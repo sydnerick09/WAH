@@ -68,117 +68,74 @@ function TaskModal({ task, user, onClose, onBidClick }) {
 function PaymentModal({ task, user, onClose, onSuccess }) {
   const [phone, setPhone] = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState('prompt'); // 'prompt' | 'processing' | 'success'
+  const [step, setStep] = useState('prompt');
 
-  function handlePay() {
-    if (!phone.trim() || !/^(07|01|\+2547|\+2541)\d{8}$/.test(phone.replace(/\s/g, ''))) {
-      alert('Please enter a valid Kenyan M-Pesa number.');
+  async function handlePay() {
+    if (!phone.trim()) {
+      alert('Enter phone number');
       return;
     }
+
     setLoading(true);
     setStep('processing');
-    // Simulate Paystack/M-Pesa flow
-    setTimeout(() => {
-      setStep('success');
-      setLoading(false);
-      onSuccess();
-    }, 3000);
+
+    const res = await fetch('/api/paystack/initialize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: user.email,
+        amount: 50,
+        phone,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.status) {
+      window.location.href = data.data.authorization_url;
+    } else {
+      alert('Payment failed');
+      setStep('prompt');
+    }
+
+    setLoading(false);
   }
 
-  const firstName = user?.fullName?.split(' ')[0] || 'User';
-  const username = '@' + (user?.fullName?.toLowerCase().replace(/\s+/g, '') || 'user');
-
   return (
-    <div className="modal-overlay" onClick={step === 'success' ? onClose : undefined}>
+    <div className="modal-overlay" onClick={onClose}>
       <div className="pay-modal-card" onClick={e => e.stopPropagation()}>
+
         <div className="pay-modal-header">
           <div className="pay-modal-title">BUSINESS HUB</div>
-          {step !== 'processing' && (
-            <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', color: 'white' }}>×</button>
-          )}
         </div>
+
         <div className="pay-modal-body">
+
           {step === 'prompt' && (
             <>
-              <div className="pay-message">
-                Hello <strong>{username}</strong>, to access tasks and have your bids accepted,
-                you must activate your account with a <strong>one-time fee of KES 50</strong>.
-                This unlocks unlimited task access and bidding.
-              </div>
+              <p>Activate account for KES 50</p>
 
-              <div className="pay-amount">
-                <div className="pay-amount-label">Activation Fee</div>
-                <div className="pay-amount-value">KES 50</div>
-                <div className="pay-amount-sub">One-time payment · Never charged again</div>
-              </div>
-
-              <div className="pay-phone-label">M-Pesa Phone Number</div>
               <input
-                type="tel"
-                className="pay-phone-input"
-                placeholder="0712 345 678"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
+                placeholder="M-Pesa number"
               />
 
-              <button className="pay-btn" onClick={handlePay}>
-                📱 Pay KES 50 via M-Pesa
+              <button onClick={handlePay}>
+                Pay via Paystack (M-Pesa supported)
               </button>
-              <div className="pay-secure">
-                🔒 Secured by Paystack · M-Pesa Integrated
-              </div>
             </>
           )}
 
           {step === 'processing' && (
-            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-              <div style={{ fontSize: 64, marginBottom: 24 }}>📱</div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Check Your Phone</h3>
-              <p style={{ fontSize: 14, color: 'var(--gray)', lineHeight: 1.7, marginBottom: 24 }}>
-                An M-Pesa prompt has been sent to <strong>{phone}</strong>.<br />
-                Enter your M-Pesa PIN to complete the payment of <strong>KES 50</strong>.
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <div className="spinner" style={{ borderTopColor: 'var(--blue)', borderColor: 'var(--gray-light)' }} />
-                <span style={{ fontSize: 14, color: 'var(--gray)' }}>Awaiting payment confirmation...</span>
-              </div>
-            </div>
+            <p>Redirecting to payment...</p>
           )}
 
-          {step === 'success' && (
-            <div className="pay-success">
-              <div className="pay-success-icon">🎉</div>
-              <h3>Account Activated!</h3>
-              <p style={{ marginBottom: 16 }}>
-                Congratulations <strong>{firstName}</strong>! Your account is now fully activated.
-                You can now bid on any task and start earning on Business Hub.
-              </p>
-              <div style={{
-                background: 'var(--blue-pale)',
-                border: '1px solid rgba(0,71,255,0.2)',
-                borderRadius: 8,
-                padding: '16px',
-                marginBottom: 24,
-                fontSize: 14,
-                color: 'var(--blue)',
-                fontWeight: 600,
-              }}>
-                ✅ Account Status: ACTIVE<br />
-                <span style={{ fontWeight: 400, color: 'var(--gray)', fontSize: 13 }}>
-                  Payment of KES 50 confirmed via M-Pesa
-                </span>
-              </div>
-              <button className="bid-btn" onClick={onClose}>
-                Go to Dashboard →
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 }
-
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
