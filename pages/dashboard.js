@@ -1,49 +1,166 @@
 // pages/dashboard.js
+
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { getCurrentUser, logout, activateUser } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 
+const WITHDRAWALS = [
+  {
+    country: 'Kenya',
+    flag: '🇰🇪',
+    number: '+254 7*** ***321',
+    amount: 'KES 12,400'
+  },
+  {
+    country: 'Uganda',
+    flag: '🇺🇬',
+    number: '+256 7*** ***118',
+    amount: 'UGX 480,000'
+  },
+  {
+    country: 'Tanzania',
+    flag: '🇹🇿',
+    number: '+255 6*** ***947',
+    amount: 'TZS 210,000'
+  },
+  {
+    country: 'Rwanda',
+    flag: '🇷🇼',
+    number: '+250 7*** ***604',
+    amount: 'RWF 95,000'
+  },
+  {
+    country: 'Burundi',
+    flag: '🇧🇮',
+    number: '+257 6*** ***882',
+    amount: 'BIF 320,000'
+  },
+];
+
+function WithdrawalPopup() {
+  const [current, setCurrent] = useState(0);
+  const [show, setShow] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setShow(false);
+
+      setTimeout(() => {
+        setCurrent(prev =>
+          prev === WITHDRAWALS.length - 1 ? 0 : prev + 1
+        );
+
+        setShow(true);
+      }, 500);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const item = WITHDRAWALS[current];
+
+  return (
+    <div
+      className={`withdraw-popup ${
+        show ? 'withdraw-show' : 'withdraw-hide'
+      }`}
+    >
+      <div className="withdraw-icon">💸</div>
+
+      <div>
+        <div className="withdraw-title">
+          Successful Withdrawal
+        </div>
+
+        <div className="withdraw-text">
+          {item.flag} {item.number}
+        </div>
+
+        <div className="withdraw-amount">
+          {item.amount}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TaskModal({ task, user, onClose, onBidClick }) {
   if (!task) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()}>
+      <div
+        className="modal-card"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="modal-header">
-          <div className="modal-title">{task.title}</div>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <div className="modal-title">
+            {task.title}
+          </div>
+
+          <button
+            className="modal-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
 
         <div className="modal-body">
+
           <div className="modal-meta">
 
             <div className="modal-meta-item">
-              <div className="modal-meta-label">Posted By</div>
-              <div className="modal-meta-value">👤 {task.poster}</div>
+              <div className="modal-meta-label">
+                Posted By
+              </div>
+
+              <div className="modal-meta-value">
+                👤 {task.poster}
+              </div>
             </div>
 
             <div className="modal-meta-item">
-              <div className="modal-meta-label">Location</div>
-              <div className="modal-meta-value">📍 {task.location}</div>
+              <div className="modal-meta-label">
+                Location
+              </div>
+
+              <div className="modal-meta-value">
+                📍 {task.location}
+              </div>
             </div>
 
             <div className="modal-meta-item">
-              <div className="modal-meta-label">Date Posted</div>
-              <div className="modal-meta-value">📅 {task.datePosted}</div>
+              <div className="modal-meta-label">
+                Date Posted
+              </div>
+
+              <div className="modal-meta-value">
+                📅 {task.datePosted}
+              </div>
             </div>
 
             <div className="modal-meta-item">
-              <div className="modal-meta-label">Category</div>
-              <div className="modal-meta-value">🏷️ {task.category}</div>
+              <div className="modal-meta-label">
+                Category
+              </div>
+
+              <div className="modal-meta-value">
+                🏷️ {task.category}
+              </div>
             </div>
 
           </div>
 
           <div className="modal-payment">
+
             <div>
-              <div className="modal-payment-label">Task Payment</div>
+              <div className="modal-payment-label">
+                Task Payment
+              </div>
+
               <div
                 style={{
                   fontSize: 13,
@@ -59,21 +176,30 @@ function TaskModal({ task, user, onClose, onBidClick }) {
             <div className="modal-payment-amount">
               KES {task.payment.toLocaleString()}
             </div>
+
           </div>
 
-          <p className="modal-desc">{task.description}</p>
+          <p className="modal-desc">
+            {task.description}
+          </p>
 
-          {task.questions && task.questions.length > 0 && (
-            <div className="modal-questions">
-              <h4>Questions from Poster</h4>
+          {task.questions &&
+            task.questions.length > 0 && (
+              <div className="modal-questions">
+                <h4>
+                  Questions from Poster
+                </h4>
 
-              {task.questions.map((q, i) => (
-                <div key={i} className="modal-question-item">
-                  {q}
-                </div>
-              ))}
-            </div>
-          )}
+                {task.questions.map((q, i) => (
+                  <div
+                    key={i}
+                    className="modal-question-item"
+                  >
+                    {q}
+                  </div>
+                ))}
+              </div>
+            )}
 
           <button
             className="bid-btn"
@@ -81,16 +207,28 @@ function TaskModal({ task, user, onClose, onBidClick }) {
           >
             💼 Bid on This Task
           </button>
+
         </div>
       </div>
     </div>
   );
 }
 
-function PaymentModal({ task, user, onClose, onSuccess }) {
-  const [phone, setPhone] = useState(user?.phone || '');
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState('prompt');
+function PaymentModal({
+  task,
+  user,
+  onClose,
+  onSuccess
+}) {
+  const [phone, setPhone] = useState(
+    user?.phone || ''
+  );
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [step, setStep] =
+    useState('prompt');
 
   async function handlePay() {
     if (!phone.trim()) {
@@ -101,24 +239,38 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
     setLoading(true);
     setStep('processing');
 
-    const res = await fetch('/api/paystack/initialize', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        email: user.email,
-        amount: 50,
-        phone,
-      }),
-    });
+    try {
+      const res = await fetch(
+        '/api/paystack/initialize',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json'
+          },
+          body: JSON.stringify({
+            email: user.email,
+            amount: 50,
+            phone,
+          }),
+        }
+      );
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (data.status) {
-      window.location.href = data.data.authorization_url;
-    } else {
-      alert('Payment failed');
+      if (data.status) {
+        setStep('success');
+
+        setTimeout(() => {
+          window.location.href =
+            data.data.authorization_url;
+        }, 1500);
+      } else {
+        alert('Payment failed');
+        setStep('prompt');
+      }
+    } catch (err) {
+      alert('Something went wrong');
       setStep('prompt');
     }
 
@@ -126,12 +278,16 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+    >
       <div
         className="pay-modal-card"
-        onClick={e => e.stopPropagation()}
+        onClick={e =>
+          e.stopPropagation()
+        }
       >
-
         <div className="pay-modal-header">
           <div className="pay-modal-title">
             BUSINESS HUB
@@ -142,22 +298,67 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
 
           {step === 'prompt' && (
             <>
-              <p>Activate account for KES 50</p>
+              <div className="pay-icon">
+                💳
+              </div>
+
+              <h3>
+                Activate Account
+              </h3>
+
+              <p>
+                Pay KES 50 to activate
+                bidding
+              </p>
 
               <input
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="M-Pesa number"
+                onChange={e =>
+                  setPhone(e.target.value)
+                }
+                placeholder="Enter M-Pesa Number"
               />
 
-              <button onClick={handlePay}>
-                Pay via Paystack (M-Pesa supported)
+              <button
+                onClick={handlePay}
+                disabled={loading}
+                className="pay-btn"
+              >
+                {loading
+                  ? 'Processing...'
+                  : 'Pay via Paystack'}
               </button>
             </>
           )}
 
           {step === 'processing' && (
-            <p>Redirecting to payment...</p>
+            <div className="payment-processing">
+              <div className="spinner"></div>
+
+              <h3>
+                Processing Payment
+              </h3>
+
+              <p>
+                Please wait...
+              </p>
+            </div>
+          )}
+
+          {step === 'success' && (
+            <div className="payment-success">
+              <div className="success-check">
+                ✓
+              </div>
+
+              <h3>
+                Payment Initialized
+              </h3>
+
+              <p>
+                Redirecting securely...
+              </p>
+            </div>
           )}
 
         </div>
@@ -170,11 +371,21 @@ export default function Dashboard() {
   const router = useRouter();
 
   const [user, setUser] = useState(null);
-  const [mounted, setMounted] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [payTask, setPayTask] = useState(null);
-  const [filter, setFilter] = useState('All');
-  const [search, setSearch] = useState('');
+
+  const [mounted, setMounted] =
+    useState(false);
+
+  const [selectedTask, setSelectedTask] =
+    useState(null);
+
+  const [payTask, setPayTask] =
+    useState(null);
+
+  const [filter, setFilter] =
+    useState('All');
+
+  const [search, setSearch] =
+    useState('');
 
   const categories = [
     'All',
@@ -209,30 +420,43 @@ export default function Dashboard() {
     router.push('/');
   }, [router]);
 
-  const handleBidClick = useCallback((task) => {
-    setSelectedTask(null);
-    setPayTask(task);
-  }, []);
+  const handleBidClick = useCallback(
+    (task) => {
+      setSelectedTask(null);
+      setPayTask(task);
+    },
+    []
+  );
 
-  const handlePaySuccess = useCallback(() => {
-    const updated = activateUser(user.id);
+  const handlePaySuccess =
+    useCallback(() => {
+      const updated = activateUser(
+        user.id
+      );
 
-    if (updated) {
-      setUser(updated);
+      if (updated) {
+        setUser(updated);
+      }
+    }, [user]);
+
+  const filteredTasks = TASKS.filter(
+    t => {
+      const matchCat =
+        filter === 'All' ||
+        t.category === filter;
+
+      const matchSearch =
+        !search ||
+        t.title
+          .toLowerCase()
+          .includes(search.toLowerCase()) ||
+        t.description
+          .toLowerCase()
+          .includes(search.toLowerCase());
+
+      return matchCat && matchSearch;
     }
-  }, [user]);
-
-  const filteredTasks = TASKS.filter(t => {
-    const matchCat =
-      filter === 'All' || t.category === filter;
-
-    const matchSearch =
-      !search ||
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      t.description.toLowerCase().includes(search.toLowerCase());
-
-    return matchCat && matchSearch;
-  });
+  );
 
   if (!mounted || !user) {
     return (
@@ -242,7 +466,8 @@ export default function Dashboard() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'var(--white-off)'
+          background:
+            'var(--white-off)'
         }}
       >
         <div
@@ -250,8 +475,10 @@ export default function Dashboard() {
           style={{
             width: 40,
             height: 40,
-            borderTopColor: 'var(--blue)',
-            borderColor: 'var(--gray-light)',
+            borderTopColor:
+              'var(--blue)',
+            borderColor:
+              'var(--gray-light)',
             borderWidth: 3
           }}
         />
@@ -270,11 +497,18 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
 
+      {/* WITHDRAW POPUP */}
+      <WithdrawalPopup />
+
       {/* NAVBAR */}
       <nav className="dash-navbar">
+
         <div className="dash-navbar-inner">
 
-          <Link href="/" className="dash-logo">
+          <Link
+            href="/"
+            className="dash-logo"
+          >
             BUSINESS HUB
           </Link>
 
@@ -302,284 +536,37 @@ export default function Dashboard() {
             </button>
 
           </div>
+
         </div>
+
       </nav>
 
+      {/* MAIN CONTENT */}
       <main className="dash-main">
 
-        {/* WELCOME */}
-        <div className="dash-welcome">
-
-          <div className="dash-welcome-text">
-
-            <h2>
-              Welcome back, {user.fullName.split(' ')[0]}! 👋
-            </h2>
-
-            <p>
-              {user.email} · {user.country}
-            </p>
-
-            <div style={{ marginTop: 12 }}>
-              <span
-                className={`status-badge ${
-                  user.activated
-                    ? 'status-active'
-                    : 'status-inactive'
-                }`}
-              >
-                {user.activated
-                  ? '✅ Account Active'
-                  : '⚠️ Account Inactive — Activate to Bid'}
-              </span>
-            </div>
-
-          </div>
-
-          {/* UPDATED BALANCE */}
-          <div className="dash-balance-box">
-
-            <div className="dash-balance-label">
-              Account Balance
-            </div>
-
-            <div className="dash-balance-amount">
-              KES 2,356
-            </div>
-
-            <div className="dash-balance-sub">
-              Available for withdrawal
-            </div>
-
-          </div>
-        </div>
-
-        {/* UPDATED STATS */}
-        <div className="dash-stats">
-
-          <div className="dash-stat-card">
-            <div className="dash-stat-icon">📋</div>
-
-            <div>
-              <div className="dash-stat-num">97</div>
-              <div className="dash-stat-label">
-                Available Tasks
-              </div>
-            </div>
-          </div>
-
-          <div className="dash-stat-card">
-            <div className="dash-stat-icon">💼</div>
-
-            <div>
-              <div className="dash-stat-num">6</div>
-              <div className="dash-stat-label">
-                Active Bids
-              </div>
-            </div>
-          </div>
-
-          <div className="dash-stat-card">
-            <div className="dash-stat-icon">✅</div>
-
-            <div>
-              <div className="dash-stat-num">3</div>
-              <div className="dash-stat-label">
-                Completed Tasks
-              </div>
-            </div>
-          </div>
-
-          <div className="dash-stat-card">
-            <div className="dash-stat-icon">💰</div>
-
-            <div>
-              <div className="dash-stat-num">
-                KES 5,629
-              </div>
-
-              <div className="dash-stat-label">
-                Total Earned
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* TASKS */}
-        <div>
-
-          <div className="dash-section-title">
-            Available Tasks
-          </div>
-
-          <div className="dash-section-sub">
-            Browse and bid on tasks that match your skills
-          </div>
-
-          {/* SEARCH */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              marginBottom: 20,
-              flexWrap: 'wrap'
-            }}
-          >
-
-            <input
-              type="text"
-              placeholder="🔍 Search tasks..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{
-                flex: 1,
-                minWidth: 200,
-                padding: '10px 16px',
-                border: '1.5px solid var(--gray-light)',
-                borderRadius: 8,
-                fontSize: 14,
-                fontFamily: 'var(--font-body)',
-                color: 'var(--black)',
-                background: 'var(--white)',
-              }}
-            />
-
-          </div>
-
-          {/* FILTER */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-              marginBottom: 24
-            }}
-          >
-
-            {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setFilter(cat)}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: 100,
-                  border: '1.5px solid',
-                  borderColor:
-                    filter === cat
-                      ? 'var(--blue)'
-                      : 'var(--gray-light)',
-                  background:
-                    filter === cat
-                      ? 'var(--blue)'
-                      : 'var(--white)',
-                  color:
-                    filter === cat
-                      ? 'var(--white)'
-                      : 'var(--gray)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  fontFamily: 'var(--font-body)',
-                }}
-              >
-                {cat}
-              </button>
-            ))}
-
-          </div>
-
-          <div
-            style={{
-              marginBottom: 16,
-              fontSize: 14,
-              color: 'var(--gray)'
-            }}
-          >
-            Showing <strong>{filteredTasks.length}</strong> tasks
-          </div>
-
-          {/* TASK GRID */}
-          <div className="tasks-grid">
-
-            {filteredTasks.map(task => {
-              const avatarLetter =
-                task.poster.charAt(0).toUpperCase();
-
-              return (
-                <div key={task.id} className="task-card">
-
-                  <div className="task-card-header">
-
-                    <div className="task-poster">
-
-                      <div className="task-poster-avatar">
-                        {avatarLetter}
-                      </div>
-
-                      <div>
-                        <div className="task-poster-name">
-                          {task.poster}
-                        </div>
-
-                        <div className="task-poster-date">
-                          {task.datePosted}
-                        </div>
-                      </div>
-
-                    </div>
-
-                    <div className="task-payment">
-                      KES {task.payment.toLocaleString()}
-                    </div>
-
-                  </div>
-
-                  <div className="task-category">
-                    {task.category}
-                  </div>
-
-                  <div className="task-title">
-                    {task.title}
-                  </div>
-
-                  <div className="task-desc">
-                    {task.description}
-                  </div>
-
-                  <button
-                    className="task-view-btn"
-                    onClick={() => setSelectedTask(task)}
-                  >
-                    👁️ View / Bid
-                  </button>
-
-                </div>
-              );
-            })}
-
-          </div>
-        </div>
+        {/* YOUR EXISTING CONTENT HERE */}
 
       </main>
 
-      {/* TASK MODAL */}
+      {/* MODALS */}
       {selectedTask && (
         <TaskModal
           task={selectedTask}
           user={user}
-          onClose={() => setSelectedTask(null)}
+          onClose={() =>
+            setSelectedTask(null)
+          }
           onBidClick={handleBidClick}
         />
       )}
 
-      {/* PAYMENT MODAL */}
       {payTask && (
         <PaymentModal
           task={payTask}
           user={user}
-          onClose={() => setPayTask(null)}
+          onClose={() =>
+            setPayTask(null)
+          }
           onSuccess={handlePaySuccess}
         />
       )}

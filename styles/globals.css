@@ -1470,3 +1470,191 @@ input, select, textarea {
 @media (max-width: 480px) {
   .navbar-actions .btn-outline { display: none; }
 }
+
+
+
+
+
+
+
+/* WITHDRAWAL POPUP */
+
+.withdraw-popup {
+  position: fixed;
+  bottom: 25px;
+  left: 25px;
+  z-index: 9999;
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 10px 35px rgba(0,0,0,0.12);
+  border-left: 5px solid #0066ff;
+  min-width: 280px;
+  transition: all 0.4s ease;
+}
+
+.withdraw-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.withdraw-hide {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.withdraw-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #eaf2ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.withdraw-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111;
+}
+
+.withdraw-text {
+  font-size: 13px;
+  color: #666;
+  margin-top: 3px;
+}
+
+.withdraw-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0066ff;
+  margin-top: 5px;
+}
+
+/* PAYMENT MODAL */
+
+.pay-modal-card {
+  width: 420px;
+  background: white;
+  border-radius: 22px;
+  overflow: hidden;
+  animation: popup 0.35s ease;
+}
+
+@keyframes popup {
+  from {
+    opacity: 0;
+    transform: scale(.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pay-modal-header {
+  background: linear-gradient(
+    135deg,
+    #0066ff,
+    #0044aa
+  );
+  padding: 22px;
+  text-align: center;
+}
+
+.pay-modal-title {
+  color: white;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.pay-modal-body {
+  padding: 32px;
+  text-align: center;
+}
+
+.pay-icon {
+  font-size: 58px;
+  margin-bottom: 10px;
+}
+
+.pay-modal-body h3 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.pay-modal-body p {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.pay-modal-body input {
+  width: 100%;
+  padding: 14px;
+  border: 1.5px solid #ddd;
+  border-radius: 12px;
+  font-size: 15px;
+  margin-bottom: 18px;
+  outline: none;
+}
+
+.pay-modal-body input:focus {
+  border-color: #0066ff;
+}
+
+.pay-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: #0066ff;
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.pay-btn:hover {
+  transform: translateY(-2px);
+  background: #0052cc;
+}
+
+.payment-processing,
+.payment-success {
+  padding: 20px 0;
+}
+
+.success-check {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #16c784;
+  color: white;
+  font-size: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 18px;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 5px solid #eee;
+  border-top: 5px solid #0066ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 18px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
