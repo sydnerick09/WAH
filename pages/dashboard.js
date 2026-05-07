@@ -177,18 +177,69 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
 
   // Fake animated withdrawals
-  const withdrawals = [
-    { flag: '🇰🇪', country: 'Kenya', phone: '+254712345678', amount: 450 },
-    { flag: '🇺🇬', country: 'Uganda', phone: '+256701223344', amount: 1200 },
-    { flag: '🇹🇿', country: 'Tanzania', phone: '+255754112233', amount: 800 },
-    { flag: '🇳🇬', country: 'Nigeria', phone: '+234812334455', amount: 1500 },
-    { flag: '🇬🇭', country: 'Ghana', phone: '+233541112223', amount: 650 },
-    { flag: '🇷🇼', country: 'Rwanda', phone: '+250788123456', amount: 300 },
-    { flag: '🇿🇦', country: 'South Africa', phone: '+27821234567', amount: 1100 },
-    { flag: '🇪🇹', country: 'Ethiopia', phone: '+251911223344', amount: 950 },
-    { flag: '🇨🇲', country: 'Cameroon', phone: '+237671234567', amount: 500 },
-    { flag: '🇲🇼', country: 'Malawi', phone: '+265991223344', amount: 250 },
-  ];
+  // Fake animated withdrawals
+const withdrawals = [
+  {
+    flag: '🇰🇪',
+    country: 'Kenya',
+    phone: '+25471*****78',
+    amount: 450,
+  },
+  {
+    flag: '🇺🇬',
+    country: 'Uganda',
+    phone: '+25670*****44',
+    amount: 1200,
+  },
+  {
+    flag: '🇹🇿',
+    country: 'Tanzania',
+    phone: '+25575*****33',
+    amount: 800,
+  },
+  {
+    flag: '🇳🇬',
+    country: 'Nigeria',
+    phone: '+23481*****55',
+    amount: 1500,
+  },
+  {
+    flag: '🇬🇭',
+    country: 'Ghana',
+    phone: '+23354*****23',
+    amount: 650,
+  },
+  {
+    flag: '🇷🇼',
+    country: 'Rwanda',
+    phone: '+25078*****56',
+    amount: 300,
+  },
+  {
+    flag: '🇿🇦',
+    country: 'South Africa',
+    phone: '+27821*****67',
+    amount: 1100,
+  },
+  {
+    flag: '🇪🇹',
+    country: 'Ethiopia',
+    phone: '+25191*****44',
+    amount: 950,
+  },
+  {
+    flag: '🇨🇲',
+    country: 'Cameroon',
+    phone: '+23767*****67',
+    amount: 500,
+  },
+  {
+    flag: '🇲🇼',
+    country: 'Malawi',
+    phone: '+26599*****44',
+    amount: 250,
+  },
+];
 
   const [currentWithdrawal, setCurrentWithdrawal] = useState(
     withdrawals[0]
