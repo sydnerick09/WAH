@@ -1,119 +1,10 @@
 // pages/dashboard.js
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { getCurrentUser, logout, activateUser } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
-
-const withdrawals = [
-  { flag: '🇰🇪', country: 'Kenya', phone: '+254 7*** ***421', amount: 1200 },
-  { flag: '🇺🇬', country: 'Uganda', phone: '+256 7*** ***908', amount: 950 },
-  { flag: '🇹🇿', country: 'Tanzania', phone: '+255 6*** ***112', amount: 1800 },
-  { flag: '🇷🇼', country: 'Rwanda', phone: '+250 7*** ***665', amount: 700 },
-  { flag: '🇧🇮', country: 'Burundi', phone: '+257 6*** ***245', amount: 1450 },
-  { flag: '🇸🇸', country: 'South Sudan', phone: '+211 9*** ***873', amount: 2000 },
-];
-
-function WithdrawalPopup() {
-  const [current, setCurrent] = useState(0);
-  const [visible, setVisible] = useState(true);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setVisible(false);
-
-      setTimeout(() => {
-        setCurrent(prev => (prev + 1) % withdrawals.length);
-        setVisible(true);
-      }, 500);
-
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const item = withdrawals[current];
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom: 24,
-        left: 24,
-        zIndex: 9999,
-        transition: 'all 0.4s ease',
-        opacity: visible ? 1 : 0,
-        transform: visible
-          ? 'translateY(0)'
-          : 'translateY(20px)',
-      }}
-    >
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: 16,
-          padding: '14px 18px',
-          width: 310,
-          boxShadow: '0 10px 35px rgba(0,0,0,0.12)',
-          border: '1px solid #e5e7eb',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-        }}
-      >
-        <div
-          style={{
-            width: 52,
-            height: 52,
-            borderRadius: '50%',
-            background: '#0f172a',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 24,
-          }}
-        >
-          💸
-        </div>
-
-        <div>
-          <div
-            style={{
-              fontWeight: 700,
-              color: '#111827',
-              fontSize: 14,
-            }}
-          >
-            Successful Withdrawal
-          </div>
-
-          <div
-            style={{
-              fontSize: 13,
-              color: '#4b5563',
-              marginTop: 3,
-            }}
-          >
-            {item.flag} {item.phone}
-          </div>
-
-          <div
-            style={{
-              marginTop: 4,
-              color: '#2563eb',
-              fontWeight: 700,
-              fontSize: 15,
-            }}
-          >
-            KES {item.amount.toLocaleString()}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function TaskModal({ task, user, onClose, onBidClick }) {
   if (!task) return null;
@@ -125,9 +16,7 @@ function TaskModal({ task, user, onClose, onBidClick }) {
         onClick={e => e.stopPropagation()}
       >
         <div className="modal-header">
-          <div className="modal-title">
-            {task.title}
-          </div>
+          <div className="modal-title">{task.title}</div>
 
           <button
             className="modal-close"
@@ -138,39 +27,34 @@ function TaskModal({ task, user, onClose, onBidClick }) {
         </div>
 
         <div className="modal-body">
-
           <div className="modal-meta">
-
             <div className="modal-meta-item">
-              <div className="modal-meta-label">
-                Posted By
-              </div>
-
+              <div className="modal-meta-label">Posted By</div>
               <div className="modal-meta-value">
                 👤 {task.poster}
               </div>
             </div>
 
             <div className="modal-meta-item">
-              <div className="modal-meta-label">
-                Location
-              </div>
-
+              <div className="modal-meta-label">Location</div>
               <div className="modal-meta-value">
                 📍 {task.location}
               </div>
             </div>
 
             <div className="modal-meta-item">
-              <div className="modal-meta-label">
-                Category
+              <div className="modal-meta-label">Date Posted</div>
+              <div className="modal-meta-value">
+                📅 {task.datePosted}
               </div>
+            </div>
 
+            <div className="modal-meta-item">
+              <div className="modal-meta-label">Category</div>
               <div className="modal-meta-value">
                 🏷️ {task.category}
               </div>
             </div>
-
           </div>
 
           <div className="modal-payment">
@@ -187,7 +71,7 @@ function TaskModal({ task, user, onClose, onBidClick }) {
                   marginTop: 2,
                 }}
               >
-                Paid after approval
+                Paid on approval
               </div>
             </div>
 
@@ -200,13 +84,28 @@ function TaskModal({ task, user, onClose, onBidClick }) {
             {task.description}
           </p>
 
+          {task.questions &&
+            task.questions.length > 0 && (
+              <div className="modal-questions">
+                <h4>Questions from Poster</h4>
+
+                {task.questions.map((q, i) => (
+                  <div
+                    key={i}
+                    className="modal-question-item"
+                  >
+                    {q}
+                  </div>
+                ))}
+              </div>
+            )}
+
           <button
             className="bid-btn"
             onClick={() => onBidClick(task)}
           >
             💼 Bid on This Task
           </button>
-
         </div>
       </div>
     </div>
@@ -217,26 +116,25 @@ function PaymentModal({
   task,
   user,
   onClose,
-  onSuccess
+  onSuccess,
 }) {
-
   const [phone, setPhone] = useState(
     user?.phone || ''
   );
 
   const [loading, setLoading] = useState(false);
+
   const [step, setStep] = useState('prompt');
 
   async function handlePay() {
-
-    if (!phone.trim()) {
-      alert('Enter phone number');
-      return;
-    }
-
     try {
+      if (!phone.trim()) {
+        alert('Enter phone number');
+        return;
+      }
 
       setLoading(true);
+
       setStep('processing');
 
       const res = await fetch(
@@ -244,61 +142,57 @@ function PaymentModal({
         {
           method: 'POST',
           headers: {
-            'Content-Type':
-              'application/json',
+            'Content-Type': 'application/json',
           },
-
           body: JSON.stringify({
             email: user.email,
             amount: 50,
             phone,
-            taskId: task.id,
           }),
         }
       );
 
-      const data = await res.json();
-
-      if (data.status) {
-
-        setTimeout(() => {
-          window.location.href =
-            data.data.authorization_url;
-        }, 1200);
-
-      } else {
-
-        alert(
-          data.message ||
-          'Payment initialization failed'
+      if (!res.ok) {
+        throw new Error(
+          'Failed to initialize payment'
         );
-
-        setStep('prompt');
       }
 
-    } catch (err) {
+      const data = await res.json();
 
-      alert('Something went wrong');
+      if (
+        data?.status &&
+        data?.data?.authorization_url
+      ) {
+        window.location.href =
+          data.data.authorization_url;
+
+        return;
+      }
+
+      throw new Error(
+        data?.message || 'Payment failed'
+      );
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        error.message ||
+          'Unable to start payment. Please try again.'
+      );
 
       setStep('prompt');
-
     } finally {
-
       setLoading(false);
     }
   }
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={onClose}
-    >
-
+    <div className="modal-overlay" onClick={onClose}>
       <div
         className="pay-modal-card"
         onClick={e => e.stopPropagation()}
       >
-
         <div className="pay-modal-header">
           <div className="pay-modal-title">
             BUSINESS HUB
@@ -306,116 +200,34 @@ function PaymentModal({
         </div>
 
         <div className="pay-modal-body">
-
           {step === 'prompt' && (
             <>
-
-              <div
-                style={{
-                  textAlign: 'center',
-                  marginBottom: 18,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 44,
-                    marginBottom: 10,
-                  }}
-                >
-                  📲
-                </div>
-
-                <h3
-                  style={{
-                    marginBottom: 6,
-                  }}
-                >
-                  Activate Account
-                </h3>
-
-                <p
-                  style={{
-                    color: '#6b7280',
-                    fontSize: 14,
-                  }}
-                >
-                  One-time activation fee
-                </p>
-              </div>
+              <p>
+                Activate account for KES 50
+              </p>
 
               <input
                 value={phone}
                 onChange={e =>
                   setPhone(e.target.value)
                 }
-                placeholder="Enter M-Pesa Number"
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  borderRadius: 12,
-                  border:
-                    '1.5px solid #d1d5db',
-                  marginBottom: 16,
-                  fontSize: 15,
-                }}
+                placeholder="M-Pesa number"
               />
 
               <button
                 onClick={handlePay}
                 disabled={loading}
-                style={{
-                  width: '100%',
-                  background: '#2563eb',
-                  color: '#fff',
-                  padding: '14px',
-                  border: 'none',
-                  borderRadius: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  transition: '0.3s',
-                  fontSize: 15,
-                }}
               >
                 {loading
-                  ? 'Processing...'
-                  : 'Pay KES 50'}
+                  ? 'Processing Payment...'
+                  : 'Pay via Paystack (M-Pesa supported)'}
               </button>
-
             </>
           )}
 
           {step === 'processing' && (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '20px 0',
-              }}
-            >
-
-              <div
-                className="spinner"
-                style={{
-                  margin: '0 auto 18px',
-                  width: 45,
-                  height: 45,
-                  borderWidth: 4,
-                }}
-              />
-
-              <h3>Redirecting...</h3>
-
-              <p
-                style={{
-                  color: '#6b7280',
-                  marginTop: 8,
-                }}
-              >
-                Secure Paystack checkout
-              </p>
-
-            </div>
+            <p>Redirecting to payment...</p>
           )}
-
         </div>
       </div>
     </div>
@@ -423,11 +235,12 @@ function PaymentModal({
 }
 
 export default function Dashboard() {
-
   const router = useRouter();
 
   const [user, setUser] = useState(null);
-  const [mounted, setMounted] = useState(false);
+
+  const [mounted, setMounted] =
+    useState(false);
 
   const [selectedTask, setSelectedTask] =
     useState(null);
@@ -440,6 +253,48 @@ export default function Dashboard() {
 
   const [search, setSearch] =
     useState('');
+
+  const withdrawals = useMemo(
+    () => [
+      {
+        country: 'Kenya',
+        flag: '🇰🇪',
+        number: '+254 7*** 4821',
+        amount: 3500,
+      },
+      {
+        country: 'Uganda',
+        flag: '🇺🇬',
+        number: '+256 7*** 9214',
+        amount: 5100,
+      },
+      {
+        country: 'Tanzania',
+        flag: '🇹🇿',
+        number: '+255 6*** 7712',
+        amount: 4200,
+      },
+      {
+        country: 'Rwanda',
+        flag: '🇷🇼',
+        number: '+250 7*** 2284',
+        amount: 2800,
+      },
+      {
+        country: 'Burundi',
+        flag: '🇧🇮',
+        number: '+257 6*** 4410',
+        amount: 3900,
+      },
+      {
+        country: 'South Sudan',
+        flag: '🇸🇸',
+        number: '+211 9*** 1021',
+        amount: 4600,
+      },
+    ],
+    []
+  );
 
   const categories = [
     'All',
@@ -458,7 +313,6 @@ export default function Dashboard() {
   ];
 
   useEffect(() => {
-
     setMounted(true);
 
     const u = getCurrentUser();
@@ -468,40 +322,27 @@ export default function Dashboard() {
     } else {
       setUser(u);
     }
-
   }, [router]);
 
   const handleLogout = useCallback(() => {
-
     logout();
-    router.push('/');
 
+    router.push('/');
   }, [router]);
 
-  const handleBidClick = useCallback(
-    task => {
+  const handleBidClick = useCallback(task => {
+    setSelectedTask(null);
 
-      setSelectedTask(null);
-      setPayTask(task);
+    setPayTask(task);
+  }, []);
 
-    },
-    []
-  );
+  const handlePaySuccess = useCallback(() => {
+    const updated = activateUser(user.id);
 
-  const handlePaySuccess =
-    useCallback(() => {
-
-      const updated =
-        activateUser(user.id);
-
-      if (updated) {
-        setUser(updated);
-      }
-
-    }, [user]);
+    if (updated) setUser(updated);
+  }, [user]);
 
   const filteredTasks = TASKS.filter(t => {
-
     const matchCat =
       filter === 'All' ||
       t.category === filter;
@@ -516,11 +357,31 @@ export default function Dashboard() {
         .includes(search.toLowerCase());
 
     return matchCat && matchSearch;
-
   });
 
   if (!mounted || !user) {
-    return null;
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--white-off)',
+        }}
+      >
+        <div
+          className="spinner"
+          style={{
+            width: 40,
+            height: 40,
+            borderTopColor: 'var(--blue)',
+            borderColor: 'var(--gray-light)',
+            borderWidth: 3,
+          }}
+        />
+      </div>
+    );
   }
 
   const initials =
@@ -533,13 +394,9 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-
-      <WithdrawalPopup />
-
+      {/* NAVBAR */}
       <nav className="dash-navbar">
-
         <div className="dash-navbar-inner">
-
           <Link
             href="/"
             className="dash-logo"
@@ -548,9 +405,7 @@ export default function Dashboard() {
           </Link>
 
           <div className="dash-user">
-
             <div className="dash-user-info">
-
               <div className="dash-user-name">
                 {user.fullName}
               </div>
@@ -558,7 +413,6 @@ export default function Dashboard() {
               <div className="dash-user-email">
                 {user.email}
               </div>
-
             </div>
 
             <div className="dash-avatar">
@@ -571,88 +425,323 @@ export default function Dashboard() {
             >
               ⏏ Logout
             </button>
-
           </div>
         </div>
       </nav>
 
       <main className="dash-main">
-
+        {/* WELCOME */}
         <div className="dash-welcome">
-
           <div className="dash-welcome-text">
-
             <h2>
-              Welcome back,
-              {' '}
-              {user.fullName.split(' ')[0]} 👋
+              Welcome back,{' '}
+              {user.fullName.split(' ')[0]}! 👋
             </h2>
 
             <p>
               {user.email} · {user.country}
             </p>
 
+            <div style={{ marginTop: 12 }}>
+              <span
+                className={`status-badge ${
+                  user.activated
+                    ? 'status-active'
+                    : 'status-inactive'
+                }`}
+              >
+                {user.activated
+                  ? '✅ Account Active'
+                  : '⚠️ Account Inactive — Activate to Bid'}
+              </span>
+            </div>
           </div>
 
           <div className="dash-balance-box">
-
             <div className="dash-balance-label">
               Account Balance
             </div>
 
             <div className="dash-balance-amount">
-              KES 2,356
+              KES{' '}
+              {(user.balance || 0).toLocaleString()}
             </div>
 
             <div className="dash-balance-sub">
               Available for withdrawal
             </div>
+          </div>
+        </div>
 
+        {/* LIVE WITHDRAWALS */}
+        <div className="withdrawal-popup-container">
+          <div className="withdrawal-popup-header">
+            🔔 Recent Withdrawals
           </div>
 
-        </div>
-
-        <div className="tasks-grid">
-
-          {filteredTasks.map(task => (
-
-            <div
-              key={task.id}
-              className="task-card"
-            >
-
-              <div className="task-payment">
-                KES {task.payment.toLocaleString()}
-              </div>
-
-              <div className="task-category">
-                {task.category}
-              </div>
-
-              <div className="task-title">
-                {task.title}
-              </div>
-
-              <div className="task-desc">
-                {task.description}
-              </div>
-
-              <button
-                className="task-view-btn"
-                onClick={() =>
-                  setSelectedTask(task)
-                }
+          <div className="withdrawal-list">
+            {withdrawals.map((item, index) => (
+              <div
+                key={index}
+                className="withdrawal-item"
               >
-                👁️ View / Bid
-              </button>
+                <div className="withdrawal-left">
+                  <div className="withdrawal-flag">
+                    {item.flag}
+                  </div>
 
-            </div>
-          ))}
+                  <div>
+                    <div className="withdrawal-number">
+                      {item.number}
+                    </div>
 
+                    <div className="withdrawal-country">
+                      {item.country}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="withdrawal-amount">
+                  +KES{' '}
+                  {item.amount.toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
+        {/* STATS */}
+        <div className="dash-stats">
+          <div className="dash-stat-card">
+            <div className="dash-stat-icon">
+              📋
+            </div>
+
+            <div>
+              <div className="dash-stat-num">
+                {TASKS.length}
+              </div>
+
+              <div className="dash-stat-label">
+                Available Tasks
+              </div>
+            </div>
+          </div>
+
+          <div className="dash-stat-card">
+            <div className="dash-stat-icon">
+              💼
+            </div>
+
+            <div>
+              <div className="dash-stat-num">
+                0
+              </div>
+
+              <div className="dash-stat-label">
+                Active Bids
+              </div>
+            </div>
+          </div>
+
+          <div className="dash-stat-card">
+            <div className="dash-stat-icon">
+              ✅
+            </div>
+
+            <div>
+              <div className="dash-stat-num">
+                0
+              </div>
+
+              <div className="dash-stat-label">
+                Completed Tasks
+              </div>
+            </div>
+          </div>
+
+          <div className="dash-stat-card">
+            <div className="dash-stat-icon">
+              💰
+            </div>
+
+            <div>
+              <div className="dash-stat-num">
+                KES{' '}
+                {(user.balance || 0).toLocaleString()}
+              </div>
+
+              <div className="dash-stat-label">
+                Total Earned
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* TASKS */}
+        <div>
+          <div className="dash-section-title">
+            Available Tasks
+          </div>
+
+          <div className="dash-section-sub">
+            Browse and bid on tasks that
+            match your skills
+          </div>
+
+          {/* SEARCH */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              marginBottom: 20,
+              flexWrap: 'wrap',
+            }}
+          >
+            <input
+              type="text"
+              placeholder="🔍 Search tasks..."
+              value={search}
+              onChange={e =>
+                setSearch(e.target.value)
+              }
+              style={{
+                flex: 1,
+                minWidth: 200,
+                padding: '10px 16px',
+                border:
+                  '1.5px solid var(--gray-light)',
+                borderRadius: 8,
+                fontSize: 14,
+                fontFamily:
+                  'var(--font-body)',
+                color: 'var(--black)',
+                background: 'var(--white)',
+              }}
+            />
+          </div>
+
+          {/* CATEGORY FILTER */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              marginBottom: 24,
+            }}
+          >
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() =>
+                  setFilter(cat)
+                }
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: 100,
+                  border: '1.5px solid',
+                  borderColor:
+                    filter === cat
+                      ? 'var(--blue)'
+                      : 'var(--gray-light)',
+                  background:
+                    filter === cat
+                      ? 'var(--blue)'
+                      : 'var(--white)',
+                  color:
+                    filter === cat
+                      ? 'var(--white)'
+                      : 'var(--gray)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  fontFamily:
+                    'var(--font-body)',
+                }}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <div
+            style={{
+              marginBottom: 16,
+              fontSize: 14,
+              color: 'var(--gray)',
+            }}
+          >
+            Showing{' '}
+            <strong>
+              {filteredTasks.length}
+            </strong>{' '}
+            tasks
+          </div>
+
+          <div className="tasks-grid">
+            {filteredTasks.map(task => {
+              const avatarLetter =
+                task.poster
+                  .charAt(0)
+                  .toUpperCase();
+
+              return (
+                <div
+                  key={task.id}
+                  className="task-card"
+                >
+                  <div className="task-card-header">
+                    <div className="task-poster">
+                      <div className="task-poster-avatar">
+                        {avatarLetter}
+                      </div>
+
+                      <div>
+                        <div className="task-poster-name">
+                          {task.poster}
+                        </div>
+
+                        <div className="task-poster-date">
+                          {task.datePosted}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="task-payment">
+                      KES{' '}
+                      {task.payment.toLocaleString()}
+                    </div>
+                  </div>
+
+                  <div className="task-category">
+                    {task.category}
+                  </div>
+
+                  <div className="task-title">
+                    {task.title}
+                  </div>
+
+                  <div className="task-desc">
+                    {task.description}
+                  </div>
+
+                  <button
+                    className="task-view-btn"
+                    onClick={() =>
+                      setSelectedTask(task)
+                    }
+                  >
+                    👁️ View / Bid
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </main>
 
+      {/* TASK MODAL */}
       {selectedTask && (
         <TaskModal
           task={selectedTask}
@@ -664,17 +753,15 @@ export default function Dashboard() {
         />
       )}
 
+      {/* PAYMENT MODAL */}
       {payTask && (
         <PaymentModal
           task={payTask}
           user={user}
-          onClose={() =>
-            setPayTask(null)
-          }
+          onClose={() => setPayTask(null)}
           onSuccess={handlePaySuccess}
         />
       )}
-
     </div>
   );
 }
