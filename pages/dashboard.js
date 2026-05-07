@@ -1,6 +1,6 @@
 // pages/dashboard.js
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { getCurrentUser, logout, activateUser } from '../lib/auth';
@@ -11,17 +11,10 @@ function TaskModal({ task, user, onClose, onBidClick }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card"
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="modal-card" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title">{task.title}</div>
-
-          <button
-            className="modal-close"
-            onClick={onClose}
-          >
+          <button className="modal-close" onClick={onClose}>
             ×
           </button>
         </div>
@@ -30,39 +23,28 @@ function TaskModal({ task, user, onClose, onBidClick }) {
           <div className="modal-meta">
             <div className="modal-meta-item">
               <div className="modal-meta-label">Posted By</div>
-              <div className="modal-meta-value">
-                👤 {task.poster}
-              </div>
+              <div className="modal-meta-value">👤 {task.poster}</div>
             </div>
 
             <div className="modal-meta-item">
               <div className="modal-meta-label">Location</div>
-              <div className="modal-meta-value">
-                📍 {task.location}
-              </div>
+              <div className="modal-meta-value">📍 {task.location}</div>
             </div>
 
             <div className="modal-meta-item">
               <div className="modal-meta-label">Date Posted</div>
-              <div className="modal-meta-value">
-                📅 {task.datePosted}
-              </div>
+              <div className="modal-meta-value">📅 {task.datePosted}</div>
             </div>
 
             <div className="modal-meta-item">
               <div className="modal-meta-label">Category</div>
-              <div className="modal-meta-value">
-                🏷️ {task.category}
-              </div>
+              <div className="modal-meta-value">🏷️ {task.category}</div>
             </div>
           </div>
 
           <div className="modal-payment">
             <div>
-              <div className="modal-payment-label">
-                Task Payment
-              </div>
-
+              <div className="modal-payment-label">Task Payment</div>
               <div
                 style={{
                   fontSize: 13,
@@ -80,25 +62,19 @@ function TaskModal({ task, user, onClose, onBidClick }) {
             </div>
           </div>
 
-          <p className="modal-desc">
-            {task.description}
-          </p>
+          <p className="modal-desc">{task.description}</p>
 
-          {task.questions &&
-            task.questions.length > 0 && (
-              <div className="modal-questions">
-                <h4>Questions from Poster</h4>
+          {task.questions && task.questions.length > 0 && (
+            <div className="modal-questions">
+              <h4>Questions from Poster</h4>
 
-                {task.questions.map((q, i) => (
-                  <div
-                    key={i}
-                    className="modal-question-item"
-                  >
-                    {q}
-                  </div>
-                ))}
-              </div>
-            )}
+              {task.questions.map((q, i) => (
+                <div key={i} className="modal-question-item">
+                  {q}
+                </div>
+              ))}
+            </div>
+          )}
 
           <button
             className="bid-btn"
@@ -112,79 +88,42 @@ function TaskModal({ task, user, onClose, onBidClick }) {
   );
 }
 
-function PaymentModal({
-  task,
-  user,
-  onClose,
-  onSuccess,
-}) {
-  const [phone, setPhone] = useState(
-    user?.phone || ''
-  );
-
+function PaymentModal({ task, user, onClose, onSuccess }) {
+  const [phone, setPhone] = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
-
   const [step, setStep] = useState('prompt');
 
   async function handlePay() {
-    try {
-      if (!phone.trim()) {
-        alert('Enter phone number');
-        return;
-      }
-
-      setLoading(true);
-
-      setStep('processing');
-
-      const res = await fetch(
-        '/api/paystack/initialize',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: user.email,
-            amount: 50,
-            phone,
-          }),
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error(
-          'Failed to initialize payment'
-        );
-      }
-
-      const data = await res.json();
-
-      if (
-        data?.status &&
-        data?.data?.authorization_url
-      ) {
-        window.location.href =
-          data.data.authorization_url;
-
-        return;
-      }
-
-      throw new Error(
-        data?.message || 'Payment failed'
-      );
-    } catch (error) {
-      console.error(error);
-
-      alert(
-        error.message ||
-          'Unable to start payment. Please try again.'
-      );
-
-      setStep('prompt');
-    } finally {
-      setLoading(false);
+    if (!phone.trim()) {
+      alert('Enter phone number');
+      return;
     }
+
+    setLoading(true);
+    setStep('processing');
+
+    const res = await fetch('/api/paystack/initialize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: user.email,
+        amount: 50,
+        phone,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.status) {
+      window.location.href = data.data.authorization_url;
+    } else {
+      alert('Payment failed');
+      setStep('prompt');
+    }
+
+    setLoading(false);
   }
 
   return (
@@ -194,32 +133,23 @@ function PaymentModal({
         onClick={e => e.stopPropagation()}
       >
         <div className="pay-modal-header">
-          <div className="pay-modal-title">
-            BUSINESS HUB
-          </div>
+          <div className="pay-modal-title">BUSINESS HUB</div>
         </div>
 
         <div className="pay-modal-body">
           {step === 'prompt' && (
             <>
-              <p>
-                Activate account for KES 50
-              </p>
+              <p>Activate account for KES 50</p>
 
               <input
                 value={phone}
-                onChange={e =>
-                  setPhone(e.target.value)
-                }
+                onChange={e => setPhone(e.target.value)}
                 placeholder="M-Pesa number"
               />
 
-              <button
-                onClick={handlePay}
-                disabled={loading}
-              >
+              <button onClick={handlePay} disabled={loading}>
                 {loading
-                  ? 'Processing Payment...'
+                  ? 'Processing...'
                   : 'Pay via Paystack (M-Pesa supported)'}
               </button>
             </>
@@ -238,63 +168,44 @@ export default function Dashboard() {
   const router = useRouter();
 
   const [user, setUser] = useState(null);
+  const [mounted, setMounted] = useState(false);
 
-  const [mounted, setMounted] =
-    useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [payTask, setPayTask] = useState(null);
 
-  const [selectedTask, setSelectedTask] =
-    useState(null);
+  const [filter, setFilter] = useState('All');
+  const [search, setSearch] = useState('');
 
-  const [payTask, setPayTask] =
-    useState(null);
+  // Fake animated withdrawals
+  const withdrawals = [
+    { flag: '🇰🇪', country: 'Kenya', phone: '+254712345678', amount: 450 },
+    { flag: '🇺🇬', country: 'Uganda', phone: '+256701223344', amount: 1200 },
+    { flag: '🇹🇿', country: 'Tanzania', phone: '+255754112233', amount: 800 },
+    { flag: '🇳🇬', country: 'Nigeria', phone: '+234812334455', amount: 1500 },
+    { flag: '🇬🇭', country: 'Ghana', phone: '+233541112223', amount: 650 },
+    { flag: '🇷🇼', country: 'Rwanda', phone: '+250788123456', amount: 300 },
+    { flag: '🇿🇦', country: 'South Africa', phone: '+27821234567', amount: 1100 },
+    { flag: '🇪🇹', country: 'Ethiopia', phone: '+251911223344', amount: 950 },
+    { flag: '🇨🇲', country: 'Cameroon', phone: '+237671234567', amount: 500 },
+    { flag: '🇲🇼', country: 'Malawi', phone: '+265991223344', amount: 250 },
+  ];
 
-  const [filter, setFilter] =
-    useState('All');
-
-  const [search, setSearch] =
-    useState('');
-
-  const withdrawals = useMemo(
-    () => [
-      {
-        country: 'Kenya',
-        flag: '🇰🇪',
-        number: '+254 7*** 4821',
-        amount: 3500,
-      },
-      {
-        country: 'Uganda',
-        flag: '🇺🇬',
-        number: '+256 7*** 9214',
-        amount: 5100,
-      },
-      {
-        country: 'Tanzania',
-        flag: '🇹🇿',
-        number: '+255 6*** 7712',
-        amount: 4200,
-      },
-      {
-        country: 'Rwanda',
-        flag: '🇷🇼',
-        number: '+250 7*** 2284',
-        amount: 2800,
-      },
-      {
-        country: 'Burundi',
-        flag: '🇧🇮',
-        number: '+257 6*** 4410',
-        amount: 3900,
-      },
-      {
-        country: 'South Sudan',
-        flag: '🇸🇸',
-        number: '+211 9*** 1021',
-        amount: 4600,
-      },
-    ],
-    []
+  const [currentWithdrawal, setCurrentWithdrawal] = useState(
+    withdrawals[0]
   );
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const random =
+        withdrawals[
+          Math.floor(Math.random() * withdrawals.length)
+        ];
+
+      setCurrentWithdrawal(random);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const categories = [
     'All',
@@ -326,13 +237,11 @@ export default function Dashboard() {
 
   const handleLogout = useCallback(() => {
     logout();
-
     router.push('/');
   }, [router]);
 
   const handleBidClick = useCallback(task => {
     setSelectedTask(null);
-
     setPayTask(task);
   }, []);
 
@@ -344,14 +253,11 @@ export default function Dashboard() {
 
   const filteredTasks = TASKS.filter(t => {
     const matchCat =
-      filter === 'All' ||
-      t.category === filter;
+      filter === 'All' || t.category === filter;
 
     const matchSearch =
       !search ||
-      t.title
-        .toLowerCase()
-        .includes(search.toLowerCase()) ||
+      t.title.toLowerCase().includes(search.toLowerCase()) ||
       t.description
         .toLowerCase()
         .includes(search.toLowerCase());
@@ -394,13 +300,88 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-      {/* NAVBAR */}
+
+      {/* Fake Withdrawal Animation */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 90,
+          right: 20,
+          zIndex: 999,
+          animation: 'slideIn 0.5s ease',
+        }}
+      >
+        <div
+          style={{
+            background: '#fff',
+            border: '1px solid var(--gray-light)',
+            borderRadius: 14,
+            padding: '14px 18px',
+            minWidth: 280,
+            boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 13,
+              color: 'var(--gray)',
+              marginBottom: 6,
+            }}
+          >
+            Recent Withdrawal
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <div style={{ fontSize: 30 }}>
+              {currentWithdrawal.flag}
+            </div>
+
+            <div>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: 14,
+                  color: 'var(--black)',
+                }}
+              >
+                {currentWithdrawal.phone}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'var(--gray)',
+                }}
+              >
+                {currentWithdrawal.country}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              fontWeight: 700,
+              color: 'green',
+              fontSize: 16,
+            }}
+          >
+            Withdrawn KES{' '}
+            {currentWithdrawal.amount.toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      {/* Nav */}
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">
-          <Link
-            href="/"
-            className="dash-logo"
-          >
+          <Link href="/" className="dash-logo">
             BUSINESS HUB
           </Link>
 
@@ -415,9 +396,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="dash-avatar">
-              {initials}
-            </div>
+            <div className="dash-avatar">{initials}</div>
 
             <button
               className="logout-btn"
@@ -430,7 +409,8 @@ export default function Dashboard() {
       </nav>
 
       <main className="dash-main">
-        {/* WELCOME */}
+
+        {/* Welcome Banner */}
         <div className="dash-welcome">
           <div className="dash-welcome-text">
             <h2>
@@ -463,8 +443,7 @@ export default function Dashboard() {
             </div>
 
             <div className="dash-balance-amount">
-              KES{' '}
-              {(user.balance || 0).toLocaleString()}
+              KES {(user.balance || 0).toLocaleString()}
             </div>
 
             <div className="dash-balance-sub">
@@ -473,49 +452,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* LIVE WITHDRAWALS */}
-        <div className="withdrawal-popup-container">
-          <div className="withdrawal-popup-header">
-            🔔 Recent Withdrawals
-          </div>
-
-          <div className="withdrawal-list">
-            {withdrawals.map((item, index) => (
-              <div
-                key={index}
-                className="withdrawal-item"
-              >
-                <div className="withdrawal-left">
-                  <div className="withdrawal-flag">
-                    {item.flag}
-                  </div>
-
-                  <div>
-                    <div className="withdrawal-number">
-                      {item.number}
-                    </div>
-
-                    <div className="withdrawal-country">
-                      {item.country}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="withdrawal-amount">
-                  +KES{' '}
-                  {item.amount.toLocaleString()}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* STATS */}
+        {/* Stats */}
         <div className="dash-stats">
           <div className="dash-stat-card">
-            <div className="dash-stat-icon">
-              📋
-            </div>
+            <div className="dash-stat-icon">📋</div>
 
             <div>
               <div className="dash-stat-num">
@@ -529,14 +469,10 @@ export default function Dashboard() {
           </div>
 
           <div className="dash-stat-card">
-            <div className="dash-stat-icon">
-              💼
-            </div>
+            <div className="dash-stat-icon">💼</div>
 
             <div>
-              <div className="dash-stat-num">
-                0
-              </div>
+              <div className="dash-stat-num">0</div>
 
               <div className="dash-stat-label">
                 Active Bids
@@ -545,14 +481,10 @@ export default function Dashboard() {
           </div>
 
           <div className="dash-stat-card">
-            <div className="dash-stat-icon">
-              ✅
-            </div>
+            <div className="dash-stat-icon">✅</div>
 
             <div>
-              <div className="dash-stat-num">
-                0
-              </div>
+              <div className="dash-stat-num">0</div>
 
               <div className="dash-stat-label">
                 Completed Tasks
@@ -561,14 +493,11 @@ export default function Dashboard() {
           </div>
 
           <div className="dash-stat-card">
-            <div className="dash-stat-icon">
-              💰
-            </div>
+            <div className="dash-stat-icon">💰</div>
 
             <div>
               <div className="dash-stat-num">
-                KES{' '}
-                {(user.balance || 0).toLocaleString()}
+                KES {(user.balance || 0).toLocaleString()}
               </div>
 
               <div className="dash-stat-label">
@@ -578,18 +507,17 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* TASKS */}
+        {/* Tasks Section */}
         <div>
           <div className="dash-section-title">
             Available Tasks
           </div>
 
           <div className="dash-section-sub">
-            Browse and bid on tasks that
-            match your skills
+            Browse and bid on tasks that match your skills
           </div>
 
-          {/* SEARCH */}
+          {/* Search */}
           <div
             style={{
               display: 'flex',
@@ -602,26 +530,22 @@ export default function Dashboard() {
               type="text"
               placeholder="🔍 Search tasks..."
               value={search}
-              onChange={e =>
-                setSearch(e.target.value)
-              }
+              onChange={e => setSearch(e.target.value)}
               style={{
                 flex: 1,
                 minWidth: 200,
                 padding: '10px 16px',
-                border:
-                  '1.5px solid var(--gray-light)',
+                border: '1.5px solid var(--gray-light)',
                 borderRadius: 8,
                 fontSize: 14,
-                fontFamily:
-                  'var(--font-body)',
+                fontFamily: 'var(--font-body)',
                 color: 'var(--black)',
                 background: 'var(--white)',
               }}
             />
           </div>
 
-          {/* CATEGORY FILTER */}
+          {/* Category Filter */}
           <div
             style={{
               display: 'flex',
@@ -633,9 +557,7 @@ export default function Dashboard() {
             {categories.map(cat => (
               <button
                 key={cat}
-                onClick={() =>
-                  setFilter(cat)
-                }
+                onClick={() => setFilter(cat)}
                 style={{
                   padding: '6px 16px',
                   borderRadius: 100,
@@ -656,8 +578,7 @@ export default function Dashboard() {
                   fontWeight: 600,
                   cursor: 'pointer',
                   transition: 'all 0.2s',
-                  fontFamily:
-                    'var(--font-body)',
+                  fontFamily: 'var(--font-body)',
                 }}
               >
                 {cat}
@@ -672,25 +593,18 @@ export default function Dashboard() {
               color: 'var(--gray)',
             }}
           >
-            Showing{' '}
-            <strong>
-              {filteredTasks.length}
-            </strong>{' '}
+            Showing <strong>{filteredTasks.length}</strong>{' '}
             tasks
           </div>
 
           <div className="tasks-grid">
             {filteredTasks.map(task => {
-              const avatarLetter =
-                task.poster
-                  .charAt(0)
-                  .toUpperCase();
+              const avatarLetter = task.poster
+                .charAt(0)
+                .toUpperCase();
 
               return (
-                <div
-                  key={task.id}
-                  className="task-card"
-                >
+                <div key={task.id} className="task-card">
                   <div className="task-card-header">
                     <div className="task-poster">
                       <div className="task-poster-avatar">
@@ -709,8 +623,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="task-payment">
-                      KES{' '}
-                      {task.payment.toLocaleString()}
+                      KES {task.payment.toLocaleString()}
                     </div>
                   </div>
 
@@ -741,19 +654,17 @@ export default function Dashboard() {
         </div>
       </main>
 
-      {/* TASK MODAL */}
+      {/* Task Detail Modal */}
       {selectedTask && (
         <TaskModal
           task={selectedTask}
           user={user}
-          onClose={() =>
-            setSelectedTask(null)
-          }
+          onClose={() => setSelectedTask(null)}
           onBidClick={handleBidClick}
         />
       )}
 
-      {/* PAYMENT MODAL */}
+      {/* Payment Modal */}
       {payTask && (
         <PaymentModal
           task={payTask}
@@ -762,6 +673,20 @@ export default function Dashboard() {
           onSuccess={handlePaySuccess}
         />
       )}
+
+      <style jsx>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(40px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
