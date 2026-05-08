@@ -141,7 +141,7 @@ function UpgradeModal({ user, onClose }) {
     const res = await fetch('/api/paystack/initialize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 500, phone, plan: 'premium' }),
+      body: JSON.stringify({ email: user.email, amount: 120, phone, plan: 'premium' }),
     });
     const data = await res.json();
     if (data.status) {
@@ -529,7 +529,7 @@ export default function Dashboard() {
           <div className="referral-banner-left">
             <span className="referral-banner-icon">🔗</span>
             <div>
-              <div className="referral-banner-title">Refer Friends & Earn KES 100 Each</div>
+              <div className="referral-banner-title">Refer Friends & Earn KES 70 Each</div>
               <div className="referral-banner-sub">Share your link · Track referrals · Get paid instantly</div>
             </div>
           </div>
