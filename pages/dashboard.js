@@ -141,7 +141,7 @@ function UpgradeModal({ user, onClose }) {
     const res = await fetch('/api/paystack/initialize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 500, phone, plan: 'premium' }),
+      body: JSON.stringify({ email: user.email, amount: 180, phone, plan: 'premium' }),
     });
     const data = await res.json();
     if (data.status) {
@@ -180,7 +180,7 @@ function UpgradeModal({ user, onClose }) {
           </div>
           <div className="pay-amount" style={{ marginTop: 20 }}>
             <div className="pay-amount-label">Monthly Premium Plan</div>
-            <div className="pay-amount-value" style={{ background: 'linear-gradient(135deg,#0047FF,#7C3AED)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>KES 500</div>
+            <div className="pay-amount-value" style={{ background: 'linear-gradient(135deg,#0047FF,#7C3AED)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>KES 180</div>
             <div className="pay-amount-sub">per month · Cancel anytime</div>
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
@@ -241,7 +241,7 @@ function WithdrawLockedModal({ onClose, onUpgrade }) {
 // ─── Referral Modal ───────────────────────────────────────────────────────────
 function ReferralModal({ user, onClose }) {
   const [copied, setCopied] = useState(false);
-  const referralLink = `https://businesshub.co.ke/join?ref=${user?.id || 'USER123'}`;
+  const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user?.id || 'USER123'}`;
 
   function copyLink() {
     navigator.clipboard.writeText(referralLink).then(() => {
@@ -256,13 +256,13 @@ function ReferralModal({ user, onClose }) {
         <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #059669, #0047FF)' }}>
           <div>
             <div className="pay-modal-title">🔗 Your Referral Link</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Earn KES 100 per referral</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Earn KES 70 per referral</div>
           </div>
           <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4' }}>
-            Share your referral link and earn <strong style={{ color: '#059669' }}>KES 100</strong> for every friend who signs up and activates their account.
+            Share your referral link and earn <strong style={{ color: '#059669' }}>KES 70</strong> for every friend who signs up and activates their account.
           </div>
           <div style={{ marginBottom: 16 }}>
             <div className="pay-phone-label">Your unique referral link</div>
@@ -302,7 +302,7 @@ function ReferralModal({ user, onClose }) {
               <div className="referral-stat-label">Earned</div>
             </div>
             <div className="referral-stat">
-              <div className="referral-stat-num">KES 100</div>
+              <div className="referral-stat-num">KES 70</div>
               <div className="referral-stat-label">Per Referral</div>
             </div>
           </div>
@@ -464,7 +464,7 @@ export default function Dashboard() {
   }
 
   const initials = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
-  const referralLink = `https://businesshub.co.ke/join?ref=${user.id || 'USER123'}`;
+  const referralLink = `https:// onlinejob-pi.vercel.app   /join?ref=${user.id || 'USER123'}`;
 
   return (
     <div className="dashboard">
@@ -529,7 +529,7 @@ export default function Dashboard() {
           <div className="referral-banner-left">
             <span className="referral-banner-icon">🔗</span>
             <div>
-              <div className="referral-banner-title">Refer Friends & Earn KES 100 Each</div>
+              <div className="referral-banner-title">Refer Friends & Earn KES 70 Each</div>
               <div className="referral-banner-sub">Share your link · Track referrals · Get paid instantly</div>
             </div>
           </div>
