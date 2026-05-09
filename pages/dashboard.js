@@ -622,7 +622,15 @@ export default function Dashboard() {
           </div>
           <div className="referral-banner-link">
             <span className="referral-link-preview">{referralLink.replace('https://', '')}</span>
-            <button className="referral-copy-btn">Copy Link →</button>
+            <button
+  className="referral-copy-btn"
+  onClick={() => {
+    navigator.clipboard.writeText(referralLink);
+    alert('Referral link copied!');
+  }}
+>
+  Copy Link →
+</button>
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 // pages/register.js
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { registerUser, setCurrentUser } from '../lib/auth';
@@ -14,6 +15,7 @@ const COUNTRIES = [
 
 export default function Register() {
   const router = useRouter();
+
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -23,47 +25,141 @@ export default function Register() {
     confirmPassword: '',
     agreedToTerms: false,
   });
+
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [referrerId, setReferrerId] = useState(null);
+
+  // Load referral ID
+  useEffect(() => {
+    const savedReferrer = localStorage.getItem('referrerId');
+
+    if (savedReferrer) {
+      setReferrerId(savedReferrer);
+    }
+  }, []);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
-    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+
+    setForm(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
   }
 
   function validate() {
-    if (!form.fullName.trim()) return 'Full name is required.';
-    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Valid email is required.';
-    if (!form.phone.trim() || !/^(07|01|\+2547|\+2541)\d{8}$/.test(form.phone.replace(/\s/g, ''))) {
-      return 'Enter a valid Kenyan phone number (e.g. 0712345678).';
+    if (!form.fullName.trim()) {
+      return 'Full name is required.';
     }
-    if (!form.country) return 'Please select a country.';
-    if (form.password.length < 8) return 'Password must be at least 8 characters.';
-    if (form.password !== form.confirmPassword) return 'Passwords do not match.';
-    if (!form.agreedToTerms) return 'You must agree to the Terms and Conditions.';
+
+    if (
+      !form.email.trim() ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
+    ) {
+      return 'Valid email is required.';
+    }
+
+    if (
+      !form.phone.trim() ||
+      !/^(07|01|\+2547|\+2541)\d{8}$/.test(
+        form.phone.replace(/\s/g, '')
+      )
+    ) {
+      return 'Enter a valid Kenyan phone number.';
+    }
+
+    if (!form.country) {
+      return 'Please select a country.';
+    }
+
+    if (form.password.length < 8) {
+      return 'Password must be at least 8 characters.';
+    }
+
+    if (form.password !== form.confirmPassword) {
+      return 'Passwords do not match.';
+    }
+
+    if (!form.agreedToTerms) {
+      return 'You must agree to the Terms and Conditions.';
+    }
+
     return null;
   }
 
   function handleSubmit(e) {
     e.preventDefault();
+
     setError('');
+
     const validationError = validate();
-    if (validationError) { setError(validationError); return; }
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
+
     setTimeout(() => {
+      // Register user
       const result = registerUser({
         fullName: form.fullName.trim(),
         email: form.email.trim().toLowerCase(),
         phone: form.phone.trim(),
         country: form.country,
         password: form.password,
+
+        // NEW FIELDS
+        activated: false,
+        premium: false,
+        balance: 0,
+        referralCount: 0,
+        referredBy: referrerId || null,
       });
+
       if (!result.success) {
         setError(result.message);
         setLoading(false);
         return;
       }
+
+      // Update referrals
+      const users = JSON.parse(
+        localStorage.getItem('users') || '[]'
+      );
+
+      // Prevent self referral
+      if (
+        referrerId &&
+        referrerId !== result.user.id
+      ) {
+        const referrer = users.find(
+          u => u.id === referrerId
+        );
+
+        if (referrer) {
+          referrer.referralCount =
+            (referrer.referralCount || 0) + 1;
+
+          referrer.balance =
+            (referrer.balance || 0) + 70;
+        }
+
+        localStorage.setItem(
+          'users',
+          JSON.stringify(users)
+        );
+      }
+
+      // Remove referral ID after successful signup
+      localStorage.removeItem('referrerId');
+
+      // Login new user
       setCurrentUser(result.user);
+
+      // Redirect
       router.push('/dashboard');
     }, 800);
   }
@@ -71,21 +167,66 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-grid-bg" />
-      <div className="auth-card">
-        <Link href="/" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
-          <div className="auth-logo">BUSINESS HUB</div>
-        </Link>
-        <p className="auth-tagline">Work. Earn. Grow.</p>
-        <h1 className="auth-title">Create Your Account</h1>
-        <p className="auth-subtitle">Join thousands of earners on Business Hub</p>
 
-        {error && <div className="error-msg">⚠️ {error}</div>}
+      <div className="auth-card">
+
+        <Link
+          href="/"
+          style={{
+            display: 'block',
+            textAlign: 'center',
+            textDecoration: 'none',
+          }}
+        >
+          <div className="auth-logo">
+            BUSINESS HUB
+          </div>
+        </Link>
+
+        <p className="auth-tagline">
+          Work. Earn. Grow.
+        </p>
+
+        <h1 className="auth-title">
+          Create Your Account
+        </h1>
+
+        <p className="auth-subtitle">
+          Join thousands of earners on Business Hub
+        </p>
+
+        {/* Referral Notice */}
+        {referrerId && (
+          <div
+            style={{
+              background: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              color: '#1D4ED8',
+              padding: '12px 16px',
+              borderRadius: 10,
+              marginBottom: 20,
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            🎉 You were invited by a Business Hub member.
+          </div>
+        )}
+
+        {error && (
+          <div className="error-msg">
+            ⚠️ {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} autoComplete="off">
+
           <div className="form-group">
-            <label className="form-label" htmlFor="fullName">Full Name</label>
+            <label className="form-label">
+              Full Name
+            </label>
+
             <input
-              id="fullName"
               name="fullName"
               type="text"
               className="form-input"
@@ -97,9 +238,11 @@ export default function Register() {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="email">Email Address</label>
+            <label className="form-label">
+              Email Address
+            </label>
+
             <input
-              id="email"
               name="email"
               type="email"
               className="form-input"
@@ -111,10 +254,13 @@ export default function Register() {
           </div>
 
           <div className="form-row">
+
             <div className="form-group">
-              <label className="form-label" htmlFor="phone">Kenyan Phone Number</label>
+              <label className="form-label">
+                Phone Number
+              </label>
+
               <input
-                id="phone"
                 name="phone"
                 type="tel"
                 className="form-input"
@@ -124,31 +270,41 @@ export default function Register() {
                 required
               />
             </div>
+
             <div className="form-group">
-              <label className="form-label" htmlFor="country">Country</label>
+              <label className="form-label">
+                Country
+              </label>
+
               <select
-                id="country"
                 name="country"
                 className="form-select"
                 value={form.country}
                 onChange={handleChange}
-                required
               >
-                {COUNTRIES.map(c => (
-                  <option key={c} value={c}>{c}</option>
+                {COUNTRIES.map(country => (
+                  <option
+                    key={country}
+                    value={country}
+                  >
+                    {country}
+                  </option>
                 ))}
               </select>
             </div>
+
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="password">Password</label>
+            <label className="form-label">
+              Password
+            </label>
+
             <input
-              id="password"
               name="password"
               type="password"
               className="form-input"
-              placeholder="Min. 8 characters"
+              placeholder="Minimum 8 characters"
               value={form.password}
               onChange={handleChange}
               required
@@ -156,13 +312,15 @@ export default function Register() {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="confirmPassword">Confirm Password</label>
+            <label className="form-label">
+              Confirm Password
+            </label>
+
             <input
-              id="confirmPassword"
               name="confirmPassword"
               type="password"
               className="form-input"
-              placeholder="Re-enter your password"
+              placeholder="Re-enter password"
               value={form.confirmPassword}
               onChange={handleChange}
               required
@@ -172,24 +330,11 @@ export default function Register() {
           {/* Terms */}
           <div className="terms-box">
             <strong>Terms and Conditions</strong>
+
             <br /><br />
-            By creating an account on Online Business Hub, you agree to the following:
-            <br /><br />
-            1. <strong>Eligibility:</strong> You must be 18 years or older to use this platform.
-            <br />
-            2. <strong>Account Activation:</strong> A one-time activation fee of KES 50 is required to access and bid on tasks.
-            <br />
-            3. <strong>Task Completion:</strong> You agree to complete any task you bid on and win in good faith.
-            <br />
-            4. <strong>Payments:</strong> All payments are processed via M-Pesa through Paystack. Business Hub is not responsible for M-Pesa network failures.
-            <br />
-            5. <strong>Prohibited Activities:</strong> Spamming, fraud, plagiarism, and misrepresentation are grounds for immediate account termination.
-            <br />
-            6. <strong>Privacy:</strong> Your personal data will never be sold to third parties.
-            <br />
-            7. <strong>Disputes:</strong> Any disputes shall be resolved through Business Hub&apos;s internal arbitration process.
-            <br /><br />
-            By checking the box below, you confirm that you have read, understood, and agreed to these terms.
+
+            By creating an account on Business Hub,
+            you agree to the platform terms and policies.
           </div>
 
           <div className="form-group">
@@ -200,25 +345,42 @@ export default function Register() {
                 checked={form.agreedToTerms}
                 onChange={handleChange}
               />
-              I agree to the Terms and Conditions and Privacy Policy
+
+              I agree to the Terms and Conditions
             </label>
           </div>
 
-          <button type="submit" className="auth-btn" disabled={loading}>
+          <button
+            type="submit"
+            className="auth-btn"
+            disabled={loading}
+          >
             {loading ? (
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                <span className="spinner" /> Creating account...
+              <span
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                }}
+              >
+                <span className="spinner" />
+                Creating account...
               </span>
             ) : (
               '🚀 Create Account'
             )}
           </button>
+
         </form>
 
         <div className="auth-link">
           Already have an account?{' '}
-          <Link href="/login">Login here →</Link>
+          <Link href="/login">
+            Login here →
+          </Link>
         </div>
+
       </div>
     </div>
   );
