@@ -6,10 +6,16 @@ import Link from 'next/link';
 import { getCurrentUser, logout, activateUser } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TASK MODAL
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────
+const SITE_URL = 'https://onlinejob-pi.vercel.app';
+const ACTIVATION_AMOUNT = 50;
+const PREMIUM_AMOUNT = 130;
 
+// ─────────────────────────────────────────────────────────────
+// TASK MODAL
+// ─────────────────────────────────────────────────────────────
 function TaskModal({ task, user, onClose, onBidClick }) {
   if (!task) return null;
 
@@ -18,6 +24,7 @@ function TaskModal({ task, user, onClose, onBidClick }) {
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title">{task.title}</div>
+
           <button className="modal-close" onClick={onClose}>
             ×
           </button>
@@ -49,6 +56,7 @@ function TaskModal({ task, user, onClose, onBidClick }) {
           <div className="modal-payment">
             <div>
               <div className="modal-payment-label">Task Payment</div>
+
               <div
                 style={{
                   fontSize: 13,
@@ -80,7 +88,10 @@ function TaskModal({ task, user, onClose, onBidClick }) {
             </div>
           )}
 
-          <button className="bid-btn" onClick={() => onBidClick(task)}>
+          <button
+            className="bid-btn"
+            onClick={() => onBidClick(task)}
+          >
             💼 Bid on This Task
           </button>
         </div>
@@ -89,11 +100,10 @@ function TaskModal({ task, user, onClose, onBidClick }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ACTIVATION PAYMENT MODAL
-// ─────────────────────────────────────────────────────────────────────────────
-
-function PaymentModal({ task, user, onClose, onSuccess }) {
+// ─────────────────────────────────────────────────────────────
+// PAYMENT MODAL
+// ─────────────────────────────────────────────────────────────
+function PaymentModal({ task, user, onClose }) {
   const [phone, setPhone] = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState('prompt');
@@ -104,10 +114,10 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
       return;
     }
 
-    try {
-      setLoading(true);
-      setStep('processing');
+    setLoading(true);
+    setStep('processing');
 
+    try {
       const res = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: {
@@ -115,32 +125,31 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
         },
         body: JSON.stringify({
           email: user.email,
-          amount: 50,
+          amount: ACTIVATION_AMOUNT,
           phone,
-          type: 'activation',
-          callback_url:
-            'https://onlinejob-pi.vercel.app/dashboard?payment=success',
+          plan: 'activation',
         }),
       });
 
       const data = await res.json();
 
-      if (data.status && data.data.authorization_url) {
+      if (data.status) {
         localStorage.setItem(
           'pendingActivation',
           JSON.stringify({
             userId: user.id,
+            type: 'activation',
           })
         );
 
         window.location.href = data.data.authorization_url;
       } else {
-        alert('Payment failed');
+        alert(data.message || 'Payment failed');
         setStep('prompt');
       }
     } catch (err) {
       console.error(err);
-      alert('Something went wrong');
+      alert('Network error. Please try again.');
       setStep('prompt');
     }
 
@@ -171,8 +180,9 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
           {step === 'prompt' && (
             <>
               <div className="pay-message">
-                Activate your account for <strong>KES 50</strong> to
-                start bidding on tasks and earning money.
+                Activate your account for{' '}
+                <strong>KES {ACTIVATION_AMOUNT}</strong>{' '}
+                to start bidding on tasks and earning money.
               </div>
 
               <div className="pay-amount">
@@ -180,7 +190,9 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
                   One-time activation fee
                 </div>
 
-                <div className="pay-amount-value">KES 50</div>
+                <div className="pay-amount-value">
+                  KES {ACTIVATION_AMOUNT}
+                </div>
 
                 <div className="pay-amount-sub">
                   Lifetime access • No hidden fees
@@ -205,8 +217,7 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
               >
                 {loading ? (
                   <>
-                    <span className="spinner" />
-                    Processing...
+                    <span className="spinner" /> Processing...
                   </>
                 ) : (
                   '🔒 Pay via Paystack'
@@ -247,10 +258,9 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PREMIUM MODAL
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────
+// UPGRADE MODAL
+// ─────────────────────────────────────────────────────────────
 function UpgradeModal({ user, onClose }) {
   const [phone, setPhone] = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
@@ -261,9 +271,9 @@ function UpgradeModal({ user, onClose }) {
       return;
     }
 
-    try {
-      setLoading(true);
+    setLoading(true);
 
+    try {
       const res = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: {
@@ -271,24 +281,30 @@ function UpgradeModal({ user, onClose }) {
         },
         body: JSON.stringify({
           email: user.email,
-          amount: 130,
+          amount: PREMIUM_AMOUNT,
           phone,
           plan: 'premium',
-          callback_url:
-            'https://onlinejob-pi.vercel.app/dashboard?premium=success',
         }),
       });
 
       const data = await res.json();
 
-      if (data.status && data.data.authorization_url) {
+      if (data.status) {
+        localStorage.setItem(
+          'pendingActivation',
+          JSON.stringify({
+            userId: user.id,
+            type: 'premium',
+          })
+        );
+
         window.location.href = data.data.authorization_url;
       } else {
-        alert('Payment initiation failed');
+        alert(data.message || 'Payment initiation failed');
       }
     } catch (err) {
       console.error(err);
-      alert('Something went wrong');
+      alert('Network error. Please try again.');
     }
 
     setLoading(false);
@@ -343,7 +359,10 @@ function UpgradeModal({ user, onClose }) {
               ['🏆', 'Premium badge on your profile'],
               ['📞', 'Dedicated support line'],
             ].map(([icon, text]) => (
-              <div key={text} className="premium-feature-item">
+              <div
+                key={text}
+                className="premium-feature-item"
+              >
                 <span>{icon}</span>
                 <span>{text}</span>
               </div>
@@ -364,11 +383,11 @@ function UpgradeModal({ user, onClose }) {
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              KES 130
+              KES {PREMIUM_AMOUNT}
             </div>
 
             <div className="pay-amount-sub">
-              weekly subscription
+              per week • Cancel anytime
             </div>
           </div>
 
@@ -394,11 +413,10 @@ function UpgradeModal({ user, onClose }) {
           >
             {loading ? (
               <>
-                <span className="spinner" />
-                Processing...
+                <span className="spinner" /> Processing...
               </>
             ) : (
-              '⭐ Upgrade to Premium'
+              `⭐ Upgrade to Premium — KES ${PREMIUM_AMOUNT}/week`
             )}
           </button>
 
@@ -411,118 +429,112 @@ function UpgradeModal({ user, onClose }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // MAIN DASHBOARD
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const router = useRouter();
 
-  const [user, setUser] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [user, setUser] = useState(null);
 
   const [selectedTask, setSelectedTask] = useState(null);
   const [payTask, setPayTask] = useState(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [showReferral, setShowReferral] = useState(false);
-
-  const [filter, setFilter] = useState('All');
-  const [search, setSearch] = useState('');
-
-  const categories = [
-    'All',
-    'Writing',
-    'Research',
-    'Data Entry',
-    'Design',
-    'Marketing',
-    'Transcription',
-    'Translation',
-    'Survey',
-    'Testing',
-    'Audio',
-    'Education',
-    'Admin',
-  ];
 
   useEffect(() => {
     setMounted(true);
 
-    const u = getCurrentUser();
+    const currentUser = getCurrentUser();
 
-    if (!u) {
+    if (!currentUser) {
       router.replace('/login');
       return;
     }
 
-    // PAYMENT SUCCESS CHECK
-    const params = new URLSearchParams(window.location.search);
+    setUser(currentUser);
+  }, [router]);
 
-    const paymentSuccess = params.get('payment');
-    const premiumSuccess = params.get('premium');
+  // ───────────────────────────────────────────────────────────
+  // VERIFY PAYSTACK PAYMENT
+  // ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!mounted || !user) return;
 
-    let updatedUser = u;
+    const reference =
+      router.query.reference || router.query.trxref;
 
-    // ACTIVATE USER AFTER SUCCESSFUL PAYMENT
-    if (paymentSuccess === 'success' && !u.activated) {
-      const activated = activateUser(u.id);
+    if (!reference) return;
 
-      if (activated) {
-        updatedUser = {
-          ...activated,
-          activated: true,
-        };
-
-        localStorage.setItem(
-          'currentUser',
-          JSON.stringify(updatedUser)
+    async function verifyPayment() {
+      try {
+        const pending = JSON.parse(
+          localStorage.getItem('pendingActivation') || 'null'
         );
 
-        alert('✅ Account activated successfully!');
+        if (!pending || pending.userId !== user.id) return;
+
+        const res = await fetch(
+          `/api/paystack/verify?reference=${reference}`
+        );
+
+        const data = await res.json();
+
+        // PAYMENT SUCCESSFUL
+        if (
+          data.status &&
+          data.data &&
+          data.data.status === 'success'
+        ) {
+          // ACTIVATE ACCOUNT
+          const updatedUser = activateUser(user.id);
+
+          if (updatedUser) {
+            const newUser = {
+              ...updatedUser,
+              activated: true,
+              premium:
+                pending.type === 'premium'
+                  ? true
+                  : updatedUser.premium,
+            };
+
+            setUser(newUser);
+
+            // SAVE UPDATED USER
+            localStorage.setItem(
+              'currentUser',
+              JSON.stringify(newUser)
+            );
+          }
+
+          alert(
+            pending.type === 'premium'
+              ? 'Premium upgrade successful!'
+              : 'Account activated successfully!'
+          );
+
+          localStorage.removeItem('pendingActivation');
+
+          // CLEAN URL
+          router.replace('/dashboard', undefined, {
+            shallow: true,
+          });
+        } else {
+          alert('Payment verification failed.');
+        }
+      } catch (err) {
+        console.error(err);
       }
     }
 
-    // PREMIUM SUCCESS
-    if (premiumSuccess === 'success') {
-      updatedUser = {
-        ...updatedUser,
-        premium: true,
-      };
-
-      localStorage.setItem(
-        'currentUser',
-        JSON.stringify(updatedUser)
-      );
-
-      alert('⭐ Premium upgraded successfully!');
-    }
-
-    setUser(updatedUser);
-  }, [router]);
+    verifyPayment();
+  }, [mounted, user, router]);
 
   const handleLogout = useCallback(() => {
     logout();
     router.push('/');
   }, [router]);
-
-  const handleBidClick = useCallback((task) => {
-    setSelectedTask(null);
-    setPayTask(task);
-  }, []);
-
-  const filteredTasks = TASKS.filter((t) => {
-    const matchCat =
-      filter === 'All' || t.category === filter;
-
-    const matchSearch =
-      !search ||
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      t.description
-        .toLowerCase()
-        .includes(search.toLowerCase());
-
-    return matchCat && matchSearch;
-  });
 
   if (!mounted || !user) {
     return (
@@ -532,40 +544,20 @@ export default function Dashboard() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'var(--white-off)',
         }}
       >
-        <div
-          className="spinner"
-          style={{
-            width: 40,
-            height: 40,
-            borderTopColor: 'var(--blue)',
-            borderColor: 'var(--gray-light)',
-            borderWidth: 3,
-          }}
-        />
+        Loading...
       </div>
     );
   }
 
-  const initials =
-    user.fullName
-      ?.split(' ')
-      .map((n) => n[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase() || 'U';
-
-  // UPDATED REFERRAL LINK
-  const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${
-    user.id || 'USER123'
+  const referralLink = `${SITE_URL}/join?ref=${
+    user?.id || 'USER123'
   }`;
 
   return (
     <div className="dashboard">
       {/* NAVBAR */}
-
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">
           <Link href="/" className="dash-logo">
@@ -583,18 +575,23 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="dash-avatar">{initials}</div>
+            <button
+              className="logout-btn"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
           </div>
         </div>
       </nav>
 
       <main className="dash-main">
         {/* WELCOME */}
-
         <div className="dash-welcome">
           <div className="dash-welcome-text">
             <h2>
-              Welcome back, {user.fullName.split(' ')[0]}! 👋
+              Welcome back,{' '}
+              {user.fullName?.split(' ')[0]} 👋
             </h2>
 
             <p>
@@ -631,186 +628,64 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* REFERRAL BANNER */}
-
-        <div
-          className="referral-banner"
-          onClick={() => {
-            navigator.clipboard.writeText(referralLink);
-
-            alert('Referral link copied!');
-          }}
-        >
-          <div className="referral-banner-left">
-            <span className="referral-banner-icon">🔗</span>
-
-            <div>
-              <div className="referral-banner-title">
-                Refer Friends & Earn KES 70 Each
-              </div>
-
-              <div className="referral-banner-sub">
-                Share your link · Track referrals · Get paid
-              </div>
-            </div>
+        {/* REFERRAL */}
+        <div className="referral-banner">
+          <div className="referral-banner-title">
+            🔗 Referral Link
           </div>
 
-          <div className="referral-banner-link">
-            <span className="referral-link-preview">
-              {referralLink.replace('https://', '')}
-            </span>
-
-            <button className="referral-copy-btn">
-              Copy Link →
-            </button>
+          <div className="referral-link-preview">
+            {referralLink}
           </div>
         </div>
 
-        {/* QUICK ACTIONS */}
-
+        {/* PREMIUM */}
         <div className="quick-actions">
           <button
             className="quick-action-card"
             onClick={() => setShowUpgrade(true)}
           >
-            <span className="quick-action-icon">⭐</span>
-
-            <span className="quick-action-label">
-              Upgrade Premium
-            </span>
+            ⭐ Upgrade Premium — KES {PREMIUM_AMOUNT}/week
           </button>
         </div>
 
         {/* TASKS */}
-
-        <div id="tasks-section">
-          <div className="dash-section-title">
-            Available Tasks
-          </div>
-
-          <div className="dash-section-sub">
-            Browse and bid on tasks that match your skills
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              marginBottom: 20,
-              flexWrap: 'wrap',
-            }}
-          >
-            <input
-              type="text"
-              placeholder="🔍 Search tasks..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                flex: 1,
-                minWidth: 200,
-                padding: '10px 16px',
-                border: '1.5px solid var(--gray-light)',
-                borderRadius: 8,
-                fontSize: 14,
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-              marginBottom: 24,
-            }}
-          >
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setFilter(cat)}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: 100,
-                  border: '1.5px solid',
-                  borderColor:
-                    filter === cat
-                      ? 'var(--blue)'
-                      : 'var(--gray-light)',
-                  background:
-                    filter === cat
-                      ? 'var(--blue)'
-                      : 'var(--white)',
-                  color:
-                    filter === cat
-                      ? 'var(--white)'
-                      : 'var(--gray)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          <div className="tasks-grid">
-            {filteredTasks.map((task) => (
-              <div key={task.id} className="task-card">
-                <div className="task-card-header">
-                  <div className="task-poster">
-                    <div className="task-poster-avatar">
-                      {task.poster.charAt(0).toUpperCase()}
-                    </div>
-
-                    <div>
-                      <div className="task-poster-name">
-                        {task.poster}
-                      </div>
-
-                      <div className="task-poster-date">
-                        {task.datePosted}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="task-payment">
-                    KES {task.payment.toLocaleString()}
-                  </div>
-                </div>
-
-                <div className="task-category">
-                  {task.category}
-                </div>
-
-                <div className="task-title">
-                  {task.title}
-                </div>
-
-                <div className="task-desc">
-                  {task.description}
-                </div>
-
-                <button
-                  className="task-view-btn"
-                  onClick={() => setSelectedTask(task)}
-                >
-                  👁️ View / Bid
-                </button>
+        <div className="tasks-grid">
+          {TASKS.map((task) => (
+            <div key={task.id} className="task-card">
+              <div className="task-title">
+                {task.title}
               </div>
-            ))}
-          </div>
+
+              <div className="task-desc">
+                {task.description}
+              </div>
+
+              <div className="task-payment">
+                KES {task.payment.toLocaleString()}
+              </div>
+
+              <button
+                className="task-view-btn"
+                onClick={() => setSelectedTask(task)}
+              >
+                👁️ View / Bid
+              </button>
+            </div>
+          ))}
         </div>
       </main>
 
       {/* MODALS */}
-
       {selectedTask && (
         <TaskModal
           task={selectedTask}
           user={user}
           onClose={() => setSelectedTask(null)}
-          onBidClick={handleBidClick}
+          onBidClick={(task) => {
+            setSelectedTask(null);
+            setPayTask(task);
+          }}
         />
       )}
 
