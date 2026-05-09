@@ -75,10 +75,7 @@ function TaskModal({ task, user, onClose, onBidClick }) {
             </div>
           )}
 
-          <button
-            className="bid-btn"
-            onClick={() => onBidClick(task)}
-          >
+          <button className="bid-btn" onClick={() => onBidClick(task)}>
             💼 Bid on This Task
           </button>
         </div>
@@ -102,22 +99,27 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
     setLoading(true);
     setStep('processing');
 
-    const res = await fetch('/api/paystack/initialize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: user.email,
-        amount: 50,
-        phone,
-      }),
-    });
+    try {
+      const res = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          amount: 50,
+          phone,
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (data.status) {
-      window.location.href = data.data.authorization_url;
-    } else {
-      alert('Payment failed');
+      if (data.status) {
+        window.location.href = data.data.authorization_url;
+      } else {
+        alert('Payment failed');
+        setStep('prompt');
+      }
+    } catch (error) {
+      alert('Something went wrong');
       setStep('prompt');
     }
 
@@ -126,10 +128,7 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="pay-modal-card"
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="pay-modal-card" onClick={e => e.stopPropagation()}>
         <div className="pay-modal-header">
           <div className="pay-modal-title">BUSINESS HUB</div>
 
@@ -229,23 +228,27 @@ function UpgradeModal({ user, onClose }) {
 
     setLoading(true);
 
-    const res = await fetch('/api/paystack/initialize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: user.email,
-        amount: 130,
-        phone,
-        plan: 'premium',
-      }),
-    });
+    try {
+      const res = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          amount: 130,
+          phone,
+          plan: 'premium',
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (data.status) {
-      window.location.href = data.data.authorization_url;
-    } else {
-      alert('Payment initiation failed. Please try again.');
+      if (data.status) {
+        window.location.href = data.data.authorization_url;
+      } else {
+        alert('Payment initiation failed. Please try again.');
+      }
+    } catch (error) {
+      alert('Something went wrong');
     }
 
     setLoading(false);
@@ -305,15 +308,12 @@ function UpgradeModal({ user, onClose }) {
           </div>
 
           <div className="pay-amount" style={{ marginTop: 20 }}>
-            <div className="pay-amount-label">
-              Weekly Premium Plan
-            </div>
+            <div className="pay-amount-label">Monthly Premium Plan</div>
 
             <div
               className="pay-amount-value"
               style={{
-                background:
-                  'linear-gradient(135deg,#0047FF,#7C3AED)',
+                background: 'linear-gradient(135deg,#0047FF,#7C3AED)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }}
@@ -322,7 +322,7 @@ function UpgradeModal({ user, onClose }) {
             </div>
 
             <div className="pay-amount-sub">
-              per week · Cancel anytime
+              per month · Cancel anytime
             </div>
           </div>
 
@@ -340,8 +340,7 @@ function UpgradeModal({ user, onClose }) {
           <button
             className="pay-btn"
             style={{
-              background:
-                'linear-gradient(135deg,#0047FF,#7C3AED)',
+              background: 'linear-gradient(135deg,#0047FF,#7C3AED)',
             }}
             onClick={handleUpgrade}
             disabled={loading}
@@ -364,6 +363,87 @@ function UpgradeModal({ user, onClose }) {
   );
 }
 
+// ─── Withdraw Modal ───────────────────────────────────────────────────────────
+function WithdrawLockedModal({ onClose, onUpgrade }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="pay-modal-card"
+        style={{ maxWidth: 400 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div
+          className="pay-modal-header"
+          style={{ background: 'var(--black)' }}
+        >
+          <div className="pay-modal-title">Withdrawal</div>
+
+          <button
+            className="modal-close"
+            onClick={onClose}
+            style={{ background: 'rgba(255,255,255,0.15)' }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div
+          className="pay-modal-body"
+          style={{ textAlign: 'center', padding: '36px 28px' }}
+        >
+          <div style={{ fontSize: 52, marginBottom: 16 }}>🔒</div>
+
+          <h3
+            style={{
+              fontSize: 20,
+              fontWeight: 700,
+              marginBottom: 12,
+              color: 'var(--black)',
+            }}
+          >
+            Premium Required
+          </h3>
+
+          <p
+            style={{
+              fontSize: 14,
+              color: 'var(--gray)',
+              lineHeight: 1.7,
+              marginBottom: 24,
+            }}
+          >
+            Withdrawals are available to <strong>Premium members</strong> only.
+          </p>
+
+          <button
+            className="pay-btn"
+            style={{
+              background: 'linear-gradient(135deg,#0047FF,#7C3AED)',
+              marginBottom: 12,
+            }}
+            onClick={onUpgrade}
+          >
+            ⭐ Upgrade to Premium
+          </button>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--gray)',
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            Maybe later
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Referral Modal ───────────────────────────────────────────────────────────
 function ReferralModal({ user, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -375,7 +455,6 @@ function ReferralModal({ user, onClose }) {
   function copyLink() {
     navigator.clipboard.writeText(referralLink).then(() => {
       setCopied(true);
-
       setTimeout(() => setCopied(false), 2500);
     });
   }
@@ -390,14 +469,11 @@ function ReferralModal({ user, onClose }) {
         <div
           className="pay-modal-header"
           style={{
-            background:
-              'linear-gradient(135deg, #059669, #0047FF)',
+            background: 'linear-gradient(135deg, #059669, #0047FF)',
           }}
         >
           <div>
-            <div className="pay-modal-title">
-              🔗 Your Referral Link
-            </div>
+            <div className="pay-modal-title">🔗 Your Referral Link</div>
 
             <div
               style={{
@@ -428,11 +504,8 @@ function ReferralModal({ user, onClose }) {
             }}
           >
             Share your referral link and earn{' '}
-            <strong style={{ color: '#059669' }}>
-              KES 100
-            </strong>{' '}
-            for every friend who signs up and activates their
-            account.
+            <strong style={{ color: '#059669' }}>KES 100</strong>
+            {' '}for every friend who signs up.
           </div>
 
           <div style={{ marginBottom: 16 }}>
@@ -457,9 +530,7 @@ function ReferralModal({ user, onClose }) {
                 onClick={copyLink}
                 style={{
                   padding: '0 20px',
-                  background: copied
-                    ? '#059669'
-                    : 'var(--blue)',
+                  background: copied ? '#059669' : 'var(--blue)',
                   color: '#fff',
                   borderRadius: 8,
                   fontWeight: 700,
@@ -476,6 +547,173 @@ function ReferralModal({ user, onClose }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
+export default function Dashboard() {
+  const router = useRouter();
+
+  const [user, setUser] = useState(null);
+  const [mounted, setMounted] = useState(false);
+
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [payTask, setPayTask] = useState(null);
+
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [showReferral, setShowReferral] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+
+    const u = getCurrentUser();
+
+    if (!u) {
+      router.replace('/login');
+    } else {
+      setUser(u);
+    }
+  }, [router]);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    router.push('/');
+  }, [router]);
+
+  const handleBidClick = useCallback(task => {
+    setSelectedTask(null);
+    setPayTask(task);
+  }, []);
+
+  const handlePaySuccess = useCallback(() => {
+    const updated = activateUser(user.id);
+
+    if (updated) setUser(updated);
+  }, [user]);
+
+  if (!mounted || !user) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        Loading...
+      </div>
+    );
+  }
+
+  const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${
+    user.id || 'USER123'
+  }`;
+
+  return (
+    <div className="dashboard">
+      <nav className="dash-navbar">
+        <div className="dash-navbar-inner">
+          <Link href="/" className="dash-logo">
+            BUSINESS HUB
+          </Link>
+
+          <button onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
+      </nav>
+
+      <main className="dash-main">
+        <div className="referral-banner" onClick={() => setShowReferral(true)}>
+          <div className="referral-banner-left">
+            <span className="referral-banner-icon">🔗</span>
+
+            <div>
+              <div className="referral-banner-title">
+                Refer Friends & Earn KES 70 Each
+              </div>
+
+              <div className="referral-banner-sub">
+                Share your link · Track referrals · Get paid instantly
+              </div>
+            </div>
+          </div>
+
+          <div className="referral-banner-link">
+            <span className="referral-link-preview">
+              {referralLink.replace('https://', '')}
+            </span>
+
+            <button className="referral-copy-btn">
+              Copy Link →
+            </button>
+          </div>
+        </div>
+
+        <div className="tasks-grid">
+          {TASKS.map(task => (
+            <div key={task.id} className="task-card">
+              <div className="task-title">{task.title}</div>
+
+              <div className="task-payment">
+                KES {task.payment.toLocaleString()}
+              </div>
+
+              <button
+                className="task-view-btn"
+                onClick={() => setSelectedTask(task)}
+              >
+                👁️ View / Bid
+              </button>
+            </div>
+          ))}
+        </div>
+      </main>
+
+      {selectedTask && (
+        <TaskModal
+          task={selectedTask}
+          user={user}
+          onClose={() => setSelectedTask(null)}
+          onBidClick={handleBidClick}
+        />
+      )}
+
+      {payTask && (
+        <PaymentModal
+          task={payTask}
+          user={user}
+          onClose={() => setPayTask(null)}
+          onSuccess={handlePaySuccess}
+        />
+      )}
+
+      {showUpgrade && (
+        <UpgradeModal
+          user={user}
+          onClose={() => setShowUpgrade(false)}
+        />
+      )}
+
+      {showWithdraw && (
+        <WithdrawLockedModal
+          onClose={() => setShowWithdraw(false)}
+          onUpgrade={() => {
+            setShowWithdraw(false);
+            setShowUpgrade(true);
+          }}
+        />
+      )}
+
+      {showReferral && (
+        <ReferralModal
+          user={user}
+          onClose={() => setShowReferral(false)}
+        />
+      )}
     </div>
   );
 }
