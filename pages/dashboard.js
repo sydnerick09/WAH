@@ -1,14 +1,38 @@
 // pages/dashboard.js
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { getCurrentUser, logout, activateUser } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 
-// ─── Task Detail Modal ───────────────────────────────────────────────────────
-function TaskModal({ task, user, onClose, onBidClick }) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const UNLOCK_KEY = 'bh_tasks_unlocked';
+
+function isTasksUnlocked() {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(UNLOCK_KEY) === 'true';
+}
+
+function setTasksUnlocked() {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(UNLOCK_KEY, 'true');
+  }
+}
+
+function getGmailSubmitLink(taskTitle) {
+  const to = 'businesshub.comke@gmail.com';
+  const subject = encodeURIComponent(`Task Submission: ${taskTitle}`);
+  const body = encodeURIComponent(
+    `Hello Business Hub Team,\n\nI would like to submit my work for the following task:\n\nTask: ${taskTitle}\n\nSubmit your tasks on email for review.\n\n[Please attach your work below or describe what you have completed]\n\nThank you.`
+  );
+  return `https://mail.google.com/mail/?view=cm&to=${to}&su=${subject}&body=${body}`;
+}
+
+// ─── Task Detail Modal ────────────────────────────────────────────────────────
+function TaskModal({ task, user, onClose, onBidClick, tasksUnlocked }) {
   if (!task) return null;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={e => e.stopPropagation()}>
@@ -35,6 +59,7 @@ function TaskModal({ task, user, onClose, onBidClick }) {
               <div className="modal-meta-value">🏷️ {task.category}</div>
             </div>
           </div>
+
           <div className="modal-payment">
             <div>
               <div className="modal-payment-label">Task Payment</div>
@@ -44,7 +69,9 @@ function TaskModal({ task, user, onClose, onBidClick }) {
             </div>
             <div className="modal-payment-amount">KES {task.payment.toLocaleString()}</div>
           </div>
+
           <p className="modal-desc">{task.description}</p>
+
           {task.questions && task.questions.length > 0 && (
             <div className="modal-questions">
               <h4>Questions from Poster</h4>
@@ -53,16 +80,43 @@ function TaskModal({ task, user, onClose, onBidClick }) {
               ))}
             </div>
           )}
-          <button className="bid-btn" onClick={() => onBidClick(task)}>
-            💼 Bid on This Task
-          </button>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+            {/* Bid Button */}
+            <button
+              className="bid-btn"
+              style={{ flex: 1 }}
+              onClick={() => onBidClick(task)}
+            >
+              💼 Bid on This Task
+            </button>
+
+            {/* Submit Button — always visible, opens Gmail */}
+            <a
+              href={getGmailSubmitLink(task.title)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bid-btn"
+              style={{
+                flex: 1,
+                background: '#059669',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              📤 Submit Task
+            </a>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Payment / Activation Modal ──────────────────────────────────────────────
+// ─── Payment / Activation Modal ───────────────────────────────────────────────
 function PaymentModal({ task, user, onClose, onSuccess }) {
   const [phone, setPhone] = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
@@ -72,16 +126,23 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
     if (!phone.trim()) { alert('Enter phone number'); return; }
     setLoading(true);
     setStep('processing');
-    const res = await fetch('/api/paystack/initialize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 50, phone }),
-    });
-    const data = await res.json();
-    if (data.status) {
-      window.location.href = data.data.authorization_url;
-    } else {
-      alert('Payment failed');
+    try {
+      const res = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, amount: 50, phone }),
+      });
+      const data = await res.json();
+      if (data.status) {
+        // Mark tasks as unlocked before redirecting
+        setTasksUnlocked();
+        window.location.href = data.data.authorization_url;
+      } else {
+        alert('Payment failed. Please try again.');
+        setStep('prompt');
+      }
+    } catch {
+      alert('Network error. Please try again.');
       setStep('prompt');
     }
     setLoading(false);
@@ -98,12 +159,13 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
           {step === 'prompt' && (
             <>
               <div className="pay-message">
-                Activate your account for <strong>KES 50</strong> to start bidding on tasks and earning money.
+                Unlock <strong>all tasks for free — forever</strong> with a one-time payment of{' '}
+                <strong>KES 50</strong>. No recurring charges.
               </div>
               <div className="pay-amount">
-                <div className="pay-amount-label">One-time activation fee</div>
+                <div className="pay-amount-label">One-time unlock fee</div>
                 <div className="pay-amount-value">KES 50</div>
-                <div className="pay-amount-sub">Lifetime access • No hidden fees</div>
+                <div className="pay-amount-sub">All tasks free forever · No hidden fees</div>
               </div>
               <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
               <input
@@ -113,7 +175,9 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
                 placeholder="+254 7XX XXX XXX"
               />
               <button className="pay-btn" onClick={handlePay} disabled={loading}>
-                {loading ? <><span className="spinner" /> Processing...</> : '🔒 Pay via Paystack'}
+                {loading
+                  ? <><span className="spinner" /> Processing...</>
+                  : '🔒 Pay KES 50 via Paystack'}
               </button>
               <div className="pay-secure">🔐 Secured by Paystack · M-Pesa supported</div>
             </>
@@ -138,16 +202,20 @@ function UpgradeModal({ user, onClose }) {
   async function handleUpgrade() {
     if (!phone.trim()) { alert('Enter phone number'); return; }
     setLoading(true);
-    const res = await fetch('/api/paystack/initialize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 180, phone, plan: 'premium' }),
-    });
-    const data = await res.json();
-    if (data.status) {
-      window.location.href = data.data.authorization_url;
-    } else {
-      alert('Payment initiation failed. Please try again.');
+    try {
+      const res = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, amount: 180, phone, plan: 'premium' }),
+      });
+      const data = await res.json();
+      if (data.status) {
+        window.location.href = data.data.authorization_url;
+      } else {
+        alert('Payment initiation failed. Please try again.');
+      }
+    } catch {
+      alert('Network error. Please try again.');
     }
     setLoading(false);
   }
@@ -173,14 +241,15 @@ function UpgradeModal({ user, onClose }) {
               ['📞', 'Dedicated support line'],
             ].map(([icon, text]) => (
               <div key={text} className="premium-feature-item">
-                <span>{icon}</span>
-                <span>{text}</span>
+                <span>{icon}</span><span>{text}</span>
               </div>
             ))}
           </div>
           <div className="pay-amount" style={{ marginTop: 20 }}>
             <div className="pay-amount-label">Monthly Premium Plan</div>
-            <div className="pay-amount-value" style={{ background: 'linear-gradient(135deg,#0047FF,#7C3AED)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>KES 180</div>
+            <div className="pay-amount-value" style={{ background: 'linear-gradient(135deg,#0047FF,#7C3AED)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              KES 180
+            </div>
             <div className="pay-amount-sub">per month · Cancel anytime</div>
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
@@ -205,7 +274,7 @@ function UpgradeModal({ user, onClose }) {
   );
 }
 
-// ─── Withdraw Modal (requires premium) ───────────────────────────────────────
+// ─── Withdraw Modal (requires premium) ────────────────────────────────────────
 function WithdrawLockedModal({ onClose, onUpgrade }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -220,7 +289,7 @@ function WithdrawLockedModal({ onClose, onUpgrade }) {
             Premium Required
           </h3>
           <p style={{ fontSize: 14, color: 'var(--gray)', lineHeight: 1.7, marginBottom: 24 }}>
-            Withdrawals are available to <strong>Premium members</strong> only. Upgrade your account to unlock instant M-Pesa withdrawals.
+            Withdrawals are available to <strong>Premium members</strong> only. Upgrade to unlock instant M-Pesa withdrawals.
           </p>
           <button
             className="pay-btn"
@@ -241,14 +310,29 @@ function WithdrawLockedModal({ onClose, onUpgrade }) {
 // ─── Referral Modal ───────────────────────────────────────────────────────────
 function ReferralModal({ user, onClose }) {
   const [copied, setCopied] = useState(false);
+
+  // Clean referral link — no extra spaces
   const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user?.id || 'USER123'}`;
 
   function copyLink() {
     navigator.clipboard.writeText(referralLink).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {
+      // Fallback for older browsers
+      const el = document.createElement('textarea');
+      el.value = referralLink;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
     });
   }
+
+  const referralCount = user?.referrals?.length || 0;
+  const referralEarnings = referralCount * 70;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -262,8 +346,9 @@ function ReferralModal({ user, onClose }) {
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4' }}>
-            Share your referral link and earn <strong style={{ color: '#059669' }}>KES 70</strong> for every friend who signs up and activates their account.
+            Share your link and earn <strong style={{ color: '#059669' }}>KES 70</strong> for every friend who signs up and activates their account. Your balance is updated automatically when they join.
           </div>
+
           <div style={{ marginBottom: 16 }}>
             <div className="pay-phone-label">Your unique referral link</div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -292,13 +377,14 @@ function ReferralModal({ user, onClose }) {
               </button>
             </div>
           </div>
+
           <div className="referral-stats">
             <div className="referral-stat">
-              <div className="referral-stat-num">0</div>
+              <div className="referral-stat-num">{referralCount}</div>
               <div className="referral-stat-label">Referrals</div>
             </div>
             <div className="referral-stat">
-              <div className="referral-stat-num">KES 0</div>
+              <div className="referral-stat-num">KES {referralEarnings}</div>
               <div className="referral-stat-label">Earned</div>
             </div>
             <div className="referral-stat">
@@ -306,10 +392,19 @@ function ReferralModal({ user, onClose }) {
               <div className="referral-stat-label">Per Referral</div>
             </div>
           </div>
+
           <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
             {[
-              { label: '📱 WhatsApp', color: '#25D366', url: `https://wa.me/?text=Join%20Business%20Hub%20and%20earn%20online!%20${encodeURIComponent(referralLink)}` },
-              { label: '✉️ Email', color: '#EA4335', url: `mailto:?subject=Join%20Business%20Hub&body=Hey!%20Join%20me%20on%20Business%20Hub%20and%20start%20earning%20online.%20Use%20my%20link:%20${referralLink}` },
+              {
+                label: '📱 WhatsApp',
+                color: '#25D366',
+                url: `https://wa.me/?text=${encodeURIComponent(`Join Business Hub and earn online! Use my link: ${referralLink}`)}`,
+              },
+              {
+                label: '✉️ Email',
+                color: '#EA4335',
+                url: `mailto:?subject=${encodeURIComponent('Join Business Hub')}&body=${encodeURIComponent(`Hey! Join me on Business Hub and start earning online. Use my referral link: ${referralLink}`)}`,
+              },
             ].map(btn => (
               <a
                 key={btn.label}
@@ -326,6 +421,7 @@ function ReferralModal({ user, onClose }) {
                   fontSize: 14,
                   textAlign: 'center',
                   display: 'block',
+                  textDecoration: 'none',
                 }}
               >
                 {btn.label}
@@ -338,6 +434,55 @@ function ReferralModal({ user, onClose }) {
   );
 }
 
+// ─── Task Unlock Banner ───────────────────────────────────────────────────────
+function UnlockBanner({ onUnlock }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #fff7ed, #fef3c7)',
+      border: '1.5px solid #fbbf24',
+      borderRadius: 12,
+      padding: '20px 28px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 16,
+      marginBottom: 24,
+      flexWrap: 'wrap',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <span style={{ fontSize: 32 }}>🔐</span>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#92400e', marginBottom: 2 }}>
+            Unlock All Tasks — One-Time KES 50
+          </div>
+          <div style={{ fontSize: 13, color: '#b45309' }}>
+            Pay once and access every task for free, forever — even after refresh
+          </div>
+        </div>
+      </div>
+      <button
+        onClick={onUnlock}
+        style={{
+          background: '#f59e0b',
+          color: '#fff',
+          border: 'none',
+          padding: '10px 24px',
+          borderRadius: 8,
+          fontWeight: 700,
+          fontSize: 14,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          transition: 'background 0.2s',
+        }}
+        onMouseEnter={e => e.target.style.background = '#d97706'}
+        onMouseLeave={e => e.target.style.background = '#f59e0b'}
+      >
+        🔓 Unlock Now
+      </button>
+    </div>
+  );
+}
+
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
 function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onLogout }) {
   const items = [
@@ -345,8 +490,19 @@ function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onLog
     { icon: '⭐', label: 'Upgrade to Premium', action: () => { onClose(); onUpgrade(); } },
     { icon: '✅', label: 'Awarded Tasks', action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: '💸', label: 'Withdraw Money', action: () => { onClose(); onWithdraw(); } },
-    { icon: '🎓', label: 'Apply for Training', action: () => { onClose(); window.location.href = 'mailto:businesshub@gmail.com?subject=Training Application&body=Hello, I would like to apply for training. My name is ' + (user?.fullName || '') + ' and my email is ' + (user?.email || '') + '.'; } },
+    {
+      icon: '🎓', label: 'Apply for Training', action: () => {
+        onClose();
+        window.location.href = `mailto:businesshub.comke@gmail.com?subject=${encodeURIComponent('Training Application')}&body=${encodeURIComponent(`Hello,\n\nI would like to apply for training.\n\nMy name is ${user?.fullName || ''} and my email is ${user?.email || ''}.\n\nThank you.`)}`;
+      },
+    },
     { icon: '🔗', label: 'My Referral Link', action: () => { onClose(); onReferral(); } },
+    {
+      icon: '📤', label: 'Submit a Task', action: () => {
+        onClose();
+        window.open(`https://mail.google.com/mail/?view=cm&to=businesshub.comke@gmail.com&su=${encodeURIComponent('Task Submission')}&body=${encodeURIComponent('Submit your tasks on email for review.\n\nTask Name:\n\nDescription of work completed:\n\n[Attach your work here]')}`, '_blank');
+      },
+    },
   ];
 
   return (
@@ -368,6 +524,7 @@ function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onLog
           </div>
           <button className="modal-close" onClick={onClose} style={{ background: 'var(--gray-light)', color: 'var(--black)', flexShrink: 0 }}>×</button>
         </div>
+
         <nav className="hamburger-nav">
           {items.map(item => (
             <button key={item.label} className="hamburger-item" onClick={item.action}>
@@ -377,6 +534,7 @@ function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onLog
             </button>
           ))}
         </nav>
+
         <div className="hamburger-footer">
           <div style={{ fontSize: 11, color: 'var(--gray)', marginBottom: 8 }}>Account Balance</div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--blue)', marginBottom: 16 }}>
@@ -396,6 +554,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [tasksUnlocked, setTasksUnlockedState] = useState(false);
 
   const [selectedTask, setSelectedTask] = useState(null);
   const [payTask, setPayTask] = useState(null);
@@ -437,15 +596,44 @@ export default function Dashboard() {
   useEffect(() => {
     setMounted(true);
     const u = getCurrentUser();
-    if (!u) { router.replace('/login'); } else { setUser(u); }
+    if (!u) {
+      router.replace('/login');
+    } else {
+      setUser(u);
+      // Check unlock status from localStorage on mount
+      setTasksUnlockedState(isTasksUnlocked());
+    }
   }, [router]);
 
+  // Also re-check unlock when returning from payment redirect
+  useEffect(() => {
+    if (!mounted) return;
+    const unlocked = isTasksUnlocked();
+    setTasksUnlockedState(unlocked);
+  }, [mounted]);
+
   const handleLogout = useCallback(() => { logout(); router.push('/'); }, [router]);
-  const handleBidClick = useCallback(task => { setSelectedTask(null); setPayTask(task); }, []);
+
+  const handleBidClick = useCallback((task) => {
+    setSelectedTask(null);
+    if (!tasksUnlocked) {
+      setPayTask(task);
+    } else {
+      // Already unlocked — open Gmail submit link directly
+      window.open(getGmailSubmitLink(task.title), '_blank');
+    }
+  }, [tasksUnlocked]);
+
   const handlePaySuccess = useCallback(() => {
     const updated = activateUser(user.id);
     if (updated) setUser(updated);
+    setTasksUnlocked();
+    setTasksUnlockedState(true);
   }, [user]);
+
+  const handleUnlockClick = useCallback(() => {
+    setPayTask({ title: 'All Tasks' });
+  }, []);
 
   const filteredTasks = TASKS.filter(t => {
     const matchCat = filter === 'All' || t.category === filter;
@@ -464,14 +652,23 @@ export default function Dashboard() {
   }
 
   const initials = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
-  const referralLink = `https:// onlinejob-pi.vercel.app   /join?ref=${user.id || 'USER123'}`;
+
+  // Clean referral link — no spaces
+  const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`;
 
   return (
     <div className="dashboard">
 
       {/* Fake Withdrawal Notification */}
       <div style={{ position: 'fixed', top: 90, right: 20, zIndex: 999, animation: 'slideIn 0.5s ease' }}>
-        <div style={{ background: '#fff', border: '1px solid var(--gray-light)', borderRadius: 14, padding: '14px 18px', minWidth: 280, boxShadow: '0 10px 25px rgba(0,0,0,0.08)' }}>
+        <div style={{
+          background: '#fff',
+          border: '1px solid var(--gray-light)',
+          borderRadius: 14,
+          padding: '14px 18px',
+          minWidth: 280,
+          boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
+        }}>
           <div style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 6 }}>Recent Withdrawal</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ fontSize: 30 }}>{currentWithdrawal.flag}</div>
@@ -496,7 +693,6 @@ export default function Dashboard() {
               <div className="dash-user-email">{user.email}</div>
             </div>
             <div className="dash-avatar">{initials}</div>
-            {/* Hamburger Button */}
             <button className="hamburger-btn" onClick={() => setShowMenu(true)} aria-label="Open menu">
               <span /><span /><span />
             </button>
@@ -515,6 +711,11 @@ export default function Dashboard() {
               <span className={`status-badge ${user.activated ? 'status-active' : 'status-inactive'}`}>
                 {user.activated ? '✅ Account Active' : '⚠️ Account Inactive — Activate to Bid'}
               </span>
+              {tasksUnlocked && (
+                <span className="status-badge status-active" style={{ marginLeft: 8 }}>
+                  🔓 Tasks Unlocked
+                </span>
+              )}
             </div>
           </div>
           <div className="dash-balance-box">
@@ -530,12 +731,15 @@ export default function Dashboard() {
             <span className="referral-banner-icon">🔗</span>
             <div>
               <div className="referral-banner-title">Refer Friends & Earn KES 70 Each</div>
-              <div className="referral-banner-sub">Share your link · Track referrals · Get paid instantly</div>
+              <div className="referral-banner-sub">Share your link · Your balance updates when they join</div>
             </div>
           </div>
           <div className="referral-banner-link">
             <span className="referral-link-preview">{referralLink.replace('https://', '')}</span>
-            <button className="referral-copy-btn">Copy Link →</button>
+            <button className="referral-copy-btn" onClick={e => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(referralLink).catch(() => {});
+            }}>Copy Link →</button>
           </div>
         </div>
 
@@ -554,7 +758,7 @@ export default function Dashboard() {
             <span className="quick-action-label">Withdraw Money</span>
           </button>
           <a
-            href="mailto:businesshub@gmail.com?subject=Training Application&body=Hello, I would like to apply for training. My name is and my email is ."
+            href={`mailto:businesshub.comke@gmail.com?subject=${encodeURIComponent('Training Application')}&body=${encodeURIComponent(`Hello,\n\nI would like to apply for training.\n\nMy name is ${user.fullName} and my email is ${user.email}.\n\nThank you.`)}`}
             className="quick-action-card"
             style={{ textDecoration: 'none' }}
           >
@@ -599,6 +803,27 @@ export default function Dashboard() {
         <div id="tasks-section">
           <div className="dash-section-title">Available Tasks</div>
           <div className="dash-section-sub">Browse and bid on tasks that match your skills</div>
+
+          {/* Unlock Banner — show only if not yet unlocked */}
+          {!tasksUnlocked && <UnlockBanner onUnlock={handleUnlockClick} />}
+
+          {/* Unlocked confirmation */}
+          {tasksUnlocked && (
+            <div style={{
+              background: '#F0FFF4',
+              border: '1px solid #BBF7D0',
+              color: '#166534',
+              padding: '12px 16px',
+              borderRadius: 6,
+              fontSize: 14,
+              marginBottom: 20,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              🔓 <strong>All tasks unlocked!</strong> You have full access — submit any task via email for review.
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             <input
@@ -653,9 +878,50 @@ export default function Dashboard() {
                 <div className="task-category">{task.category}</div>
                 <div className="task-title">{task.title}</div>
                 <div className="task-desc">{task.description}</div>
-                <button className="task-view-btn" onClick={() => setSelectedTask(task)}>
-                  👁️ View / Bid
-                </button>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {/* View / Bid */}
+                  <button
+                    className="task-view-btn"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      if (tasksUnlocked) {
+                        setSelectedTask(task);
+                      } else {
+                        setPayTask(task);
+                      }
+                    }}
+                  >
+                    {tasksUnlocked ? '👁️ View Task' : '🔒 Unlock to View'}
+                  </button>
+
+                  {/* Submit Icon — always visible, redirects to Gmail */}
+                  <a
+                    href={getGmailSubmitLink(task.title)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Submit this task via email"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 44,
+                      minWidth: 44,
+                      background: '#059669',
+                      borderRadius: 6,
+                      color: '#fff',
+                      fontSize: 18,
+                      textDecoration: 'none',
+                      transition: 'background 0.2s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#047857'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#059669'}
+                  >
+                    📤
+                  </a>
+                </div>
               </div>
             ))}
           </div>
@@ -663,8 +929,23 @@ export default function Dashboard() {
       </main>
 
       {/* Modals */}
-      {selectedTask && <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} />}
-      {payTask && <PaymentModal task={payTask} user={user} onClose={() => setPayTask(null)} onSuccess={handlePaySuccess} />}
+      {selectedTask && (
+        <TaskModal
+          task={selectedTask}
+          user={user}
+          onClose={() => setSelectedTask(null)}
+          onBidClick={handleBidClick}
+          tasksUnlocked={tasksUnlocked}
+        />
+      )}
+      {payTask && (
+        <PaymentModal
+          task={payTask}
+          user={user}
+          onClose={() => setPayTask(null)}
+          onSuccess={handlePaySuccess}
+        />
+      )}
       {showUpgrade && <UpgradeModal user={user} onClose={() => setShowUpgrade(false)} />}
       {showWithdraw && (
         <WithdrawLockedModal
