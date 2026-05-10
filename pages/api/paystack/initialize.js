@@ -14,8 +14,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         email,
         amount: amount * 100,  
-        callback_url:
-'https://onlinejob-pi.vercel.app/payment-success',
+       
         
         // kobo
         channels: ["card", "mobile_money"], // 👈 enables M-Pesa option
