@@ -28,7 +28,7 @@ export default async function handler(req, res) {
             },
           ],
         },
-        callback_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard`,
+        callback_url: 'https://onlinejob-pi.vercel.app/payment-success',
       }),
     });
 

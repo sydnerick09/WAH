@@ -171,7 +171,7 @@ function UpgradeModal({ user, onClose }) {
     const res = await fetch('/api/paystack/initialize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 180, phone, plan: 'premium' }),
+      body: JSON.stringify({ email: user.email, amount: 480, phone, plan: 'premium' }),
     });
     const data = await res.json();
     if (data.status) {
@@ -210,7 +210,7 @@ function UpgradeModal({ user, onClose }) {
           </div>
           <div className="pay-amount" style={{ marginTop: 20 }}>
             <div className="pay-amount-label">Monthly Premium Plan</div>
-            <div className="pay-amount-value" style={{ background: 'linear-gradient(135deg,#0047FF,#7C3AED)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>KES 180</div>
+            <div className="pay-amount-value" style={{ background: 'linear-gradient(135deg,#0047FF,#7C3AED)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>KES 480</div>
             <div className="pay-amount-sub">per month • Cancel anytime</div>
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
@@ -273,7 +273,9 @@ function ReferralModal({ user, onClose }) {
   const [copied, setCopied] = useState(false);
 
   // Clean referral link — no spaces, uses the correct base URL
-  const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user?.id || 'USER123'}`;
+  const referralLink = user?.activated
+  ? `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`
+  : 'Activate your account to unlock referral link';
 
   function copyLink() {
     navigator.clipboard.writeText(referralLink).then(() => {
@@ -288,13 +290,13 @@ function ReferralModal({ user, onClose }) {
         <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #059669, #0047FF)' }}>
           <div>
             <div className="pay-modal-title">🔗 Your Referral Link</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Earn KES 70 per referral</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Earn KES 132 per referral</div>
           </div>
           <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4' }}>
-            Share your referral link and earn <strong style={{ color: '#059669' }}>KES 70</strong> for every friend who signs up and activates their account.
+            Share your referral link and earn <strong style={{ color: '#059669' }}>KES 132</strong> for every friend who signs up and activates their account.
           </div>
           <div style={{ marginBottom: 16 }}>
             <div className="pay-phone-label">Your unique referral link</div>
@@ -330,11 +332,11 @@ function ReferralModal({ user, onClose }) {
               <div className="referral-stat-label">Referrals</div>
             </div>
             <div className="referral-stat">
-              <div className="referral-stat-num">KES {((user?.referralCount || 0) * 70).toLocaleString()}</div>
+              <div className="referral-stat-num">KES {((user?.referralCount || 0) * 132).toLocaleString()}</div>
               <div className="referral-stat-label">Earned</div>
             </div>
             <div className="referral-stat">
-              <div className="referral-stat-num">KES 70</div>
+              <div className="referral-stat-num">KES 132</div>
               <div className="referral-stat-label">Per Referral</div>
             </div>
           </div>
@@ -353,20 +355,22 @@ function ReferralModal({ user, onClose }) {
             ].map(btn => (
               <a
                 key={btn.label}
-                href={btn.url}
+                href={user?.activated ? btn.url : '#'}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
                   flex: 1,
-                  padding: '12px',
-                  background: btn.color,
-                  color: '#fff',
-                  borderRadius: 8,
-                  fontWeight: 700,
-                  fontSize: 14,
-                  textAlign: 'center',
-                  display: 'block',
-                }}
+                   padding: '12px',
+                   background: btn.color,
+                   color: '#fff',
+  borderRadius: 8,
+  fontWeight: 700,
+  fontSize: 14,
+  textAlign: 'center',
+  display: 'block',
+  opacity: user?.activated ? 1 : 0.5,
+  pointerEvents: user?.activated ? 'auto' : 'none',
+}}
               >
                 {btn.label}
               </a>

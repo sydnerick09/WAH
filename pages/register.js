@@ -32,12 +32,19 @@ export default function Register() {
 
   // Load referral ID
   useEffect(() => {
+    // from localStorage
     const savedReferrer = localStorage.getItem('referrerId');
 
-    if (savedReferrer) {
+    // from URL
+    const urlReferrer = router.query.ref;
+
+    if (urlReferrer) {
+      localStorage.setItem('referrerId', urlReferrer);
+      setReferrerId(urlReferrer);
+    } else if (savedReferrer) {
       setReferrerId(savedReferrer);
     }
-  }, []);
+  }, [router.query]);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -103,6 +110,7 @@ export default function Register() {
     setLoading(true);
 
     setTimeout(() => {
+
       // Register user
       const result = registerUser({
         fullName: form.fullName.trim(),
@@ -111,10 +119,14 @@ export default function Register() {
         country: form.country,
         password: form.password,
 
-        // NEW FIELDS
+        // ACCOUNT STATUS
         activated: false,
         premium: false,
+
+        // BALANCE
         balance: 0,
+
+        // REFERRALS
         referralCount: 0,
         referredBy: referrerId || null,
       });
@@ -125,35 +137,10 @@ export default function Register() {
         return;
       }
 
-      // Update referrals
-      const users = JSON.parse(
-        localStorage.getItem('users') || '[]'
-      );
+      // DO NOT reward referral here
+      // reward will happen ONLY after successful payment
 
-      // Prevent self referral
-      if (
-        referrerId &&
-        referrerId !== result.user.id
-      ) {
-        const referrer = users.find(
-          u => u.id === referrerId
-        );
-
-        if (referrer) {
-          referrer.referralCount =
-            (referrer.referralCount || 0) + 1;
-
-          referrer.balance =
-            (referrer.balance || 0) + 70;
-        }
-
-        localStorage.setItem(
-          'users',
-          JSON.stringify(users)
-        );
-      }
-
-      // Remove referral ID after successful signup
+      // Remove referral ID after signup
       localStorage.removeItem('referrerId');
 
       // Login new user
@@ -161,6 +148,7 @@ export default function Register() {
 
       // Redirect
       router.push('/dashboard');
+
     }, 800);
   }
 
