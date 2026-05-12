@@ -922,3 +922,144 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   .task-actions { flex-direction: column; }
   .task-submit-btn { width: 100%; }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ═══════════════════════════════════════════════════════════
+   PASTE THIS ENTIRE BLOCK AT THE BOTTOM OF styles/globals.css
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Withdrawal toast — desktop only, hidden on small screens ── */
+.withdrawal-toast {
+  position: fixed;
+  top: 90px;
+  right: 20px;
+  z-index: 999;
+  background: #fff;
+  border: 1px solid var(--gray-light);
+  border-radius: 14px;
+  padding: 14px 18px;
+  min-width: 260px;
+  max-width: 300px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+}
+
+/* ── Category filter — scrollable pill row, no wrap ── */
+.category-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 20px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;           /* Firefox */
+}
+.category-scroll::-webkit-scrollbar { display: none; } /* Chrome / Safari */
+
+.cat-btn {
+  flex-shrink: 0;               /* never squish */
+  padding: 6px 16px;
+  border-radius: 100px;
+  border: 1.5px solid var(--gray-light);
+  background: var(--white);
+  color: var(--gray);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-body);
+  white-space: nowrap;
+}
+.cat-btn--active {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--white);
+}
+
+/* ── Modal overlay — sheet slides up from bottom on mobile ── */
+@media (max-width: 600px) {
+  .modal-overlay {
+    align-items: flex-end;        /* pin to bottom edge */
+    padding: 0;
+  }
+  .modal-card {
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 92vh;
+    width: 100%;
+    max-width: 100% !important;
+  }
+  .pay-modal-card {
+    border-radius: 20px 20px 0 0 !important;
+    max-width: 100% !important;
+    width: 100%;
+  }
+}
+
+/* ── Withdrawal toast — hide on phones so it doesn't cover content ── */
+@media (max-width: 600px) {
+  .withdrawal-toast { display: none; }
+}
+
+/* ── Stats — 2 columns on phones ── */
+@media (max-width: 600px) {
+  .dash-stats        { grid-template-columns: repeat(2, 1fr); }
+  .quick-actions     { grid-template-columns: repeat(2, 1fr); }
+  .referral-stats    { grid-template-columns: repeat(3, 1fr); }
+  .dash-welcome      { padding: 24px 20px; }
+  .dash-welcome-text h2 { font-size: 20px; }
+  .dash-balance-amount  { font-size: 26px; }
+
+  /* Task cards — full width single column */
+  .tasks-grid { grid-template-columns: 1fr; }
+
+  /* Task action buttons stack vertically */
+  .task-actions      { flex-direction: column; }
+  .task-submit-btn   { width: 100%; }
+  .task-view-btn     { width: 100%; }
+
+  /* Referral banner — stack vertically */
+  .referral-banner   { flex-direction: column; align-items: flex-start; }
+  .referral-banner-link { flex-direction: column; width: 100%; }
+  .referral-link-preview { display: none; }  /* hide on tiny screens */
+  .referral-copy-btn { width: 100%; text-align: center; }
+
+  /* Hamburger menu — full width */
+  .hamburger-menu    { width: 100%; }
+
+  /* Main padding */
+  .dash-main         { padding-left: 16px; padding-right: 16px; }
+}
+
+/* ── Very small phones (< 380px) ── */
+@media (max-width: 380px) {
+  .dash-stats        { grid-template-columns: 1fr; }
+  .quick-actions     { grid-template-columns: repeat(2, 1fr); }
+  .dash-balance-amount { font-size: 22px; }
+  .modal-meta        { grid-template-columns: 1fr; }
+}
+
+/* ── Hamburger always visible on mobile ── */
+@media (max-width: 768px) {
+  .hamburger-btn     { display: flex; }
+  .dash-user-info    { display: none; }
+}
