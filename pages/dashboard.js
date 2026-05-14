@@ -73,14 +73,12 @@ function TaskModal({ task, user, onClose, onBidClick }) {
             </div>
           )}
 
-          {/* Bid button — only shown if not yet activated */}
           {!isActivated && (
             <button className="bid-btn" onClick={() => onBidClick(task)}>
               💼 Bid on This Task
             </button>
           )}
 
-          {/* Once activated, show Submit button instead */}
           {isActivated && (
             <button className="submit-btn" onClick={handleSubmit}>
               📤 Submit This Task
@@ -235,6 +233,91 @@ function UpgradeModal({ user, onClose }) {
   );
 }
 
+// ─── Training Payment Modal ───────────────────────────────────────────────────
+// ADDED: New modal for Apply for Training — KES 132 via Paystack
+function TrainingModal({ user, onClose }) {
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [loading, setLoading] = useState(false);
+
+  async function handleTrainingPay() {
+    if (!phone.trim()) { alert('Enter phone number'); return; }
+    setLoading(true);
+    const res = await fetch('/api/paystack/initialize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.email, amount: 132, phone, plan: 'training' }),
+    });
+    const data = await res.json();
+    if (data.status) {
+      window.location.href = data.data.authorization_url;
+    } else {
+      alert('Payment initiation failed. Please try again.');
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #059669, #0047FF)' }}>
+          <div>
+            <div className="pay-modal-title">🎓 TRAINING</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Apply for professional training</div>
+          </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+        </div>
+        <div className="pay-modal-body">
+          <div className="premium-features">
+            {[
+              ['📚', 'Access to all training materials'],
+              ['🎯', 'Hands-on practical assignments'],
+              ['🏆', 'Certificate of completion'],
+              ['👨‍🏫', 'Expert instructor support'],
+              ['💼', 'Job placement assistance'],
+              ['♾️', 'Lifetime access to course content'],
+            ].map(([icon, text]) => (
+              <div key={text} className="premium-feature-item">
+                <span>{icon}</span>
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
+          <div className="pay-amount" style={{ marginTop: 20 }}>
+            <div className="pay-amount-label">Training Registration Fee</div>
+            <div
+              className="pay-amount-value"
+              style={{
+                background: 'linear-gradient(135deg, #059669, #0047FF)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              KES 132
+            </div>
+            <div className="pay-amount-sub">One-time payment • Instant access</div>
+          </div>
+          <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
+          <input
+            className="pay-phone-input"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            placeholder="+254 7XX XXX XXX"
+          />
+          <button
+            className="pay-btn"
+            style={{ background: 'linear-gradient(135deg, #059669, #0047FF)' }}
+            onClick={handleTrainingPay}
+            disabled={loading}
+          >
+            {loading ? <><span className="spinner" /> Processing...</> : '🎓 Pay & Apply Now'}
+          </button>
+          <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Withdraw Modal (requires premium) ───────────────────────────────────────
 function WithdrawLockedModal({ onClose, onUpgrade }) {
   return (
@@ -272,7 +355,6 @@ function WithdrawLockedModal({ onClose, onUpgrade }) {
 function ReferralModal({ user, onClose }) {
   const [copied, setCopied] = useState(false);
 
-  // Clean referral link — no spaces, uses the correct base URL
   const referralLink = user?.activated
   ? `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`
   : 'Activate your account to unlock referral link';
@@ -383,25 +465,14 @@ function ReferralModal({ user, onClose }) {
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onLogout }) {
+function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onTraining, onLogout }) {
   const items = [
     { icon: '🏠', label: 'Dashboard', action: () => { onClose(); } },
     { icon: '⭐', label: 'Upgrade to Premium', action: () => { onClose(); onUpgrade(); } },
     { icon: '✅', label: 'Awarded Tasks', action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: '💸', label: 'Withdraw Money', action: () => { onClose(); onWithdraw(); } },
-    {
-      icon: '🎓',
-      label: 'Apply for Training',
-      action: () => {
-        onClose();
-        window.location.href =
-          'mailto:businesshub.comke@gmail.com?subject=Training Application&body=Hello, I would like to apply for training. My name is ' +
-          (user?.fullName || '') +
-          ' and my email is ' +
-          (user?.email || '') +
-          '.';
-      },
-    },
+    // CHANGED: now opens training payment modal instead of mailto
+    { icon: '🎓', label: 'Apply for Training', action: () => { onClose(); onTraining(); } },
     { icon: '🔗', label: 'My Referral Link', action: () => { onClose(); onReferral(); } },
   ];
 
@@ -459,6 +530,7 @@ export default function Dashboard() {
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showReferral, setShowReferral] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showTraining, setShowTraining] = useState(false); // ADDED
 
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
@@ -498,15 +570,8 @@ export default function Dashboard() {
 
   const handleLogout = useCallback(() => { logout(); router.push('/'); }, [router]);
 
-  // If user is already activated, open task detail directly (no payment gate)
-  const handleViewTask = useCallback(
-    task => {
-      setSelectedTask(task);
-    },
-    []
-  );
+  const handleViewTask = useCallback(task => { setSelectedTask(task); }, []);
 
-  // Called from TaskModal when user clicks "Bid" (only shown when NOT activated)
   const handleBidClick = useCallback(task => {
     setSelectedTask(null);
     setPayTask(task);
@@ -517,7 +582,6 @@ export default function Dashboard() {
     if (updated) setUser(updated);
   }, [user]);
 
-  // Submit task directly to email (no modal needed)
   function handleSubmitTask(task) {
     const subject = encodeURIComponent('Task Submission: ' + task.title);
     const body = encodeURIComponent(
@@ -554,8 +618,6 @@ export default function Dashboard() {
   }
 
   const initials = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
-
-  // Clean referral link with no spaces
   const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`;
 
   return (
@@ -627,14 +689,14 @@ export default function Dashboard() {
           <div className="referral-banner-link">
             <span className="referral-link-preview">{referralLink.replace('https://', '')}</span>
             <button
-  className="referral-copy-btn"
-  onClick={() => {
-    navigator.clipboard.writeText(referralLink);
-    alert('Referral link copied!');
-  }}
->
-  Copy Link →
-</button>
+              className="referral-copy-btn"
+              onClick={() => {
+                navigator.clipboard.writeText(referralLink);
+                alert('Referral link copied!');
+              }}
+            >
+              Copy Link →
+            </button>
           </div>
         </div>
 
@@ -652,14 +714,11 @@ export default function Dashboard() {
             <span className="quick-action-icon">💸</span>
             <span className="quick-action-label">Withdraw Money</span>
           </button>
-          <a
-            href={`mailto:businesshub.comke@gmail.com?subject=Training Application&body=Hello, I would like to apply for training. My name is ${user.fullName || ''} and my email is ${user.email || ''}.`}
-            className="quick-action-card"
-            style={{ textDecoration: 'none' }}
-          >
+          {/* CHANGED: was an <a> mailto link, now opens TrainingModal */}
+          <button className="quick-action-card" onClick={() => setShowTraining(true)}>
             <span className="quick-action-icon">🎓</span>
             <span className="quick-action-label">Apply for Training</span>
-          </a>
+          </button>
         </div>
 
         {/* Stats */}
@@ -759,12 +818,9 @@ export default function Dashboard() {
                 <div className="task-desc">{task.description}</div>
 
                 <div className="task-actions">
-                  {/* View / Bid button — always visible */}
                   <button className="task-view-btn" onClick={() => handleViewTask(task)}>
                     👁️ View / Bid
                   </button>
-
-                  {/* Submit button — always visible, opens Gmail directly */}
                   <button
                     className="task-submit-btn"
                     onClick={() => handleSubmitTask(task)}
@@ -804,6 +860,8 @@ export default function Dashboard() {
         />
       )}
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
+      {/* ADDED: Training modal */}
+      {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}
       {showMenu && (
         <HamburgerMenu
           user={user}
@@ -811,6 +869,7 @@ export default function Dashboard() {
           onUpgrade={() => setShowUpgrade(true)}
           onWithdraw={() => setShowWithdraw(true)}
           onReferral={() => setShowReferral(true)}
+          onTraining={() => setShowTraining(true)}
           onLogout={handleLogout}
         />
       )}
@@ -823,4 +882,4 @@ export default function Dashboard() {
       `}</style>
     </div>
   );
-}    
+}
