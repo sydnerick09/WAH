@@ -657,23 +657,8 @@ const withdrawals = [
   return (
     <div className="dashboard">
 
-      {/* Fake Withdrawal Notification */}
-      <div style={{ position: 'fixed', top: 90, right: 20, zIndex: 999, animation: 'slideIn 0.5s ease' }}>
-        <div style={{ background: '#fff', border: '1px solid var(--gray-light)', borderRadius: 14, padding: '14px 18px', minWidth: 280, boxShadow: '0 10px 25px rgba(0,0,0,0.08)' }}>
-          <div style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 6 }}>Recent Withdrawal</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ fontSize: 30 }}>{currentWithdrawal.flag}</div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--black)' }}>{currentWithdrawal.phone}</div>
-              <div style={{ fontSize: 12, color: 'var(--gray)' }}>{currentWithdrawal.country}</div>
-            </div>
-          </div>
-          <div style={{ marginTop: 10, fontWeight: 700, color: 'green', fontSize: 16 }}>
-            Withdrawn KES {currentWithdrawal.amount.toLocaleString()}
-          </div>
-        </div>
-      </div>
 
+      
       {/* Navbar */}
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">
@@ -786,6 +771,49 @@ const withdrawals = [
             </div>
           </div>
         </div>
+      
+
+{/* Permanent Withdrawals Feed */}
+<div className="withdrawals-feed">
+
+  <div className="withdrawals-header">
+    <div className="withdrawals-title">
+      <span className="live-dot"></span>
+      Live Withdrawals
+    </div>
+
+    <div className="withdrawals-badge">
+      Instant M-Pesa Payouts
+    </div>
+  </div>
+
+  <div className="withdrawals-list">
+
+    {withdrawals.slice(0, 6).map((item, index) => (
+      <div className="withdrawal-item" key={index}>
+
+        <div className="withdrawal-user">
+          <div className="withdrawal-avatar">
+            {item.flag}
+          </div>
+
+          <div className="withdrawal-info">
+            <h4>{item.phone}</h4>
+            <p>{item.country}</p>
+          </div>
+        </div>
+
+        <div className="withdrawal-amount">
+          <h3>KES {item.amount.toLocaleString()}</h3>
+          <span>Successful</span>
+        </div>
+
+      </div>
+    ))}
+
+  </div>
+      </div>
+
 
         {/* Tasks Section */}
         <div id="tasks-section">
@@ -909,9 +937,137 @@ const withdrawals = [
       )}
 
       <style jsx>{`
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateX(40px); }
-          to { opacity: 1; transform: translateX(0); }
+        @keyframes slideIn {.withdrawals-feed{
+  margin: 28px 0;
+  background: #fff;
+  border-radius: 22px;
+  padding: 24px;
+  border: 1px solid var(--gray-light);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+}
+
+.withdrawals-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:22px;
+  flex-wrap:wrap;
+  gap:12px;
+}
+
+.withdrawals-title{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:20px;
+  font-weight:800;
+  color:var(--black);
+}
+
+.live-dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:#00C853;
+  animation:pulse 1.4s infinite;
+}
+
+@keyframes pulse{
+  0%{transform:scale(1);opacity:1;}
+  50%{transform:scale(1.5);opacity:.5;}
+  100%{transform:scale(1);opacity:1;}
+}
+
+.withdrawals-badge{
+  background:#EEF4FF;
+  color:var(--blue);
+  padding:8px 14px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+}
+
+.withdrawals-list{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+
+.withdrawal-item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:16px;
+  border-radius:16px;
+  border:1px solid var(--gray-light);
+  transition:all .25s ease;
+  background:#fff;
+}
+
+.withdrawal-item:hover{
+  transform:translateY(-2px);
+  box-shadow:0 6px 18px rgba(0,0,0,0.06);
+}
+
+.withdrawal-user{
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+
+.withdrawal-avatar{
+  width:52px;
+  height:52px;
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:28px;
+  background:#F8FAFC;
+}
+
+.withdrawal-info h4{
+  margin:0;
+  font-size:15px;
+  font-weight:700;
+  color:var(--black);
+}
+
+.withdrawal-info p{
+  margin:4px 0 0;
+  font-size:13px;
+  color:var(--gray);
+}
+
+.withdrawal-amount{
+  text-align:right;
+}
+
+.withdrawal-amount h3{
+  margin:0;
+  color:#00A63E;
+  font-size:18px;
+  font-weight:800;
+}
+
+.withdrawal-amount span{
+  font-size:12px;
+  color:var(--gray);
+}
+
+@media(max-width:768px){
+
+  .withdrawal-item{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:14px;
+  }
+
+  .withdrawal-amount{
+    text-align:left;
+  }
+
+      }
         }
       `}</style>
     </div>
