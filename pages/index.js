@@ -598,7 +598,7 @@ export default function Home() {
 
         <div className="footer-bottom">
           <p className="footer-copy">
-            © 2024 Online Business Hub. All rights reserved.
+            © 2026 Online Business Hub. All rights reserved.
           </p>
 
           <p
