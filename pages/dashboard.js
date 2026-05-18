@@ -534,19 +534,53 @@ export default function Dashboard() {
 
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
+const withdrawals = [
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25471*****78', amount: 450 },
+  { flag: '🇺🇬', country: 'Uganda', phone: '+25670*****44', amount: 1200 },
+  { flag: '🇹🇿', country: 'Tanzania', phone: '+25575*****33', amount: 800 },
+  { flag: '🇳🇬', country: 'Nigeria', phone: '+23481*****55', amount: 1500 },
+  { flag: '🇬🇭', country: 'Ghana', phone: '+23354*****23', amount: 650 },
+  { flag: '🇷🇼', country: 'Rwanda', phone: '+25078*****56', amount: 300 },
+  { flag: '🇿🇦', country: 'South Africa', phone: '+27821*****67', amount: 1100 },
+  { flag: '🇪🇹', country: 'Ethiopia', phone: '+25191*****44', amount: 950 },
+  { flag: '🇨🇲', country: 'Cameroon', phone: '+23767*****67', amount: 500 },
+  { flag: '🇲🇼', country: 'Malawi', phone: '+26599*****44', amount: 250 },
 
-  const withdrawals = [
-    { flag: '🇰🇪', country: 'Kenya', phone: '+25471*****78', amount: 450 },
-    { flag: '🇺🇬', country: 'Uganda', phone: '+25670*****44', amount: 1200 },
-    { flag: '🇹🇿', country: 'Tanzania', phone: '+25575*****33', amount: 800 },
-    { flag: '🇳🇬', country: 'Nigeria', phone: '+23481*****55', amount: 1500 },
-    { flag: '🇬🇭', country: 'Ghana', phone: '+23354*****23', amount: 650 },
-    { flag: '🇷🇼', country: 'Rwanda', phone: '+25078*****56', amount: 300 },
-    { flag: '🇿🇦', country: 'South Africa', phone: '+27821*****67', amount: 1100 },
-    { flag: '🇪🇹', country: 'Ethiopia', phone: '+25191*****44', amount: 950 },
-    { flag: '🇨🇲', country: 'Cameroon', phone: '+23767*****67', amount: 500 },
-    { flag: '🇲🇼', country: 'Malawi', phone: '+26599*****44', amount: 250 },
-  ];
+  // 15 Kenyan contacts
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25479*****12', amount: 700 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25472*****45', amount: 980 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25474*****67', amount: 350 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25476*****89', amount: 1250 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25470*****23', amount: 430 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25473*****90', amount: 890 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25475*****11', amount: 670 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25478*****55', amount: 1500 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25471*****34', amount: 760 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25477*****66', amount: 540 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25479*****88', amount: 1340 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25472*****19', amount: 600 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25474*****44', amount: 990 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25470*****75', amount: 410 },
+  { flag: '🇰🇪', country: 'Kenya', phone: '+25473*****28', amount: 870 },
+
+  // Other random African contacts
+  { flag: '🇺🇬', country: 'Uganda', phone: '+25678*****21', amount: 450 },
+  { flag: '🇹🇿', country: 'Tanzania', phone: '+25568*****32', amount: 720 },
+  { flag: '🇳🇬', country: 'Nigeria', phone: '+23490*****45', amount: 2100 },
+  { flag: '🇬🇭', country: 'Ghana', phone: '+23324*****67', amount: 530 },
+  { flag: '🇷🇼', country: 'Rwanda', phone: '+25072*****89', amount: 280 },
+  { flag: '🇿🇦', country: 'South Africa', phone: '+27831*****11', amount: 1600 },
+  { flag: '🇪🇹', country: 'Ethiopia', phone: '+25193*****22', amount: 770 },
+  { flag: '🇨🇲', country: 'Cameroon', phone: '+23769*****33', amount: 620 },
+  { flag: '🇲🇼', country: 'Malawi', phone: '+26588*****44', amount: 310 },
+  { flag: '🇿🇲', country: 'Zambia', phone: '+26097*****55', amount: 850 },
+  { flag: '🇧🇮', country: 'Burundi', phone: '+25779*****66', amount: 240 },
+  { flag: '🇸🇸', country: 'South Sudan', phone: '+21192*****77', amount: 940 },
+  { flag: '🇸🇳', country: 'Senegal', phone: '+22177*****88', amount: 1300 },
+  { flag: '🇨🇮', country: 'Ivory Coast', phone: '+22505*****99', amount: 580 },
+  { flag: '🇲🇿', country: 'Mozambique', phone: '+25884*****10', amount: 470 },
+];
+ 
   const [currentWithdrawal, setCurrentWithdrawal] = useState(withdrawals[0]);
 
   useEffect(() => {
