@@ -234,7 +234,6 @@ function UpgradeModal({ user, onClose }) {
 }
 
 // ─── Training Payment Modal ───────────────────────────────────────────────────
-// ADDED: New modal for Apply for Training — KES 132 via Paystack
 function TrainingModal({ user, onClose }) {
   const [phone, setPhone] = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
@@ -318,7 +317,7 @@ function TrainingModal({ user, onClose }) {
   );
 }
 
-// ─── Withdraw Modal (requires premium) ───────────────────────────────────────
+// ─── Withdraw: Not Activated (locked) ────────────────────────────────────────
 function WithdrawLockedModal({ onClose, onUpgrade }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -330,24 +329,248 @@ function WithdrawLockedModal({ onClose, onUpgrade }) {
         <div className="pay-modal-body" style={{ textAlign: 'center', padding: '36px 28px' }}>
           <div style={{ fontSize: 52, marginBottom: 16 }}>🔒</div>
           <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12, color: 'var(--black)' }}>
-            Premium Required
+            Activation Required
           </h3>
           <p style={{ fontSize: 14, color: 'var(--gray)', lineHeight: 1.7, marginBottom: 24 }}>
-            Withdrawals are available to <strong>Premium members</strong> only. Upgrade your account to unlock instant M-Pesa withdrawals.
+            Please <strong>activate your account</strong> to access withdrawals.
           </p>
-          <button
-            className="pay-btn"
-            style={{ background: 'linear-gradient(135deg,#0047FF,#7C3AED)', marginBottom: 12 }}
-            onClick={onUpgrade}
-          >
-            ⭐ Upgrade to Premium
-          </button>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer' }}>
-            Maybe later
+            Close
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Withdraw: Form Modal (activated users, no pending request) ───────────────
+function WithdrawFormModal({ user, onClose, storageKey, onSubmitted }) {
+  const [fullName, setFullName]       = useState(user?.fullName || '');
+  const [accountNum, setAccountNum]   = useState(user?.phone || '');
+  const [amount, setAmount]           = useState('');
+  const [kraPin, setKraPin]           = useState('');
+  const [submitting, setSubmitting]   = useState(false);
+  const [errors, setErrors]           = useState({});
+
+  function validate() {
+    const e = {};
+    if (!fullName.trim())    e.fullName   = 'Full name is required';
+    if (!accountNum.trim())  e.accountNum = 'Account number or phone is required';
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
+                             e.amount     = 'Enter a valid withdrawal amount';
+    if (!kraPin.trim())      e.kraPin     = 'KRA PIN is required for taxation';
+    return e;
+  }
+
+  function handleSubmit() {
+    const e = validate();
+    if (Object.keys(e).length) { setErrors(e); return; }
+
+    setSubmitting(true);
+
+    const request = {
+      status:      'pending',
+      fullName:    fullName.trim(),
+      accountNum:  accountNum.trim(),
+      amount:      Number(amount),
+      kraPin:      kraPin.trim(),
+      requestedAt: new Date().toISOString(),
+    };
+
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(request));
+    } catch (_) {
+      // localStorage not available — state still passes via onSubmitted
+    }
+
+    setSubmitting(false);
+    onSubmitted(request);   // lift state up so parent re-renders
+    onClose();
+  }
+
+  const field = (label, value, setter, placeholder, key, type = 'text') => (
+    <div style={{ marginBottom: 18 }}>
+      <div className="pay-phone-label">{label}</div>
+      <input
+        className="pay-phone-input"
+        type={type}
+        value={value}
+        onChange={e => { setter(e.target.value); setErrors(prev => ({ ...prev, [key]: undefined })); }}
+        placeholder={placeholder}
+        style={{ marginBottom: 0, borderColor: errors[key] ? '#ef4444' : undefined }}
+      />
+      {errors[key] && (
+        <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors[key]}</div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #0047FF, #059669)' }}>
+          <div>
+            <div className="pay-modal-title">💸 Withdraw Funds</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>
+              Balance: KES {(user?.balance || 0).toLocaleString()}
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+        </div>
+
+        <div className="pay-modal-body">
+          <div className="pay-message" style={{ borderColor: '#0047FF', background: '#EEF4FF', marginBottom: 20 }}>
+            Please fill in your withdrawal details accurately. Funds will be sent to the account number provided.
+          </div>
+
+          {field('Full Name', fullName, setFullName, 'Enter your full name', 'fullName')}
+          {field('Account Number or Phone Number', accountNum, setAccountNum, '+254 7XX XXX XXX or account number', 'accountNum')}
+          {field('Amount to Withdraw (KES)', amount, setAmount, 'e.g. 500', 'amount', 'number')}
+          {field('KRA PIN (for taxation purposes)', kraPin, setKraPin, 'e.g. A012345678B', 'kraPin')}
+
+          <button
+            className="pay-btn"
+            style={{ background: 'linear-gradient(135deg, #0047FF, #059669)', marginTop: 4 }}
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? <><span className="spinner" /> Submitting...</> : '💸 Submit Withdrawal Request'}
+          </button>
+          <div className="pay-secure">🔐 Secured & encrypted • Processed within 24–48 hours</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Withdraw: Pending Notification Modal ────────────────────────────────────
+function WithdrawPendingModal({ data, onClose }) {
+  const requestedAt = data?.requestedAt
+    ? new Date(data.requestedAt).toLocaleString('en-KE', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}>
+          <div>
+            <div className="pay-modal-title">⏳ Pending Withdrawal</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Your request is being processed</div>
+          </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+        </div>
+
+        <div className="pay-modal-body" style={{ padding: '28px 28px 24px' }}>
+          {/* Main message */}
+          <div style={{
+            background: '#FFFBEB',
+            border: '1.5px solid #FCD34D',
+            borderRadius: 12,
+            padding: '16px 18px',
+            marginBottom: 22,
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: 24, flexShrink: 0 }}>🕐</span>
+            <p style={{ margin: 0, fontSize: 14, color: '#92400E', lineHeight: 1.65 }}>
+              Your withdrawal request is currently being processed. Please be patient while the withdrawal is being initiated.
+            </p>
+          </div>
+
+          {/* Details */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+            {/* Amount */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '14px 16px', borderRadius: 10,
+              background: '#F8FAFC', border: '1px solid #E2E8F0',
+            }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Requested Amount</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#0047FF', marginTop: 2 }}>
+                  KES {(data?.amount || 0).toLocaleString()}
+                </div>
+              </div>
+              <div style={{ fontSize: 28 }}>💰</div>
+            </div>
+
+            {/* Status */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '14px 16px', borderRadius: 10,
+              background: '#FFFBEB', border: '1px solid #FCD34D',
+            }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#D97706', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%', background: '#F59E0B',
+                    display: 'inline-block', animation: 'pulse 1.4s infinite',
+                  }} />
+                  Pending
+                </div>
+              </div>
+              <div style={{ fontSize: 24 }}>⏳</div>
+            </div>
+
+            {/* Date / Time */}
+            {requestedAt && (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '14px 16px', borderRadius: 10,
+                background: '#F8FAFC', border: '1px solid #E2E8F0',
+              }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date & Time of Request</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B', marginTop: 2 }}>{requestedAt}</div>
+                </div>
+                <div style={{ fontSize: 24 }}>📅</div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              width: '100%', padding: '13px', background: '#F1F5F9',
+              border: 'none', borderRadius: 10, color: '#475569',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Close
+          </button>
+          <div style={{ textAlign: 'center', fontSize: 12, color: '#94A3B8', marginTop: 12 }}>
+            Processing typically takes 24–48 hours. Contact support if delayed.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Smart Withdraw Modal (controller) ───────────────────────────────────────
+// Decides which withdraw experience to show based on activation + pending state.
+function WithdrawModal({ user, onClose, onUpgrade, pendingWithdrawal, onWithdrawalSubmitted }) {
+  if (!user?.activated) {
+    return <WithdrawLockedModal onClose={onClose} onUpgrade={onUpgrade} />;
+  }
+
+  if (pendingWithdrawal?.status === 'pending') {
+    return <WithdrawPendingModal data={pendingWithdrawal} onClose={onClose} />;
+  }
+
+  const storageKey = `withdrawal_pending_${user?.id}`;
+  return (
+    <WithdrawFormModal
+      user={user}
+      onClose={onClose}
+      storageKey={storageKey}
+      onSubmitted={onWithdrawalSubmitted}
+    />
   );
 }
 
@@ -356,8 +579,8 @@ function ReferralModal({ user, onClose }) {
   const [copied, setCopied] = useState(false);
 
   const referralLink = user?.activated
-  ? `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`
-  : 'Activate your account to unlock referral link';
+    ? `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`
+    : 'Activate your account to unlock referral link';
 
   function copyLink() {
     navigator.clipboard.writeText(referralLink).then(() => {
@@ -442,17 +665,17 @@ function ReferralModal({ user, onClose }) {
                 rel="noopener noreferrer"
                 style={{
                   flex: 1,
-                   padding: '12px',
-                   background: btn.color,
-                   color: '#fff',
-  borderRadius: 8,
-  fontWeight: 700,
-  fontSize: 14,
-  textAlign: 'center',
-  display: 'block',
-  opacity: user?.activated ? 1 : 0.5,
-  pointerEvents: user?.activated ? 'auto' : 'none',
-}}
+                  padding: '12px',
+                  background: btn.color,
+                  color: '#fff',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 14,
+                  textAlign: 'center',
+                  display: 'block',
+                  opacity: user?.activated ? 1 : 0.5,
+                  pointerEvents: user?.activated ? 'auto' : 'none',
+                }}
               >
                 {btn.label}
               </a>
@@ -471,7 +694,6 @@ function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onTra
     { icon: '⭐', label: 'Upgrade to Premium', action: () => { onClose(); onUpgrade(); } },
     { icon: '✅', label: 'Awarded Tasks', action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: '💸', label: 'Withdraw Money', action: () => { onClose(); onWithdraw(); } },
-    // CHANGED: now opens training payment modal instead of mailto
     { icon: '🎓', label: 'Apply for Training', action: () => { onClose(); onTraining(); } },
     { icon: '🔗', label: 'My Referral Link', action: () => { onClose(); onReferral(); } },
   ];
@@ -524,63 +746,64 @@ export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [mounted, setMounted] = useState(false);
 
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [payTask, setPayTask] = useState(null);
-  const [showUpgrade, setShowUpgrade] = useState(false);
-  const [showWithdraw, setShowWithdraw] = useState(false);
-  const [showReferral, setShowReferral] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showTraining, setShowTraining] = useState(false); // ADDED
+  const [selectedTask, setSelectedTask]   = useState(null);
+  const [payTask, setPayTask]             = useState(null);
+  const [showUpgrade, setShowUpgrade]     = useState(false);
+  const [showWithdraw, setShowWithdraw]   = useState(false);
+  const [showReferral, setShowReferral]   = useState(false);
+  const [showMenu, setShowMenu]           = useState(false);
+  const [showTraining, setShowTraining]   = useState(false);
+
+  // ── Withdrawal pending state ──
+  // Loaded from localStorage on mount; updated when user submits a request.
+  const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
 
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
-const withdrawals = [
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25471*****78', amount: 450 },
-  { flag: '🇺🇬', country: 'Uganda', phone: '+25670*****44', amount: 1200 },
-  { flag: '🇹🇿', country: 'Tanzania', phone: '+25575*****33', amount: 800 },
-  { flag: '🇳🇬', country: 'Nigeria', phone: '+23481*****55', amount: 1500 },
-  { flag: '🇬🇭', country: 'Ghana', phone: '+23354*****23', amount: 650 },
-  { flag: '🇷🇼', country: 'Rwanda', phone: '+25078*****56', amount: 300 },
-  { flag: '🇿🇦', country: 'South Africa', phone: '+27821*****67', amount: 1100 },
-  { flag: '🇪🇹', country: 'Ethiopia', phone: '+25191*****44', amount: 950 },
-  { flag: '🇨🇲', country: 'Cameroon', phone: '+23767*****67', amount: 500 },
-  { flag: '🇲🇼', country: 'Malawi', phone: '+26599*****44', amount: 250 },
 
-  // 15 Kenyan contacts
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25479*****12', amount: 700 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25472*****45', amount: 980 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25474*****67', amount: 350 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25476*****89', amount: 1250 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25470*****23', amount: 430 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25473*****90', amount: 890 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25475*****11', amount: 670 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25478*****55', amount: 1500 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25471*****34', amount: 760 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25477*****66', amount: 540 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25479*****88', amount: 1340 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25472*****19', amount: 600 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25474*****44', amount: 990 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25470*****75', amount: 410 },
-  { flag: '🇰🇪', country: 'Kenya', phone: '+25473*****28', amount: 870 },
+  const withdrawals = [
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25471*****78', amount: 450 },
+    { flag: '🇺🇬', country: 'Uganda', phone: '+25670*****44', amount: 1200 },
+    { flag: '🇹🇿', country: 'Tanzania', phone: '+25575*****33', amount: 800 },
+    { flag: '🇳🇬', country: 'Nigeria', phone: '+23481*****55', amount: 1500 },
+    { flag: '🇬🇭', country: 'Ghana', phone: '+23354*****23', amount: 650 },
+    { flag: '🇷🇼', country: 'Rwanda', phone: '+25078*****56', amount: 300 },
+    { flag: '🇿🇦', country: 'South Africa', phone: '+27821*****67', amount: 1100 },
+    { flag: '🇪🇹', country: 'Ethiopia', phone: '+25191*****44', amount: 950 },
+    { flag: '🇨🇲', country: 'Cameroon', phone: '+23767*****67', amount: 500 },
+    { flag: '🇲🇼', country: 'Malawi', phone: '+26599*****44', amount: 250 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25479*****12', amount: 700 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25472*****45', amount: 980 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25474*****67', amount: 350 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25476*****89', amount: 1250 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25470*****23', amount: 430 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25473*****90', amount: 890 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25475*****11', amount: 670 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25478*****55', amount: 1500 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25471*****34', amount: 760 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25477*****66', amount: 540 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25479*****88', amount: 1340 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25472*****19', amount: 600 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25474*****44', amount: 990 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25470*****75', amount: 410 },
+    { flag: '🇰🇪', country: 'Kenya', phone: '+25473*****28', amount: 870 },
+    { flag: '🇺🇬', country: 'Uganda', phone: '+25678*****21', amount: 450 },
+    { flag: '🇹🇿', country: 'Tanzania', phone: '+25568*****32', amount: 720 },
+    { flag: '🇳🇬', country: 'Nigeria', phone: '+23490*****45', amount: 2100 },
+    { flag: '🇬🇭', country: 'Ghana', phone: '+23324*****67', amount: 530 },
+    { flag: '🇷🇼', country: 'Rwanda', phone: '+25072*****89', amount: 280 },
+    { flag: '🇿🇦', country: 'South Africa', phone: '+27831*****11', amount: 1600 },
+    { flag: '🇪🇹', country: 'Ethiopia', phone: '+25193*****22', amount: 770 },
+    { flag: '🇨🇲', country: 'Cameroon', phone: '+23769*****33', amount: 620 },
+    { flag: '🇲🇼', country: 'Malawi', phone: '+26588*****44', amount: 310 },
+    { flag: '🇿🇲', country: 'Zambia', phone: '+26097*****55', amount: 850 },
+    { flag: '🇧🇮', country: 'Burundi', phone: '+25779*****66', amount: 240 },
+    { flag: '🇸🇸', country: 'South Sudan', phone: '+21192*****77', amount: 940 },
+    { flag: '🇸🇳', country: 'Senegal', phone: '+22177*****88', amount: 1300 },
+    { flag: '🇨🇮', country: 'Ivory Coast', phone: '+22505*****99', amount: 580 },
+    { flag: '🇲🇿', country: 'Mozambique', phone: '+25884*****10', amount: 470 },
+  ];
 
-  // Other random African contacts
-  { flag: '🇺🇬', country: 'Uganda', phone: '+25678*****21', amount: 450 },
-  { flag: '🇹🇿', country: 'Tanzania', phone: '+25568*****32', amount: 720 },
-  { flag: '🇳🇬', country: 'Nigeria', phone: '+23490*****45', amount: 2100 },
-  { flag: '🇬🇭', country: 'Ghana', phone: '+23324*****67', amount: 530 },
-  { flag: '🇷🇼', country: 'Rwanda', phone: '+25072*****89', amount: 280 },
-  { flag: '🇿🇦', country: 'South Africa', phone: '+27831*****11', amount: 1600 },
-  { flag: '🇪🇹', country: 'Ethiopia', phone: '+25193*****22', amount: 770 },
-  { flag: '🇨🇲', country: 'Cameroon', phone: '+23769*****33', amount: 620 },
-  { flag: '🇲🇼', country: 'Malawi', phone: '+26588*****44', amount: 310 },
-  { flag: '🇿🇲', country: 'Zambia', phone: '+26097*****55', amount: 850 },
-  { flag: '🇧🇮', country: 'Burundi', phone: '+25779*****66', amount: 240 },
-  { flag: '🇸🇸', country: 'South Sudan', phone: '+21192*****77', amount: 940 },
-  { flag: '🇸🇳', country: 'Senegal', phone: '+22177*****88', amount: 1300 },
-  { flag: '🇨🇮', country: 'Ivory Coast', phone: '+22505*****99', amount: 580 },
-  { flag: '🇲🇿', country: 'Mozambique', phone: '+25884*****10', amount: 470 },
-];
- 
   const [currentWithdrawal, setCurrentWithdrawal] = useState(withdrawals[0]);
 
   useEffect(() => {
@@ -599,7 +822,16 @@ const withdrawals = [
   useEffect(() => {
     setMounted(true);
     const u = getCurrentUser();
-    if (!u) { router.replace('/login'); } else { setUser(u); }
+    if (!u) {
+      router.replace('/login');
+    } else {
+      setUser(u);
+      // Load any existing pending withdrawal for this user
+      try {
+        const stored = localStorage.getItem(`withdrawal_pending_${u.id}`);
+        if (stored) setPendingWithdrawal(JSON.parse(stored));
+      } catch (_) {}
+    }
   }, [router]);
 
   const handleLogout = useCallback(() => { logout(); router.push('/'); }, [router]);
@@ -615,6 +847,14 @@ const withdrawals = [
     const updated = activateUser(user.id);
     if (updated) setUser(updated);
   }, [user]);
+
+  // Called when user submits the withdrawal form
+  const handleWithdrawalSubmitted = useCallback((request) => {
+    setPendingWithdrawal(request);
+    setShowWithdraw(false);
+    // Brief delay then re-open to show pending notification
+    // (optional: you can just close and let user re-open manually)
+  }, []);
 
   function handleSubmitTask(task) {
     const subject = encodeURIComponent('Task Submission: ' + task.title);
@@ -656,9 +896,6 @@ const withdrawals = [
 
   return (
     <div className="dashboard">
-
-
-      
       {/* Navbar */}
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">
@@ -677,7 +914,6 @@ const withdrawals = [
       </nav>
 
       <main className="dash-main">
-
         {/* Welcome Banner */}
         <div className="dash-welcome">
           <div className="dash-welcome-text">
@@ -709,7 +945,8 @@ const withdrawals = [
             <span className="referral-link-preview">{referralLink.replace('https://', '')}</span>
             <button
               className="referral-copy-btn"
-              onClick={() => {
+              onClick={e => {
+                e.stopPropagation();
                 navigator.clipboard.writeText(referralLink);
                 alert('Referral link copied!');
               }}
@@ -731,9 +968,18 @@ const withdrawals = [
           </button>
           <button className="quick-action-card" onClick={() => setShowWithdraw(true)}>
             <span className="quick-action-icon">💸</span>
-            <span className="quick-action-label">Withdraw Money</span>
+            {/* Show pending indicator on tile if there's a pending withdrawal */}
+            <span className="quick-action-label">
+              Withdraw Money
+              {pendingWithdrawal?.status === 'pending' && (
+                <span style={{
+                  display: 'inline-block', marginLeft: 6,
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: '#F59E0B', verticalAlign: 'middle',
+                }} />
+              )}
+            </span>
           </button>
-          {/* CHANGED: was an <a> mailto link, now opens TrainingModal */}
           <button className="quick-action-card" onClick={() => setShowTraining(true)}>
             <span className="quick-action-icon">🎓</span>
             <span className="quick-action-label">Apply for Training</span>
@@ -771,49 +1017,34 @@ const withdrawals = [
             </div>
           </div>
         </div>
-      
 
-{/* Permanent Withdrawals Feed */}
-<div className="withdrawals-feed">
-
-  <div className="withdrawals-header">
-    <div className="withdrawals-title">
-      <span className="live-dot"></span>
-      Live Withdrawals
-    </div>
-
-    <div className="withdrawals-badge">
-      Instant M-Pesa Payouts
-    </div>
-  </div>
-
-  <div className="withdrawals-list">
-
-    {withdrawals.slice(0, 6).map((item, index) => (
-      <div className="withdrawal-item" key={index}>
-
-        <div className="withdrawal-user">
-          <div className="withdrawal-avatar">
-            {item.flag}
+        {/* Live Withdrawals Feed */}
+        <div className="withdrawals-feed">
+          <div className="withdrawals-header">
+            <div className="withdrawals-title">
+              <span className="live-dot"></span>
+              Live Withdrawals
+            </div>
+            <div className="withdrawals-badge">Instant M-Pesa Payouts</div>
           </div>
-
-          <div className="withdrawal-info">
-            <h4>{item.phone}</h4>
-            <p>{item.country}</p>
+          <div className="withdrawals-list">
+            {withdrawals.slice(0, 6).map((item, index) => (
+              <div className="withdrawal-item" key={index}>
+                <div className="withdrawal-user">
+                  <div className="withdrawal-avatar">{item.flag}</div>
+                  <div className="withdrawal-info">
+                    <h4>{item.phone}</h4>
+                    <p>{item.country}</p>
+                  </div>
+                </div>
+                <div className="withdrawal-amount">
+                  <h3>KES {item.amount.toLocaleString()}</h3>
+                  <span>Successful</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-
-        <div className="withdrawal-amount">
-          <h3>KES {item.amount.toLocaleString()}</h3>
-          <span>Successful</span>
-        </div>
-
-      </div>
-    ))}
-
-  </div>
-      </div>
-
 
         {/* Tasks Section */}
         <div id="tasks-section">
@@ -878,7 +1109,6 @@ const withdrawals = [
                 <div className="task-category">{task.category}</div>
                 <div className="task-title">{task.title}</div>
                 <div className="task-desc">{task.description}</div>
-
                 <div className="task-actions">
                   <button className="task-view-btn" onClick={() => handleViewTask(task)}>
                     👁️ View / Bid
@@ -897,7 +1127,7 @@ const withdrawals = [
         </div>
       </main>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       {selectedTask && (
         <TaskModal
           task={selectedTask}
@@ -915,14 +1145,19 @@ const withdrawals = [
         />
       )}
       {showUpgrade && <UpgradeModal user={user} onClose={() => setShowUpgrade(false)} />}
+
+      {/* Smart withdraw modal — handles all three states */}
       {showWithdraw && (
-        <WithdrawLockedModal
+        <WithdrawModal
+          user={user}
           onClose={() => setShowWithdraw(false)}
           onUpgrade={() => { setShowWithdraw(false); setShowUpgrade(true); }}
+          pendingWithdrawal={pendingWithdrawal}
+          onWithdrawalSubmitted={handleWithdrawalSubmitted}
         />
       )}
+
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
-      {/* ADDED: Training modal */}
       {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}
       {showMenu && (
         <HamburgerMenu
@@ -937,137 +1172,119 @@ const withdrawals = [
       )}
 
       <style jsx>{`
-        @keyframes slideIn {.withdrawals-feed{
-  margin: 28px 0;
-  background: #fff;
-  border-radius: 22px;
-  padding: 24px;
-  border: 1px solid var(--gray-light);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.04);
-}
-
-.withdrawals-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:22px;
-  flex-wrap:wrap;
-  gap:12px;
-}
-
-.withdrawals-title{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  font-size:20px;
-  font-weight:800;
-  color:var(--black);
-}
-
-.live-dot{
-  width:10px;
-  height:10px;
-  border-radius:50%;
-  background:#00C853;
-  animation:pulse 1.4s infinite;
-}
-
-@keyframes pulse{
-  0%{transform:scale(1);opacity:1;}
-  50%{transform:scale(1.5);opacity:.5;}
-  100%{transform:scale(1);opacity:1;}
-}
-
-.withdrawals-badge{
-  background:#EEF4FF;
-  color:var(--blue);
-  padding:8px 14px;
-  border-radius:999px;
-  font-size:12px;
-  font-weight:700;
-}
-
-.withdrawals-list{
-  display:flex;
-  flex-direction:column;
-  gap:14px;
-}
-
-.withdrawal-item{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:16px;
-  border-radius:16px;
-  border:1px solid var(--gray-light);
-  transition:all .25s ease;
-  background:#fff;
-}
-
-.withdrawal-item:hover{
-  transform:translateY(-2px);
-  box-shadow:0 6px 18px rgba(0,0,0,0.06);
-}
-
-.withdrawal-user{
-  display:flex;
-  align-items:center;
-  gap:14px;
-}
-
-.withdrawal-avatar{
-  width:52px;
-  height:52px;
-  border-radius:16px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:28px;
-  background:#F8FAFC;
-}
-
-.withdrawal-info h4{
-  margin:0;
-  font-size:15px;
-  font-weight:700;
-  color:var(--black);
-}
-
-.withdrawal-info p{
-  margin:4px 0 0;
-  font-size:13px;
-  color:var(--gray);
-}
-
-.withdrawal-amount{
-  text-align:right;
-}
-
-.withdrawal-amount h3{
-  margin:0;
-  color:#00A63E;
-  font-size:18px;
-  font-weight:800;
-}
-
-.withdrawal-amount span{
-  font-size:12px;
-  color:var(--gray);
-}
-
-@media(max-width:768px){
-
-  .withdrawal-item{
-    flex-direction:column;
-    align-items:flex-start;
-    gap:14px;
-  }
-
-  .withdrawal-amount{
-    text-align:left;
-  }
-
-      }
+        @keyframes slideIn {
+          .withdrawals-feed {
+            margin: 28px 0;
+            background: #fff;
+            border-radius: 22px;
+            padding: 24px;
+            border: 1px solid var(--gray-light);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+          }
+          .withdrawals-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 22px;
+            flex-wrap: wrap;
+            gap: 12px;
+          }
+          .withdrawals-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--black);
+          }
+          .live-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00C853;
+            animation: pulse 1.4s infinite;
+          }
+          @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: .5; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+          .withdrawals-badge {
+            background: #EEF4FF;
+            color: var(--blue);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .withdrawals-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+          }
+          .withdrawal-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid var(--gray-light);
+            transition: all .25s ease;
+            background: #fff;
+          }
+          .withdrawal-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+          }
+          .withdrawal-user {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+          }
+          .withdrawal-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            background: #F8FAFC;
+          }
+          .withdrawal-info h4 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--black);
+          }
+          .withdrawal-info p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: var(--gray);
+          }
+          .withdrawal-amount {
+            text-align: right;
+          }
+          .withdrawal-amount h3 {
+            margin: 0;
+            color: #00A63E;
+            font-size: 18px;
+            font-weight: 800;
+          }
+          .withdrawal-amount span {
+            font-size: 12px;
+            color: var(--gray);
+          }
+          @media(max-width: 768px) {
+            .withdrawal-item {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 14px;
+            }
+            .withdrawal-amount {
+              text-align: left;
+            }
+          }
         }
       `}</style>
     </div>
