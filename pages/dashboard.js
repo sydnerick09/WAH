@@ -803,36 +803,74 @@ export default function Dashboard() {
     { flag: '🇨🇮', country: 'Ivory Coast', phone: '+22505*****99', amount: 580 },
     { flag: '🇲🇿', country: 'Mozambique', phone: '+25884*****10', amount: 470 },
   ];
+// Withdrawal ticker
+const [currentWithdrawal, setCurrentWithdrawal] = useState(
+  withdrawals?.[0] || null
+);
 
-  const [currentWithdrawal, setCurrentWithdrawal] = useState(withdrawals[0]);
+useEffect(() => {
+  if (!withdrawals || withdrawals.length === 0) return;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentWithdrawal(withdrawals[Math.floor(Math.random() * withdrawals.length)]);
-    }, 20000);
-    return () => clearInterval(interval);
-  }, []);
+  const interval = setInterval(() => {
+    const randomIndex = Math.floor(
+      Math.random() * withdrawals.length
+    );
 
-  const categories = [
-    'All', 'Writing', 'Research', 'Data Entry', 'Design',
-    'Marketing', 'Transcription', 'Translation', 'Survey',
-    'Testing', 'Audio', 'Education', 'Admin',
-  ];
+    setCurrentWithdrawal(withdrawals[randomIndex]);
+  }, 20000);
 
-  useEffect(() => {
-    setMounted(true);
-    const u = getCurrentUser();
-    if (!u) {
-      router.replace('/login');
-    } else {
-      setUser(u);
-      // Load any existing pending withdrawal for this user
-      try {
-        const stored = localStorage.getItem(`withdrawal_pending_${u.id}`);
-        if (stored) setPendingWithdrawal(JSON.parse(stored));
-      } catch (_) {}
+  return () => clearInterval(interval);
+}, [withdrawals]);
+
+// Categories
+const categories = [
+  'All',
+  'Writing',
+  'Research',
+  'Data Entry',
+  'Design',
+  'Marketing',
+  'Transcription',
+  'Translation',
+  'Survey',
+  'Testing',
+  'Audio',
+  'Education',
+  'Admin',
+];
+
+// Initial page load
+useEffect(() => {
+  setMounted(true);
+
+  const u = getCurrentUser();
+
+  if (!u) {
+    router.replace('/login');
+    return;
+  }
+
+  setUser(u);
+
+  try {
+    const stored = localStorage.getItem(
+      `withdrawal_pending_${u.id}`
+    );
+
+    if (stored) {
+      const parsedWithdrawal = JSON.parse(stored);
+
+      if (parsedWithdrawal) {
+        setPendingWithdrawal(parsedWithdrawal);
+      }
     }
-  }, [router]);
+  } catch (error) {
+    console.error(
+      'Failed to load pending withdrawal:',
+      error
+    );
+  }
+}, [router]);
 
   const handleLogout = useCallback(() => { logout(); router.push('/'); }, [router]);
 
