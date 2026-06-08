@@ -93,7 +93,7 @@ function ComingSoonModal({ onClose }) {
           <h2 className="coming-soon-title">Withdraw with M-Pesa</h2>
           <p className="coming-soon-subtitle">
             This application is <strong>coming soon</strong>.<br />
-            We're working hard to bring you seamless M-Pesa withdrawals directly from your Business Hub dashboard.
+            We&apos;re working hard to bring you seamless M-Pesa withdrawals directly from your Business Hub dashboard.
           </p>
 
           {/* Feature preview pills */}
@@ -112,10 +112,10 @@ function ComingSoonModal({ onClose }) {
           </div>
 
           {/* Notify me row */}
-          <p className="coming-soon-notify-text">Stay tuned — we'll notify you the moment it launches!</p>
+          <p className="coming-soon-notify-text">Stay tuned — we&apos;ll notify you the moment it launches!</p>
 
           <button className="coming-soon-close-action" onClick={onClose}>
-            Got It, I'll Wait!
+            Got It, I&apos;ll Wait!
           </button>
         </div>
       </div>
