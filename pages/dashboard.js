@@ -6,6 +6,7 @@
 //   • Withdrawal form saved to localStorage; pending state blocks re-submission
 //   • Live withdrawals: 50 generated records (KSh 1,000–3,700), animated ticker
 //   • Improved modals, animations, responsive CSS
+//   • NEW: "Withdraw with M-Pesa" quick action tile with Coming Soon modal
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -59,6 +60,67 @@ function getOrGenerateWithdrawals() {
 
   try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch (_) {}
   return records;
+}
+
+// ─── Coming Soon Modal ────────────────────────────────────────────────────────
+function ComingSoonModal({ onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="coming-soon-modal-card" onClick={e => e.stopPropagation()}>
+        {/* Decorative top bar */}
+        <div className="coming-soon-header">
+          <div className="coming-soon-header-inner">
+            <div className="coming-soon-mpesa-logo">
+              <span className="mpesa-icon">📱</span>
+              <span className="mpesa-text">M-PESA</span>
+            </div>
+            <button className="modal-close coming-soon-close-btn" onClick={onClose}>×</button>
+          </div>
+        </div>
+
+        <div className="coming-soon-body">
+          {/* Animated rocket / icon area */}
+          <div className="coming-soon-icon-wrap">
+            <div className="coming-soon-orbit">
+              <div className="coming-soon-orbit-ring ring-1" />
+              <div className="coming-soon-orbit-ring ring-2" />
+              <div className="coming-soon-rocket">🚀</div>
+            </div>
+          </div>
+
+          {/* Text */}
+          <div className="coming-soon-badge">NEW FEATURE</div>
+          <h2 className="coming-soon-title">Withdraw with M-Pesa</h2>
+          <p className="coming-soon-subtitle">
+            This application is <strong>coming soon</strong>.<br />
+            We're working hard to bring you seamless M-Pesa withdrawals directly from your Business Hub dashboard.
+          </p>
+
+          {/* Feature preview pills */}
+          <div className="coming-soon-features">
+            {[
+              { icon: '⚡', label: 'Instant Transfers' },
+              { icon: '🔒', label: 'Bank-Grade Security' },
+              { icon: '📲', label: 'Mobile First' },
+              { icon: '💰', label: 'Zero Hidden Fees' },
+            ].map(f => (
+              <div key={f.label} className="coming-soon-feature-pill">
+                <span>{f.icon}</span>
+                <span>{f.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Notify me row */}
+          <p className="coming-soon-notify-text">Stay tuned — we'll notify you the moment it launches!</p>
+
+          <button className="coming-soon-close-action" onClick={onClose}>
+            Got It, I'll Wait!
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
@@ -319,7 +381,7 @@ function TrainingModal({ user, onClose }) {
 function WithdrawFeeModal({ user, onClose }) {
   const [phone,   setPhone]   = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
-  const [step,    setStep]    = useState('prompt');  // 'prompt' | 'processing'
+  const [step,    setStep]    = useState('prompt');
 
   async function handlePay() {
     if (!phone.trim()) { alert('Enter your M-Pesa number'); return; }
@@ -335,7 +397,6 @@ function WithdrawFeeModal({ user, onClose }) {
           amount: 480,
           phone,
           plan:   'withdrawal_fee',
-          // Paystack callback should redirect back and set withdrawalFeePaid flag
         }),
       });
       const data = await res.json();
@@ -367,7 +428,6 @@ function WithdrawFeeModal({ user, onClose }) {
         <div className="pay-modal-body">
           {step === 'prompt' && (
             <>
-              {/* Info banner */}
               <div className="withdraw-fee-info">
                 <div className="withdraw-fee-icon">ℹ️</div>
                 <p>
@@ -375,8 +435,6 @@ function WithdrawFeeModal({ user, onClose }) {
                   This fee covers transaction processing and verification costs.
                 </p>
               </div>
-
-              {/* What you get */}
               <div className="premium-features" style={{ marginBottom: 20 }}>
                 {[
                   ['✅', 'Instant withdrawal form access'],
@@ -389,13 +447,11 @@ function WithdrawFeeModal({ user, onClose }) {
                   </div>
                 ))}
               </div>
-
               <div className="pay-amount">
                 <div className="pay-amount-label">Withdrawal Processing Fee</div>
                 <div className="pay-amount-value">KES 480</div>
                 <div className="pay-amount-sub">One-time fee • Unlocks withdrawal form</div>
               </div>
-
               <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
               <input
                 className="pay-phone-input"
@@ -403,7 +459,6 @@ function WithdrawFeeModal({ user, onClose }) {
                 onChange={e => setPhone(e.target.value)}
                 placeholder="+254 7XX XXX XXX"
               />
-
               <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1A7A4A, #C9933A)' }} onClick={handlePay} disabled={loading}>
                 {loading ? <><span className="spinner" /> Processing...</> : '🔒 Pay KES 480 via Paystack'}
               </button>
@@ -423,7 +478,7 @@ function WithdrawFeeModal({ user, onClose }) {
   );
 }
 
-// ─── Withdraw: Step 2 — Withdrawal Form (shown after fee paid) ────────────────
+// ─── Withdraw: Step 2 — Withdrawal Form ──────────────────────────────────────
 function WithdrawFormModal({ user, onClose, storageKey, onSubmitted }) {
   const [fullName,   setFullName]   = useState(user?.fullName || '');
   const [accountNum, setAccountNum] = useState(user?.phone || '');
@@ -537,7 +592,6 @@ function WithdrawPendingModal({ data, onClose }) {
             </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-            {/* Amount */}
             <div className="withdraw-detail-card">
               <div>
                 <div className="withdraw-detail-label">Requested Amount</div>
@@ -545,7 +599,6 @@ function WithdrawPendingModal({ data, onClose }) {
               </div>
               <div className="withdraw-detail-icon">💰</div>
             </div>
-            {/* Status */}
             <div className="withdraw-detail-card" style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
               <div>
                 <div className="withdraw-detail-label">Status</div>
@@ -556,7 +609,6 @@ function WithdrawPendingModal({ data, onClose }) {
               </div>
               <div className="withdraw-detail-icon">⏳</div>
             </div>
-            {/* Date */}
             {requestedAt && (
               <div className="withdraw-detail-card">
                 <div>
@@ -576,16 +628,8 @@ function WithdrawPendingModal({ data, onClose }) {
 }
 
 // ─── Smart Withdraw Controller ────────────────────────────────────────────────
-/**
- * State machine:
- *   not activated            → WithdrawLockedModal (activate account first)
- *   activated, fee not paid  → WithdrawFeeModal    (pay KSh 480)
- *   fee paid, no pending     → WithdrawFormModal   (fill withdrawal form)
- *   pending exists           → WithdrawPendingModal
- */
 function WithdrawModal({ user, onClose, pendingWithdrawal, onWithdrawalSubmitted, withdrawalFeePaid }) {
   if (!user?.activated) {
-    // Not activated — tell them to activate first
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="pay-modal-card" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
@@ -708,14 +752,12 @@ function LiveWithdrawalsTicker({ withdrawals }) {
   const [animatingIn, setAnimatingIn]  = useState(null);
   const indexRef = useRef(0);
 
-  // Seed the initial visible 5 items
   useEffect(() => {
     if (!withdrawals.length) return;
     setVisibleItems(withdrawals.slice(0, 5));
     indexRef.current = 5;
   }, [withdrawals]);
 
-  // Every 2.5 s, rotate one item out and slide a new one in
   useEffect(() => {
     if (!withdrawals.length) return;
     const interval = setInterval(() => {
@@ -724,7 +766,6 @@ function LiveWithdrawalsTicker({ withdrawals }) {
       setAnimatingIn(nextItem);
       indexRef.current = nextIdx + 1;
 
-      // After animation starts (300 ms) swap the list
       setTimeout(() => {
         setVisibleItems(prev => {
           const updated = [...prev.slice(1), nextItem];
@@ -746,7 +787,6 @@ function LiveWithdrawalsTicker({ withdrawals }) {
         <div className="withdrawals-badge">Instant M-Pesa Payouts</div>
       </div>
 
-      {/* Horizontal scrolling ticker strip */}
       <div className="ticker-strip">
         <div className="ticker-track">
           {[...withdrawals, ...withdrawals].map((item, i) => (
@@ -760,7 +800,6 @@ function LiveWithdrawalsTicker({ withdrawals }) {
         </div>
       </div>
 
-      {/* Animated card list */}
       <div className="withdrawals-list">
         {visibleItems.map((item, index) => (
           <div
@@ -794,14 +833,15 @@ function LiveWithdrawalsTicker({ withdrawals }) {
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onTraining, onLogout }) {
+function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onTraining, onLogout, onMpesaWithdraw }) {
   const items = [
-    { icon: '🏠', label: 'Dashboard',          action: () => { onClose(); } },
-    { icon: '⭐', label: 'Upgrade to Premium', action: () => { onClose(); onUpgrade(); } },
-    { icon: '✅', label: 'Awarded Tasks',       action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
-    { icon: '💸', label: 'Withdraw Money',      action: () => { onClose(); onWithdraw(); } },
-    { icon: '🎓', label: 'Apply for Training',  action: () => { onClose(); onTraining(); } },
-    { icon: '🔗', label: 'My Referral Link',    action: () => { onClose(); onReferral(); } },
+    { icon: '🏠', label: 'Dashboard',            action: () => { onClose(); } },
+    { icon: '⭐', label: 'Upgrade to Premium',   action: () => { onClose(); onUpgrade(); } },
+    { icon: '✅', label: 'Awarded Tasks',         action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
+    { icon: '💸', label: 'Withdraw Money',        action: () => { onClose(); onWithdraw(); } },
+    { icon: '📲', label: 'Withdraw with M-Pesa', action: () => { onClose(); onMpesaWithdraw(); } },
+    { icon: '🎓', label: 'Apply for Training',    action: () => { onClose(); onTraining(); } },
+    { icon: '🔗', label: 'My Referral Link',      action: () => { onClose(); onReferral(); } },
   ];
 
   return (
@@ -852,21 +892,20 @@ export default function Dashboard() {
   const [user,    setUser]    = useState(null);
   const [mounted, setMounted] = useState(false);
 
-  const [selectedTask,  setSelectedTask]  = useState(null);
-  const [payTask,       setPayTask]       = useState(null);
-  const [showUpgrade,   setShowUpgrade]   = useState(false);
-  const [showWithdraw,  setShowWithdraw]  = useState(false);
-  const [showReferral,  setShowReferral]  = useState(false);
-  const [showMenu,      setShowMenu]      = useState(false);
-  const [showTraining,  setShowTraining]  = useState(false);
+  const [selectedTask,      setSelectedTask]      = useState(null);
+  const [payTask,           setPayTask]           = useState(null);
+  const [showUpgrade,       setShowUpgrade]       = useState(false);
+  const [showWithdraw,      setShowWithdraw]      = useState(false);
+  const [showReferral,      setShowReferral]      = useState(false);
+  const [showMenu,          setShowMenu]          = useState(false);
+  const [showTraining,      setShowTraining]      = useState(false);
+  const [showMpesaComingSoon, setShowMpesaComingSoon] = useState(false); // ← NEW
 
   // Withdrawal state
-  const [pendingWithdrawal,  setPendingWithdrawal]  = useState(null);
-  const [withdrawalFeePaid,  setWithdrawalFeePaid]  = useState(false);
+  const [pendingWithdrawal, setPendingWithdrawal]  = useState(null);
+  const [withdrawalFeePaid, setWithdrawalFeePaid]  = useState(false);
 
-  // Live withdrawals (50 records, stored in localStorage)
   const [liveWithdrawals, setLiveWithdrawals] = useState([]);
-
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
 
@@ -875,44 +914,36 @@ export default function Dashboard() {
     'Transcription','Translation','Survey','Testing','Audio','Education','Admin',
   ];
 
-  // ── On mount ──
   useEffect(() => {
     setMounted(true);
     const u = getCurrentUser();
     if (!u) { router.replace('/login'); return; }
     setUser(u);
 
-    // Load pending withdrawal
     try {
       const stored = localStorage.getItem(`withdrawal_pending_${u.id}`);
       if (stored) setPendingWithdrawal(JSON.parse(stored));
     } catch (_) {}
 
-    // Load withdrawal fee paid state
     try {
       const feePaid = localStorage.getItem(`withdrawal_fee_paid_${u.id}`);
       if (feePaid === 'true') setWithdrawalFeePaid(true);
     } catch (_) {}
 
-    // Generate / load 50 live withdrawal records
     setLiveWithdrawals(getOrGenerateWithdrawals());
   }, [router]);
 
-  // ── Check Paystack return params for withdrawal_fee confirmation ──
   useEffect(() => {
     if (!user) return;
-    const params   = new URLSearchParams(window.location.search);
-    const plan     = params.get('plan');
-    const trxref   = params.get('trxref');
+    const params    = new URLSearchParams(window.location.search);
+    const plan      = params.get('plan');
+    const trxref    = params.get('trxref');
     const reference = params.get('reference');
 
-    // If Paystack redirected back with plan=withdrawal_fee, mark fee as paid
     if (plan === 'withdrawal_fee' && (trxref || reference)) {
       try { localStorage.setItem(`withdrawal_fee_paid_${user.id}`, 'true'); } catch (_) {}
       setWithdrawalFeePaid(true);
-      // Clean URL
       router.replace('/dashboard', undefined, { shallow: true });
-      // Auto-open withdrawal form
       setShowWithdraw(true);
     }
   }, [user, router]);
@@ -953,8 +984,8 @@ export default function Dashboard() {
     );
   }
 
-  const initials      = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
-  const referralLink  = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`;
+  const initials     = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
+  const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`;
 
   return (
     <div className="dashboard">
@@ -1018,7 +1049,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Quick Action Tiles */}
+        {/* Quick Action Tiles — now 5 tiles including the new M-Pesa one */}
         <div className="quick-actions">
           <button className="quick-action-card" onClick={() => setShowUpgrade(true)}>
             <span className="quick-action-icon">⭐</span>
@@ -1037,6 +1068,12 @@ export default function Dashboard() {
               )}
             </span>
           </button>
+          {/* ── NEW: Withdraw with M-Pesa tile ── */}
+          <button className="quick-action-card quick-action-mpesa" onClick={() => setShowMpesaComingSoon(true)}>
+            <span className="quick-action-icon">📲</span>
+            <span className="quick-action-label">Withdraw with M-Pesa</span>
+            <span className="mpesa-coming-soon-pill">Soon</span>
+          </button>
           <button className="quick-action-card" onClick={() => setShowTraining(true)}>
             <span className="quick-action-icon">🎓</span>
             <span className="quick-action-label">Apply for Training</span>
@@ -1047,8 +1084,8 @@ export default function Dashboard() {
         <div className="dash-stats">
           {[
             { icon: '📋', num: (TASKS || []).length, label: 'Available Tasks' },
-            { icon: '💼', num: 0,                   label: 'Active Bids' },
-            { icon: '✅', num: 0,                   label: 'Completed Tasks' },
+            { icon: '💼', num: 0,                    label: 'Active Bids' },
+            { icon: '✅', num: 0,                    label: 'Completed Tasks' },
             { icon: '💰', num: `KES ${(user.balance || 0).toLocaleString()}`, label: 'Total Earned' },
           ].map(({ icon, num, label }) => (
             <div key={label} className="dash-stat-card">
@@ -1061,7 +1098,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* ── Live Withdrawals Animated Ticker ── */}
+        {/* Live Withdrawals Ticker */}
         <LiveWithdrawalsTicker withdrawals={liveWithdrawals} />
 
         {/* Tasks Section */}
@@ -1145,6 +1182,11 @@ export default function Dashboard() {
         />
       )}
 
+      {/* ── NEW: Coming Soon Modal for M-Pesa Withdrawal ── */}
+      {showMpesaComingSoon && (
+        <ComingSoonModal onClose={() => setShowMpesaComingSoon(false)} />
+      )}
+
       {showMenu && (
         <HamburgerMenu
           user={user}
@@ -1153,6 +1195,7 @@ export default function Dashboard() {
           onWithdraw={() => setShowWithdraw(true)}
           onReferral={() => setShowReferral(true)}
           onTraining={() => setShowTraining(true)}
+          onMpesaWithdraw={() => setShowMpesaComingSoon(true)}
           onLogout={handleLogout}
         />
       )}

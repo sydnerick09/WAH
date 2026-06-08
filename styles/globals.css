@@ -18,6 +18,10 @@
   --gold-light:  #E6B05A;
   --gold-pale:   #FDF4E3;
 
+  /* M-Pesa brand green */
+  --mpesa-green: #00A651;
+  --mpesa-red:   #E30613;
+
   /* Neutrals */
   --cream:       #F9F6F0;
   --cream-dark:  #EDE8DF;
@@ -322,18 +326,61 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 .referral-copy-btn     { background: rgba(255,255,255,0.2); color: var(--white); border: 1px solid rgba(255,255,255,0.4); padding: 8px 16px; border-radius: 50px; font-family: var(--font-display); font-size: 13px; font-weight: 600; transition: background 0.2s; }
 .referral-copy-btn:hover { background: rgba(255,255,255,0.35); }
 
-/* ── Quick Actions ── */
-.quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+/* ── Quick Actions — 5-tile grid ── */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
 .quick-action-card {
   background: var(--white); border: 1.5px solid var(--gray-light);
   border-radius: var(--radius-lg); padding: 20px 16px;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); text-align: center;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-sm); position: relative;
 }
 .quick-action-card:hover { border-color: var(--green); box-shadow: var(--shadow-green-sm); transform: translateY(-4px); }
 .quick-action-icon  { font-size: 28px; }
 .quick-action-label { font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--black); }
+
+/* ── M-Pesa Quick Action Tile (special styling) ── */
+.quick-action-mpesa {
+  border-color: rgba(0,166,81,0.3);
+  background: linear-gradient(145deg, #fff, #f0fff8);
+}
+.quick-action-mpesa:hover {
+  border-color: var(--mpesa-green);
+  box-shadow: 0 8px 24px rgba(0,166,81,0.2);
+  background: linear-gradient(145deg, #f0fff8, #dcfaec);
+}
+.quick-action-mpesa .quick-action-icon {
+  filter: drop-shadow(0 2px 6px rgba(0,166,81,0.35));
+}
+.quick-action-mpesa .quick-action-label {
+  color: #007a3d;
+}
+
+/* "Soon" pill badge on the M-Pesa tile */
+.mpesa-coming-soon-pill {
+  position: absolute;
+  top: 10px; right: 10px;
+  background: linear-gradient(135deg, var(--mpesa-green), #007a3d);
+  color: #fff;
+  font-family: var(--font-utility);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 100px;
+  box-shadow: 0 2px 6px rgba(0,166,81,0.4);
+  animation: pillPulse 2.2s ease-in-out infinite;
+}
+@keyframes pillPulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(0,166,81,0.4); }
+  50%       { box-shadow: 0 2px 14px rgba(0,166,81,0.7); }
+}
 
 /* ── Stats ── */
 .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px; }
@@ -471,6 +518,173 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 .withdraw-footer-note { text-align: center; font-family: var(--font-sub); font-size: 12px; color: var(--gray); margin-top: 12px; line-height: 1.6; }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   COMING SOON MODAL — Withdraw with M-Pesa
+   ══════════════════════════════════════════════════════════════════════════════ */
+.coming-soon-modal-card {
+  background: var(--white);
+  border-radius: var(--radius-2xl);
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  animation: slideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Header bar with M-Pesa brand colours */
+.coming-soon-header {
+  background: linear-gradient(135deg, #00A651 0%, #007a3d 60%, #004d26 100%);
+  padding: 20px 24px;
+  position: relative;
+  overflow: hidden;
+}
+/* Subtle diagonal stripe texture */
+.coming-soon-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 10px,
+    rgba(255,255,255,0.04) 10px,
+    rgba(255,255,255,0.04) 20px
+  );
+}
+.coming-soon-header-inner {
+  position: relative; z-index: 1;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.coming-soon-mpesa-logo {
+  display: flex; align-items: center; gap: 10px;
+}
+.mpesa-icon { font-size: 24px; }
+.mpesa-text {
+  font-family: var(--font-display);
+  font-size: 18px; font-weight: 800;
+  color: var(--white); letter-spacing: 2px;
+}
+.coming-soon-close-btn {
+  background: rgba(255,255,255,0.2) !important;
+}
+
+/* Body */
+.coming-soon-body {
+  padding: 32px 28px 28px;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+}
+
+/* Animated orbit icon */
+.coming-soon-icon-wrap {
+  margin-bottom: 24px;
+}
+.coming-soon-orbit {
+  position: relative;
+  width: 100px; height: 100px;
+  display: flex; align-items: center; justify-content: center;
+}
+.coming-soon-orbit-ring {
+  position: absolute; border-radius: 50%;
+  border: 2px dashed rgba(0,166,81,0.25);
+  animation: orbitSpin 12s linear infinite;
+}
+.ring-1 { width: 100%; height: 100%; animation-duration: 12s; }
+.ring-2 { width: 70%; height: 70%; animation-direction: reverse; animation-duration: 8s; }
+@keyframes orbitSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.coming-soon-rocket {
+  font-size: 44px;
+  animation: rocketFloat 3s ease-in-out infinite;
+  position: relative; z-index: 1;
+  filter: drop-shadow(0 6px 12px rgba(0,166,81,0.4));
+}
+@keyframes rocketFloat {
+  0%, 100% { transform: translateY(0) rotate(-10deg); }
+  50%       { transform: translateY(-8px) rotate(5deg); }
+}
+
+/* Badge */
+.coming-soon-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #00A651, #007a3d);
+  color: #fff;
+  font-family: var(--font-utility);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 100px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 12px rgba(0,166,81,0.35);
+}
+
+/* Title */
+.coming-soon-title {
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 800;
+  color: var(--black); letter-spacing: -0.5px;
+  margin-bottom: 12px; line-height: 1.1;
+}
+
+/* Subtitle */
+.coming-soon-subtitle {
+  font-family: var(--font-sub);
+  font-size: 14px; color: var(--gray);
+  line-height: 1.75; margin-bottom: 24px;
+  max-width: 320px;
+}
+
+/* Feature pills */
+.coming-soon-features {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: center; margin-bottom: 24px;
+}
+.coming-soon-feature-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  background: #f0fff8;
+  border: 1px solid rgba(0,166,81,0.2);
+  border-radius: 100px;
+  font-family: var(--font-body);
+  font-size: 12px; font-weight: 600;
+  color: #007a3d;
+  transition: all 0.2s;
+}
+.coming-soon-feature-pill:hover {
+  background: #dcfaec;
+  border-color: rgba(0,166,81,0.4);
+  transform: translateY(-2px);
+}
+
+/* Notify text */
+.coming-soon-notify-text {
+  font-family: var(--font-sub);
+  font-size: 13px; color: var(--gray);
+  margin-bottom: 20px; line-height: 1.6;
+}
+
+/* Close action button */
+.coming-soon-close-action {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #00A651, #007a3d);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  font-family: var(--font-display);
+  font-size: 15px; font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(0,166,81,0.35);
+  letter-spacing: 0.3px;
+}
+.coming-soon-close-action:hover {
+  background: linear-gradient(135deg, #009644, #006b35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,166,81,0.45);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    LIVE WITHDRAWALS — ANIMATED TICKER
    ══════════════════════════════════════════════════════════════════════════════ */
 .withdrawals-feed {
@@ -483,8 +697,6 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   overflow: hidden;
   position: relative;
 }
-
-/* Green accent line at the top */
 .withdrawals-feed::before {
   content: '';
   position: absolute;
@@ -609,7 +821,6 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 }
 .wd-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-light); display: inline-block; animation: pulse 2s infinite; }
 
-/* Footer bar below cards */
 .wd-footer {
   display: flex; justify-content: space-between; align-items: center;
   margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--gray-light);
@@ -649,9 +860,13 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 /* ══════════════════════════════════════════════════════════════════════════════
    RESPONSIVE
    ══════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1200px) {
+  .quick-actions { grid-template-columns: repeat(3, 1fr); }
+}
+
 @media (max-width: 1024px) {
   .dash-stats    { grid-template-columns: repeat(2, 1fr); }
-  .quick-actions { grid-template-columns: repeat(2, 1fr); }
+  .quick-actions { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 768px) {
@@ -668,6 +883,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   .withdraw-detail-card { flex-direction: column; align-items: flex-start; gap: 8px; }
   .wd-footer { flex-direction: column; align-items: flex-start; gap: 8px; }
   .ticker-pill { padding: 6px 12px; }
+  .quick-actions { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 480px) {
@@ -679,4 +895,6 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   .task-submit-btn { width: 100%; }
   .withdrawals-feed { padding: 20px 16px; }
   .pay-modal-body { padding: 20px; }
+  .coming-soon-body { padding: 24px 20px 20px; }
+  .coming-soon-title { font-size: 22px; }
 }
