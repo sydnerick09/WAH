@@ -576,9 +576,8 @@ export default function Home() {
 
             <ul className="footer-links">
               <li>
-                <a href="#">Help Center</a>
-              </li>
-
+  <a href="https://swastaskhub.github.io/manual/" target="_blank" rel="noopener noreferrer">Help Center</a>
+</li>
               <li>
                 <a href="#">Terms of Service</a>
               </li>
