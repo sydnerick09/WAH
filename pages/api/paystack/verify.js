@@ -1,12 +1,12 @@
+// pages/api/paystack/verify.js
+
 export default async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).end();
+
   const { reference } = req.query;
 
-  // check if reference exists
   if (!reference) {
-    return res.status(400).json({
-      status: false,
-      message: 'Payment reference is required',
-    });
+    return res.status(400).json({ status: false, message: 'Missing reference' });
   }
 
   try {
@@ -16,31 +16,13 @@ export default async function handler(req, res) {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          'Content-Type': 'application/json',
         },
       }
     );
 
     const data = await response.json();
-
-    // successful verification
-    if (data.status) {
-      return res.status(200).json(data);
-    }
-
-    // verification failed
-    return res.status(400).json({
-      status: false,
-      message: data.message || 'Verification failed',
-    });
-
+    res.status(200).json(data);
   } catch (err) {
-    console.error('Paystack Verify Error:', err);
-
-    return res.status(500).json({
-      status: false,
-      message: 'Server error verifying payment',
-      error: err.message,
-    });
+    res.status(500).json({ status: false, error: err.message });
   }
 }
