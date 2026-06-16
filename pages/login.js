@@ -15,7 +15,7 @@ export default function Login() {
     setForm(prev => ({ ...prev, [name]: value }));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     if (!form.email || !form.password) {
@@ -23,15 +23,13 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      const result = loginUser({ email: form.email.trim().toLowerCase(), password: form.password });
-      if (!result.success) {
-        setError(result.message);
-        setLoading(false);
-        return;
-      }
-      router.push('/dashboard');
-    }, 700);
+    const result = await loginUser({ email: form.email.trim().toLowerCase(), password: form.password });
+    if (!result.success) {
+      setError(result.message);
+      setLoading(false);
+      return;
+    }
+    router.push('/dashboard');
   }
 
   return (
@@ -45,7 +43,7 @@ export default function Login() {
         <h1 className="auth-title">Welcome Back</h1>
         <p className="auth-subtitle">Log in to access your tasks and earnings</p>
 
-        {error && <div className="error-msg">⚠️ {error}</div>}
+        {error && <div className="error-msg">{error}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -82,7 +80,7 @@ export default function Login() {
                 <span className="spinner" /> Logging in...
               </span>
             ) : (
-              '🔐 Login to Dashboard'
+              'Login to Dashboard'
             )}
           </button>
         </form>

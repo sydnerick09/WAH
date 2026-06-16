@@ -95,61 +95,37 @@ export default function Register() {
     return null;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-
     setError('');
 
     const validationError = validate();
-
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+    if (validationError) { setError(validationError); return; }
 
     setLoading(true);
 
-    setTimeout(() => {
+    const result = await registerUser({
+      fullName:     form.fullName.trim(),
+      email:        form.email.trim().toLowerCase(),
+      phone:        form.phone.trim(),
+      country:      form.country,
+      password:     form.password,
+      activated:    false,
+      premium:      false,
+      balance:      0,
+      referralCount: 0,
+      referredBy:   referrerId || null,
+    });
 
-      // Register user
-      const result = registerUser({
-        fullName: form.fullName.trim(),
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim(),
-        country: form.country,
-        password: form.password,
+    if (!result.success) {
+      setError(result.message);
+      setLoading(false);
+      return;
+    }
 
-        // ACCOUNT STATUS
-        activated: false,
-        premium: false,
-
-        // BALANCE
-        balance: 0,
-
-        // REFERRALS
-        referralCount: 0,
-        referredBy: referrerId || null,
-      });
-
-      if (!result.success) {
-        setError(result.message);
-        setLoading(false);
-        return;
-      }
-
-      // DO NOT reward referral here
-      // reward will happen ONLY after successful payment
-
-      // Remove referral ID after signup
-      localStorage.removeItem('referrerId');
-
-      // Login new user
-      setCurrentUser(result.user);
-
-      // Redirect
-      router.push('/dashboard');
-
-    }, 800);
+    localStorage.removeItem('referrerId');
+    setCurrentUser(result.user);
+    router.push('/dashboard');
   }
 
   return (
@@ -197,13 +173,13 @@ export default function Register() {
               fontWeight: 600,
             }}
           >
-            🎉 You were invited by a Business Hub member.
+            You were invited by a Business Hub member.
           </div>
         )}
 
         {error && (
           <div className="error-msg">
-            ⚠️ {error}
+            {error}
           </div>
         )}
 
@@ -356,7 +332,7 @@ export default function Register() {
                 Creating account...
               </span>
             ) : (
-              '🚀 Create Account'
+              'Create Account'
             )}
           </button>
 

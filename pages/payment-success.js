@@ -1,65 +1,82 @@
+// pages/payment-success.js
+// Receives Paystack callback, verifies payment, then redirects based on plan.
+
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { activateUser, getCurrentUser } from '../lib/auth';
-
-const ACTIVATION_AMOUNT_KOBO = 5000; // KSh 50
+import { activateUser, upgradeToPremium, getCurrentUser } from '../lib/auth';
 
 export default function PaymentSuccess() {
   const router = useRouter();
 
   useEffect(() => {
-    async function verifyPayment() {
-      const reference = router.query.reference;
-      if (!reference) return;
+    if (!router.isReady) return;
 
+    async function verify() {
+      const { reference, plan } = router.query;
+
+      if (!reference) {
+        router.replace('/dashboard');
+        return;
+      }
+
+      let verifyData;
       try {
         const res  = await fetch(`/api/paystack/verify?reference=${reference}`);
-        const data = await res.json();
-
-        const verified = data.status && data.data.status === 'success';
-
-        if (!verified) {
-          alert('Payment verification failed');
-          router.replace('/dashboard');
-          return;
-        }
-
-        const amountPaid = data.data.amount; // in kobo
-
-        if (amountPaid === ACTIVATION_AMOUNT_KOBO) {
-          // ── KSh 50 verified: activate the account ──
-          const user = getCurrentUser();
-          if (user) {
-            activateUser(user.id, amountPaid / 100);
-          }
-          alert('Payment successful. Account activated.');
-        } else {
-          // Other verified payments (premium, training, withdrawal fee, etc.)
-          // are handled by their respective flows — don't touch activation status.
-          alert('Payment successful.');
-        }
-
+        verifyData = await res.json();
+      } catch {
+        alert('Verification error. Please contact support.');
         router.replace('/dashboard');
-      } catch (err) {
-        console.error(err);
-        alert('Something went wrong');
+        return;
+      }
+
+      const verified =
+        verifyData.status && verifyData.data?.status === 'success';
+
+      if (!verified) {
+        alert('Payment verification failed. Please try again or contact support.');
+        router.replace('/dashboard');
+        return;
+      }
+
+      const user = await getCurrentUser();
+
+      if (plan === 'withdrawal') {
+        // Fee paid — redirect to dashboard which will auto-open withdrawal form
+        router.replace('/dashboard?open=withdrawal-form');
+
+      } else if (plan === 'premium') {
+        if (user) await upgradeToPremium(user.id);
+        router.replace('/dashboard');
+
+      } else if (plan === 'training') {
+        alert('Training registration successful! We will contact you with course details.');
+        router.replace('/dashboard');
+
+      } else {
+        // Default: account activation (KES 50)
+        const amountKES = Math.round(verifyData.data.amount / 100);
+        if (user) await activateUser(user.id, amountKES);
+        alert('Payment successful! Your account is now activated.');
+        router.replace('/dashboard');
       }
     }
 
-    verifyPayment();
-  }, [router]);
+    verify();
+  }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'sans-serif',
-      }}
-    >
-      Verifying payment...
+    <div style={{
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'sans-serif', gap: 16,
+    }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: '50%',
+        border: '4px solid #E2E8F0', borderTopColor: '#059669',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <p style={{ color: '#64748B', fontSize: 15 }}>Verifying your payment…</p>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
