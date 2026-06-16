@@ -1109,22 +1109,25 @@ export default function Dashboard() {
   }, [user]);
 
   useEffect(() => {
-    setMounted(true);
-    const u = getCurrentUser();
-    if (!u) { router.replace('/login'); return; }
-    setUser(u);
+    async function init() {
+      setMounted(true);
+      const u = await getCurrentUser();
+      if (!u) { router.replace('/login'); return; }
+      setUser(u);
 
-    try {
-      const stored = localStorage.getItem(`withdrawal_pending_${u.id}`);
-      if (stored) setPendingWithdrawal(JSON.parse(stored));
-    } catch (_) {}
+      try {
+        const stored = localStorage.getItem(`withdrawal_pending_${u.id}`);
+        if (stored) setPendingWithdrawal(JSON.parse(stored));
+      } catch (_) {}
 
-    try {
-      const feePaid = localStorage.getItem(`withdrawal_fee_paid_${u.id}`);
-      if (feePaid === 'true') setWithdrawalFeePaid(true);
-    } catch (_) {}
+      try {
+        const feePaid = localStorage.getItem(`withdrawal_fee_paid_${u.id}`);
+        if (feePaid === 'true') setWithdrawalFeePaid(true);
+      } catch (_) {}
 
-    setLiveWithdrawals(getOrGenerateWithdrawals());
+      setLiveWithdrawals(getOrGenerateWithdrawals());
+    }
+    init();
   }, [router]);
 
   // Handle Paystack return URL params
@@ -1146,8 +1149,8 @@ export default function Dashboard() {
   const handleLogout       = useCallback(() => { logout(); router.push('/'); }, [router]);
   const handleViewTask     = useCallback(task => setSelectedTask(task), []);
   const handleBidClick     = useCallback(task => { setSelectedTask(null); setPayTask(task); }, []);
-  const handlePaySuccess   = useCallback(() => {
-    const updated = activateUser(user.id);
+  const handlePaySuccess   = useCallback(async () => {
+    const updated = await activateUser(user.id);
     if (updated) setUser(updated);
   }, [user]);
 
