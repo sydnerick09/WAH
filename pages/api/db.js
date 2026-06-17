@@ -86,6 +86,41 @@ export default async function handler(req, res) {
         return res.json({ success: true, user: norm(data) });
       }
 
+      case 'migrateUser': {
+        const u = p.user;
+        if (!u?.id) return res.json({ data: null });
+
+        // Return existing record if already in Supabase (by id or email)
+        const { data: byId } = await db.from('users')
+          .select('*').eq('id', u.id).maybeSingle();
+        if (byId) return res.json({ data: norm(byId) });
+
+        const { data: byEmail } = await db.from('users')
+          .select('*').eq('email', u.email).maybeSingle();
+        if (byEmail) return res.json({ data: norm(byEmail) });
+
+        const { data: inserted, error: insertErr } = await db.from('users').insert({
+          id:               u.id,
+          full_name:        u.fullName        ?? u.full_name        ?? '',
+          email:            u.email           ?? '',
+          phone:            u.phone           ?? '',
+          country:          u.country         ?? '',
+          password:         u.password        ?? '',
+          activated:        Boolean(u.activated),
+          premium:          Boolean(u.premium),
+          premium_paid_at:  u.premiumPaidAt   ?? u.premium_paid_at  ?? null,
+          balance:          Number(u.balance  ?? 0),
+          referral_count:   Number(u.referralCount ?? u.referral_count ?? 0),
+          referred_by:      u.referredBy      ?? u.referred_by      ?? null,
+          completed_tasks:  Number(u.completedTasks ?? u.completed_tasks ?? 0),
+          active_bids:      Number(u.activeBids     ?? u.active_bids     ?? 0),
+          task_submissions: u.taskSubmissions ?? u.task_submissions  ?? {},
+        }).select().single();
+
+        if (insertErr) return res.json({ data: null, error: insertErr.message });
+        return res.json({ data: norm(inserted) });
+      }
+
       case 'loginUser': {
         const { email, password } = p;
         const { data } = await db.from('users')
