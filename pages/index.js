@@ -122,9 +122,112 @@ export default function Home() {
 
       {/* Hero */}
       <section className="hero">
-        <div className="hero-grid" />
-        <div className="hero-glow" />
-        <div className="hero-glow-2" />
+        {/* ── Gold ribbon SVG background ── */}
+        <svg
+          className="hero-ribbon-svg"
+          viewBox="0 0 1440 800"
+          preserveAspectRatio="xMidYMid slice"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <defs>
+            {/* Fine gold mesh fill for the ribbon body */}
+            <pattern
+              id="goldMesh"
+              x="0" y="0"
+              width="13" height="13"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(33 720 400)"
+            >
+              <line x1="0" y1="0" x2="0" y2="13" stroke="#C9933A" strokeWidth="0.5" strokeOpacity="0.38"/>
+              <line x1="0" y1="0" x2="13" y2="0" stroke="#C9933A" strokeWidth="0.5" strokeOpacity="0.38"/>
+            </pattern>
+            {/* Soft glow filter for main edge lines */}
+            <filter id="lineGlow" x="-25%" y="-25%" width="150%" height="150%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+              <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* ── Dark diagonal depth bands (like the image) ── */}
+          <polygon points="0,0 370,0 0,800"          fill="rgba(0,0,0,0.45)"/>
+          <polygon points="1085,0 1440,0 1440,800 1395,800" fill="rgba(0,0,0,0.38)"/>
+          <polygon points="110,0 500,0 310,800 -70,800"   fill="rgba(0,0,0,0.18)"/>
+          <polygon points="875,0 1265,0 1440,660 1440,800 1200,800" fill="rgba(0,0,0,0.15)"/>
+
+          {/* ── Ribbon mesh body ── */}
+          <path
+            d="M-80,692 L418,82 L648,382 L970,77 L1540,447
+               L1540,500 L970,130 L648,435 L418,135 L-80,745 Z"
+            fill="url(#goldMesh)"
+            opacity="0.55"
+          />
+
+          {/* ── Top edge — main glowing gold line (animates in) ── */}
+          <path
+            className="ribbon-draw"
+            d="M-80,692 L418,82 L648,382 L970,77 L1540,447"
+            fill="none"
+            stroke="#C9933A"
+            strokeWidth="2.2"
+            style={{ filter: 'url(#lineGlow)' }}
+            opacity="0.95"
+          />
+          {/* Bright highlight stripe on top edge */}
+          <path
+            d="M-80,690 L418,80 L648,380 L970,75 L1540,445"
+            fill="none"
+            stroke="#FFE09A"
+            strokeWidth="0.75"
+            opacity="0.72"
+          />
+          {/* Bottom edge */}
+          <path
+            d="M-80,745 L418,135 L648,435 L970,130 L1540,500"
+            fill="none"
+            stroke="#C9933A"
+            strokeWidth="1.2"
+            opacity="0.40"
+          />
+
+          {/* ── Sparkle 1 — first peak ── */}
+          <g className="sp-a" transform="translate(418,80)">
+            <line className="sp-v" x1="0" y1="-22" x2="0" y2="22" stroke="#FFE09A" strokeWidth="1.1"/>
+            <line className="sp-h" x1="-22" y1="0" x2="22" y2="0" stroke="#FFE09A" strokeWidth="1.1"/>
+            <circle className="sp-dot" cx="0" cy="0" r="2.6" fill="#FFFFFF"/>
+          </g>
+
+          {/* ── Sparkle 2 — descending slope after peak 1 ── */}
+          <g className="sp-b" transform="translate(510,218)">
+            <line className="sp-v" x1="0" y1="-17" x2="0" y2="17" stroke="#E8C46A" strokeWidth="0.9"/>
+            <line className="sp-h" x1="-17" y1="0" x2="17" y2="0" stroke="#E8C46A" strokeWidth="0.9"/>
+            <circle className="sp-dot" cx="0" cy="0" r="1.9" fill="#FFFFFF"/>
+          </g>
+
+          {/* ── Sparkle 3 — second peak ── */}
+          <g className="sp-c" transform="translate(970,77)">
+            <line className="sp-v" x1="0" y1="-22" x2="0" y2="22" stroke="#FFE09A" strokeWidth="1.1"/>
+            <line className="sp-h" x1="-22" y1="0" x2="22" y2="0" stroke="#FFE09A" strokeWidth="1.1"/>
+            <circle className="sp-dot" cx="0" cy="0" r="2.6" fill="#FFFFFF"/>
+          </g>
+
+          {/* ── Sparkle 4 — ascending slope between peaks ── */}
+          <g className="sp-d" transform="translate(812,230)">
+            <line className="sp-v" x1="0" y1="-15" x2="0" y2="15" stroke="#E8C46A" strokeWidth="0.85"/>
+            <line className="sp-h" x1="-15" y1="0" x2="15" y2="0" stroke="#E8C46A" strokeWidth="0.85"/>
+            <circle className="sp-dot" cx="0" cy="0" r="1.6" fill="#FFFFFF"/>
+          </g>
+
+          {/* ── Sparkle 5 — right exit area ── */}
+          <g className="sp-e" transform="translate(1185,395)">
+            <line className="sp-v" x1="0" y1="-18" x2="0" y2="18" stroke="#E8C46A" strokeWidth="0.9"/>
+            <line className="sp-h" x1="-18" y1="0" x2="18" y2="0" stroke="#E8C46A" strokeWidth="0.9"/>
+            <circle className="sp-dot" cx="0" cy="0" r="1.9" fill="#FFFFFF"/>
+          </g>
+        </svg>
 
         <div className="hero-content">
           <div className="hero-tag">
