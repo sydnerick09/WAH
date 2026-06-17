@@ -207,14 +207,15 @@ export default async function handler(req, res) {
         const { userId, fullName, phone, idNumber, kraPin, amount } = p;
         const deadline = Date.now() + 2 * 60 * 60 * 1000;
         const { data, error } = await db.from('withdrawal_requests').insert({
-          user_id:   userId,
-          full_name: fullName,
+          user_id:      userId,
+          full_name:    fullName,
           phone,
-          id_number: idNumber,
-          kra_pin:   kraPin,
-          amount:    Number(amount),
-          status:    'pending',
+          id_number:    idNumber,
+          kra_pin:      kraPin,
+          amount:       Number(amount),
+          status:       'pending',
           deadline,
+          requested_at: new Date().toISOString(),
         }).select().single();
         if (error) return res.json({ data: null });
         return res.json({ data: normWd(data) });

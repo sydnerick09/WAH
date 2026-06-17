@@ -40,17 +40,17 @@ export default function PaymentSuccess() {
 
       const user = await getCurrentUser();
 
-      if (plan === 'withdrawal') {
-        // Fee paid — redirect to dashboard which will auto-open withdrawal form
-        router.replace('/dashboard?open=withdrawal-form');
-
-      } else if (plan === 'premium') {
+      if (plan === 'premium') {
         if (user) await upgradeToPremium(user.id);
         router.replace('/dashboard');
 
       } else if (plan === 'training') {
         alert('Training registration successful! We will contact you with course details.');
         router.replace('/dashboard');
+
+      } else if (plan === 'withdrawal_fee') {
+        // Redirect back to dashboard with params so it can unlock the withdrawal form
+        router.replace(`/dashboard?plan=withdrawal_fee&reference=${encodeURIComponent(reference)}`);
 
       } else {
         // Default: account activation (KES 50)
