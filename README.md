@@ -1,85 +1,135 @@
-# Online Business Hub
+# Business Hub — Online Earning Platform
 
-A full-stack web application for task management and earnings platform targeting Kenyan users.
+A full-stack Next.js web app for task management and earning, targeting East African users. Supports real payments via Paystack, Supabase persistence, and a full withdrawal flow.
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (React)
-- **Styling**: Custom CSS with CSS Variables
-- **Storage**: localStorage (no database required)
-- **Payment**: Paystack M-Pesa (simulated flow)
-- **Deployment**: Vercel
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 14 (React) |
+| Styling | Custom CSS with CSS Variables |
+| Database | Supabase (PostgreSQL) |
+| Payments | Paystack (KES, M-Pesa support) |
+| Email | Nodemailer (SMTP) |
+| Deployment | Vercel |
 
 ## Features
 
-- 🏠 **Homepage** — Modern landing page with hero, features, and CTA sections
-- 👤 **User Registration** — Full registration with validation (name, email, Kenyan phone, country, password)
-- 🔐 **Login** — Email/password authentication stored in localStorage
-- 📊 **Dashboard** — User stats, balance, task feed with 50 tasks
-- 🗂️ **Task Cards** — 50 unique tasks with categories, payment amounts (KES 1,000–3,500)
-- 🔍 **Search & Filter** — Filter by category or search by keyword
-- 👁️ **Task Detail Modal** — Full task details, poster info, location, payment
-- 💼 **Bid Flow** — Triggers account activation with KES 50 M-Pesa payment
-- ✅ **Activation** — Updates account status on successful payment
+- **Registration & Login** — Full auth with Supabase persistence; legacy localStorage users auto-migrated on login
+- **Account Activation** — One-time KES 50 Paystack payment to unlock task bidding
+- **Dashboard** — Live user stats (balance, completed tasks, active bids), task feed with search & category filter
+- **80+ Tasks** — Real tasks priced KES 1,200–4,600 across Writing, Research, Data Entry, Design, Marketing, and more
+- **Task Submission** — File upload (PDF, Word, Excel, audio, video) sent to admin via email attachment
+- **Withdrawal Flow** — KES 480 Paystack processing fee → withdrawal details form → 2-hour countdown → auto-fail on expiry
+- **Live Withdrawals Ticker** — Animated real-time payout feed
+- **Referral System** — Unique referral links, KES 70 earned per activated referral
+- **Premium Upgrade** — KES 480/month premium plan via Paystack
+- **Training Registration** — KES 132 one-time training fee via Paystack
+- **Space Background** — Full-bleed asteroid/particle backdrop on the dashboard
 
-## Deployment on Vercel
+## Environment Variables
 
-### Option 1: Vercel CLI
-```bash
-npm install -g vercel
-cd online-business-hub
-npm install
-vercel
+Create a `.env.local` file at the project root:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_live_xxxx
+PAYSTACK_SECRET_KEY=sk_live_xxxx
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your@gmail.com
+SMTP_PASS=your_app_password
+NOTIFY_EMAIL=businesshub.comke@gmail.com
 ```
 
-### Option 2: GitHub + Vercel Dashboard
-1. Push this folder to a GitHub repository
-2. Go to [vercel.com](https://vercel.com) and import the repository
-3. Vercel auto-detects Next.js — click Deploy
-4. Done! Your site is live in ~2 minutes
+## Supabase Schema
 
-### Option 3: Local Development
-```bash
-cd online-business-hub
-npm install
-npm run dev
-# Open http://localhost:3000
-```
+### `users` table
+| Column | Type | Notes |
+|--------|------|-------|
+| id | text | primary key |
+| full_name | text | |
+| email | text | unique |
+| phone | text | |
+| country | text | |
+| password | text | |
+| activated | boolean | default false |
+| premium | boolean | default false |
+| premium_paid_at | bigint | |
+| balance | numeric | default 0 |
+| referral_count | int | default 0 |
+| referred_by | text | |
+| completed_tasks | int | default 0 |
+| active_bids | int | default 0 |
+| task_submissions | jsonb | default {} |
+| created_at | timestamptz | default now() |
+
+### `withdrawal_requests` table
+| Column | Type | Notes |
+|--------|------|-------|
+| id | text | primary key |
+| user_id | text | references users.id |
+| full_name | text | |
+| phone | text | |
+| id_number | text | |
+| kra_pin | text | |
+| amount | numeric | |
+| status | text | pending / failed / cancelled |
+| deadline | bigint | epoch ms |
+| requested_at | timestamptz | default now() |
+| updated_at | timestamptz | |
 
 ## Project Structure
 
 ```
-online-business-hub/
 ├── pages/
-│   ├── _app.js          # App wrapper
-│   ├── _document.js     # HTML document with fonts
-│   ├── index.js         # Homepage
-│   ├── register.js      # Registration page
-│   ├── login.js         # Login page
-│   └── dashboard.js     # Dashboard with tasks
+│   ├── _app.js              # App wrapper
+│   ├── _document.js         # HTML document
+│   ├── index.js             # Landing page
+│   ├── register.js          # Registration
+│   ├── login.js             # Login
+│   ├── dashboard.js         # Main dashboard
+│   ├── payment-success.js   # Paystack callback handler
+│   └── api/
+│       ├── db.js            # Supabase operations proxy
+│       ├── submit-task.js   # File upload + email API
+│       └── paystack/
+│           ├── initialize.js
+│           └── verify.js
 ├── lib/
-│   ├── auth.js          # Auth helpers (localStorage)
-│   └── tasks.js         # 50 task definitions
+│   ├── auth.js              # Auth + user helpers
+│   ├── supabase.js          # Supabase client
+│   └── tasks.js             # Task definitions
+├── public/
+│   └── dashboard-bg.jpg     # Dashboard space background image
 ├── styles/
-│   └── globals.css      # All styles
+│   └── globals.css          # All styles
 ├── next.config.js
-├── package.json
-└── vercel.json
+├── vercel.json
+└── package.json
 ```
 
-## Color Palette
+## Local Development
 
-| Color | Hex |
-|-------|-----|
-| Blue (Primary) | `#0047FF` |
-| Blue Dark | `#0033CC` |
-| Blue Light | `#3B6FFF` |
-| Black | `#0A0A0A` |
-| White | `#FFFFFF` |
+```bash
+npm install
+cp .env.local.example .env.local  # fill in your keys
+npm run dev
+# Open http://localhost:3000
+```
 
-## Notes
+## Deployment (Vercel)
 
-- No database required — all data stored in browser localStorage
-- M-Pesa payment is simulated (3-second delay then success)
-- To integrate real Paystack payments, add your Paystack public key and implement the Paystack JS SDK
-- All 50 tasks are pre-generated with randomized posters, locations, and payment amounts
+1. Push to GitHub
+2. Import repo on [vercel.com](https://vercel.com)
+3. Add all environment variables in the Vercel dashboard
+4. Deploy — live in ~2 minutes
+
+## Dashboard Background
+
+Place the space background image at `public/dashboard-bg.jpg`. The dashboard CSS will automatically use it with a dark overlay to keep all text readable.
