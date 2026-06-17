@@ -124,10 +124,11 @@ export default function Home() {
       <section className="hero">
         <div className="hero-grid" />
         <div className="hero-glow" />
+        <div className="hero-glow-2" />
 
         <div className="hero-content">
           <div className="hero-tag">
-            🚀 All-in-one Digital Platform for Tasks &amp; Assignments
+            All-in-one Digital Platform for Tasks &amp; Assignments
           </div>
 
           <h1 className="hero-title">
@@ -173,7 +174,7 @@ export default function Home() {
 
           <div className="hero-stats">
             <div className="hero-stat">
-              <div className="hero-stat-num">50+</div>
+              <div className="hero-stat-num">80+</div>
               <div className="hero-stat-label">Daily Tasks</div>
             </div>
 
