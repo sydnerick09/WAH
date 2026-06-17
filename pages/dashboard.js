@@ -49,7 +49,7 @@ function getOrGenerateWithdrawals() {
   const records = Array.from({ length: 50 }, () => {
     const src    = sources[rand(0, sources.length - 1)];
     const prefix = src.prefixes[rand(0, src.prefixes.length - 1)];
-    return { flag: src.flag, country: src.country, phone: mask(prefix), amount: rand(1000, 3700) };
+    return { flag: src.flag, country: src.country, phone: mask(prefix), amount: rand(1200, 4600) };
   });
 
   try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch (_) {}

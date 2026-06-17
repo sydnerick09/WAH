@@ -409,33 +409,33 @@ export default function Home() {
           >
             {[
               {
-                title: 'Social Media Content Writing',
-                pay: 'KES 2,500',
+                title: 'Write 5 WhatsApp Business Status Captions',
+                pay: 'KES 1,200',
                 category: 'Writing',
               },
               {
-                title: 'Product Research Report',
+                title: '30-Day Social Media Content Calendar',
+                pay: 'KES 4,000',
+                category: 'Marketing',
+              },
+              {
+                title: 'Translate Customer Service Policy to Swahili',
+                pay: 'KES 3,300',
+                category: 'Translation',
+              },
+              {
+                title: 'Write a 500-Word Blog Post for SMEs',
+                pay: 'KES 3,900',
+                category: 'Writing',
+              },
+              {
+                title: 'Research Top 5 Co-Working Spaces in Nairobi',
                 pay: 'KES 3,000',
                 category: 'Research',
               },
               {
-                title: 'Data Entry – Customer Records',
-                pay: 'KES 1,800',
-                category: 'Data Entry',
-              },
-              {
-                title: 'SEO Keyword Research',
-                pay: 'KES 2,200',
-                category: 'Marketing',
-              },
-              {
-                title: 'Excel Data Cleaning',
-                pay: 'KES 1,500',
-                category: 'Data Entry',
-              },
-              {
-                title: 'Blog Article Writing',
-                pay: 'KES 3,500',
+                title: 'Write 10 Product Reviews for Electronics Store',
+                pay: 'KES 4,300',
                 category: 'Writing',
               },
             ].map((t, i) => (
