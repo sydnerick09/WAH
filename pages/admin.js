@@ -100,7 +100,15 @@ function UsersTab({ users, secret, onRefresh }) {
     const premium     = e.premium     !== undefined ? e.premium             : user.premium;
     const premiumDays = e.premiumDays !== undefined ? Number(e.premiumDays) : null;
 
-    const params = { adminSecret: secret, userId: user.id, balance, premium };
+    const params = {
+      adminSecret: secret,
+      userId:      user.id,
+      balance,
+      premium,
+      fullName: getEdit(user.id, 'fullName', user.fullName),
+      email:    getEdit(user.id, 'email',    user.email),
+      phone:    getEdit(user.id, 'phone',    user.phone || ''),
+    };
 
     if (premiumDays !== null && premium) {
       params.premiumPaidAt = Date.now() - (THREE_DAYS_MS - premiumDays * 24 * 60 * 60 * 1000);
@@ -203,13 +211,30 @@ function UsersTab({ users, secret, onRefresh }) {
 
                   {/* Name / Email / Phone */}
                   <td style={styles.td}>
-                    <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {user.fullName || '—'}
-                      {isSusp && <span style={{ ...styles.badge, background: '#FEE2E2', color: '#991B1B', fontSize: 10 }}>🚫 SUSPENDED</span>}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{user.email}</div>
-                    <div style={{ fontSize: 12, color: '#64748B' }}>{user.phone || '—'}</div>
-                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{user.country || '—'}</div>
+                    {isSusp && <span style={{ ...styles.badge, background: '#FEE2E2', color: '#991B1B', fontSize: 10, marginBottom: 6, display: 'inline-block' }}>🚫 SUSPENDED</span>}
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Full Name</div>
+                    <input
+                      style={{ ...styles.numInput, width: '100%', marginBottom: 6 }}
+                      value={getEdit(user.id, 'fullName', user.fullName || '')}
+                      onChange={e => setEdit(user.id, 'fullName', e.target.value)}
+                      placeholder="Full name"
+                    />
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Email</div>
+                    <input
+                      style={{ ...styles.numInput, width: '100%', marginBottom: 6 }}
+                      type="email"
+                      value={getEdit(user.id, 'email', user.email || '')}
+                      onChange={e => setEdit(user.id, 'email', e.target.value)}
+                      placeholder="Email"
+                    />
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Phone</div>
+                    <input
+                      style={{ ...styles.numInput, width: '100%' }}
+                      value={getEdit(user.id, 'phone', user.phone || '')}
+                      onChange={e => setEdit(user.id, 'phone', e.target.value)}
+                      placeholder="Phone"
+                    />
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{user.country || '—'}</div>
                     {isSusp && user.suspendReason && (
                       <div style={{ fontSize: 11, color: '#991B1B', marginTop: 2 }}>Reason: {user.suspendReason}</div>
                     )}
@@ -322,7 +347,6 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
       amount:      getEdit(wd.id, 'amount',   wd.amount),
       phone:       getEdit(wd.id, 'phone',    wd.phone),
       idNumber:    getEdit(wd.id, 'idNumber', wd.idNumber),
-      kraPin:      getEdit(wd.id, 'kraPin',   wd.kraPin),
       fullName:    getEdit(wd.id, 'fullName', wd.fullName),
     });
     setSaving(prev => ({ ...prev, [wd.id]: false }));
@@ -365,7 +389,7 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
         <table style={styles.table}>
           <thead>
             <tr>
-              {['Client Name', 'Phone / ID / KRA PIN', 'Amount (KES)', 'Status', 'Dates', 'Actions'].map(h => (
+              {['Client Name', 'Phone / National ID', 'Amount (KES)', 'Status', 'Dates', 'Actions'].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
             </tr>
@@ -387,20 +411,16 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>ID: {wd.userId}</div>
                   </td>
 
-                  {/* Phone / ID / KRA */}
+                  {/* Phone / ID */}
                   <td style={styles.td}>
                     <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Phone</div>
                     <input style={{ ...styles.numInput, width: 160, marginBottom: 6 }}
                       value={getEdit(wd.id, 'phone', wd.phone || '')}
                       onChange={e => setEdit(wd.id, 'phone', e.target.value)} />
                     <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>National ID</div>
-                    <input style={{ ...styles.numInput, width: 160, marginBottom: 6 }}
+                    <input style={{ ...styles.numInput, width: 160 }}
                       value={getEdit(wd.id, 'idNumber', wd.idNumber || '')}
                       onChange={e => setEdit(wd.id, 'idNumber', e.target.value)} />
-                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>KRA PIN</div>
-                    <input style={{ ...styles.numInput, width: 160 }}
-                      value={getEdit(wd.id, 'kraPin', wd.kraPin || '')}
-                      onChange={e => setEdit(wd.id, 'kraPin', e.target.value)} />
                   </td>
 
                   {/* Amount */}

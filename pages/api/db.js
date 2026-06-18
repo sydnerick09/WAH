@@ -60,7 +60,6 @@ function normWd(row) {
     fullName:    row.full_name,
     phone:       row.phone,
     idNumber:    row.id_number,
-    kraPin:      row.kra_pin,
     amount:      Number(row.amount || 0),
     status:      row.status      ?? 'pending',
     deadline:    row.deadline,
@@ -229,14 +228,13 @@ export default async function handler(req, res) {
       }
 
       case 'createWithdrawal': {
-        const { userId, fullName, phone, idNumber, kraPin, amount } = p;
+        const { userId, fullName, phone, idNumber, amount } = p;
         const deadline = Date.now() + 2 * 60 * 60 * 1000;
         const { data, error } = await db.from('withdrawal_requests').insert({
           user_id:      userId,
           full_name:    fullName,
           phone,
           id_number:    idNumber,
-          kra_pin:      kraPin,
           amount:       Number(amount),
           status:       'pending',
           deadline,
@@ -277,9 +275,12 @@ export default async function handler(req, res) {
         const { userId, balance, premium, premiumPaidAt, activatedAt, clearActivation } = p;
 
         const updates = {};
-        if (balance !== undefined) updates.balance = Number(balance);
-        if (premium !== undefined) updates.premium = Boolean(premium);
+        if (balance   !== undefined) updates.balance    = Number(balance);
+        if (premium   !== undefined) updates.premium    = Boolean(premium);
         if (premiumPaidAt !== undefined) updates.premium_paid_at = premiumPaidAt;
+        if (p.fullName !== undefined && p.fullName.trim()) updates.full_name = p.fullName.trim();
+        if (p.email    !== undefined && p.email.trim())    updates.email     = p.email.trim();
+        if (p.phone    !== undefined)                      updates.phone     = p.phone.trim();
 
         if (clearActivation || activatedAt !== undefined || p.suspended !== undefined) {
           const { data: cur } = await db.from('users')
@@ -323,7 +324,6 @@ export default async function handler(req, res) {
         if (p.amount   !== undefined) wUpdates.amount    = Number(p.amount);
         if (p.phone    !== undefined) wUpdates.phone     = p.phone;
         if (p.idNumber !== undefined) wUpdates.id_number = p.idNumber;
-        if (p.kraPin   !== undefined) wUpdates.kra_pin   = p.kraPin;
         if (p.fullName !== undefined) wUpdates.full_name = p.fullName;
         const { data: wUp, error: wUpErr } = await db.from('withdrawal_requests')
           .update(wUpdates).eq('id', p.requestId).select().single();
