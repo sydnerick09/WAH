@@ -8,25 +8,34 @@ function getAdmin() {
   );
 }
 
-const PREMIUM_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 function norm(row) {
   if (!row) return null;
-  const paidAt    = row.premium_paid_at ?? null;
-  const expiresAt = paidAt ? paidAt + PREMIUM_WEEK_MS : null;
-  const active    = (row.premium ?? false) && (!expiresAt || Date.now() <= expiresAt);
+  const subs = row.task_submissions ?? {};
+
+  const actAt      = subs._act ?? null;
+  const actExpires = actAt ? actAt + THREE_DAYS_MS : null;
+  const activated  = actAt !== null && (!actExpires || Date.now() <= actExpires);
+
+  const paidAt      = row.premium_paid_at ?? null;
+  const premExpires = paidAt ? paidAt + THREE_DAYS_MS : null;
+  const premium     = (row.premium ?? false) && paidAt !== null && (!premExpires || Date.now() <= premExpires);
+
   return {
-    id:              row.id,
-    fullName:        row.full_name        ?? '',
-    email:           row.email            ?? '',
-    phone:           row.phone            ?? '',
-    country:         row.country          ?? '',
-    password:        row.password         ?? '',
-    activated:       row.activated        ?? false,
-    premium:         active,
-    premiumPaidAt:   paidAt,
-    premiumExpiresAt: expiresAt,
-    balance:         Number(row.balance   ?? 0),
+    id:               row.id,
+    fullName:         row.full_name        ?? '',
+    email:            row.email            ?? '',
+    phone:            row.phone            ?? '',
+    country:          row.country          ?? '',
+    password:         row.password         ?? '',
+    activated,
+    activatedAt:      actAt,
+    activatedExpiresAt: actExpires,
+    premium,
+    premiumPaidAt:    paidAt,
+    premiumExpiresAt: premExpires,
+    balance:          Number(row.balance   ?? 0),
     referralCount:   Number(row.referral_count  ?? 0),
     referredBy:      row.referred_by      ?? null,
     completedTasks:  Number(row.completed_tasks ?? 0),
@@ -147,9 +156,11 @@ export default async function handler(req, res) {
           .select('*').eq('id', userId).maybeSingle();
         if (!u) return res.json({ data: null });
 
+        const updatedSubs = { ...(u.task_submissions || {}), _act: Date.now() };
         const { data: updated } = await db.from('users').update({
-          activated: true,
-          balance: (u.balance || 0) + Number(amountPaid),
+          activated:        true,
+          task_submissions: updatedSubs,
+          balance:          (u.balance || 0) + Number(amountPaid),
         }).eq('id', userId).select().single();
 
         if (u.referred_by && u.referred_by !== userId) {

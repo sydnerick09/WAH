@@ -480,13 +480,12 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
           {step === 'prompt' && (
             <>
               <div className="pay-message">
-                Activate your account for <strong>KES 50</strong> to start bidding on tasks and earning money.
-                Once activated, all tasks are <strong style={{ color: 'var(--green)' }}>free to access</strong>.
+                Pay <strong>KES 50</strong> to unlock bidding on tasks for <strong style={{ color: 'var(--green)' }}>3 days</strong>. Renew every 3 days to keep access.
               </div>
               <div className="pay-amount">
-                <div className="pay-amount-label">One-time activation fee</div>
-                <div className="pay-amount-value">KES 50</div>
-                <div className="pay-amount-sub">Lifetime access • No hidden fees</div>
+                <div className="pay-amount-label">Activation Fee</div>
+                <div className="pay-amount-value">KES 50<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/3 days</span></div>
+                <div className="pay-amount-sub">Valid for 3 days • Renew to continue bidding</div>
               </div>
               <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
               <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
@@ -536,7 +535,7 @@ function UpgradeModal({ user, onClose }) {
         <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>
           <div>
             <div className="pay-modal-title">⭐ PREMIUM</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>KES 480/week • Renews every 7 days</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>KES 480 / 3 days • Required to submit tasks</div>
           </div>
           <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
         </div>
@@ -556,9 +555,9 @@ function UpgradeModal({ user, onClose }) {
             ))}
           </div>
           <div className="pay-amount" style={{ marginTop: 20 }}>
-            <div className="pay-amount-label">Premium Plan</div>
-            <div className="pay-amount-value">KES 480<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/week</span></div>
-            <div className="pay-amount-sub">Weekly subscription • Renews every 7 days</div>
+            <div className="pay-amount-label">Premium — Submit Tasks</div>
+            <div className="pay-amount-value">KES 480<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/3 days</span></div>
+            <div className="pay-amount-sub">Valid for 3 days • Required to submit tasks</div>
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
           <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
@@ -915,7 +914,9 @@ export default function Dashboard() {
   }, [user]);
 
   const handleLogout       = useCallback(() => { logout(); router.push('/'); }, [router]);
-  const handleViewTask     = useCallback(task => setSelectedTask(task), []);
+  const handleViewTask     = useCallback(task => {
+    if (!user?.activated) { setPayTask(task); } else { setSelectedTask(task); }
+  }, [user]);
   const handleBidClick     = useCallback(task => { setSelectedTask(null); setPayTask(task); }, []);
   const handlePaySuccess   = useCallback(async () => {
     const updated = await activateUser(user.id);
@@ -980,7 +981,7 @@ export default function Dashboard() {
             <p>{user.email} • {user.country}</p>
             <div style={{ marginTop: 12 }}>
               <span className={`status-badge ${user.activated ? 'status-active' : 'status-inactive'}`}>
-                {user.activated ? '✅ Account Active' : '⚠️ Account Inactive — Activate to Bid'}
+                {user.activated ? '✅ Active — Access valid 3 days' : '⚠️ Inactive — Pay KES 50 to Bid'}
               </span>
             </div>
           </div>
