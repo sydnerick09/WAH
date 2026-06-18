@@ -158,11 +158,15 @@ function MpesaFeeModal({ user, onClose }) {
 
 // ─── M-Pesa Withdrawal: Step 2 — Credentials Form ────────────────────────────
 function MpesaFormModal({ onClose, onSubmit }) {
-  const [phone,  setPhone]  = useState('');
-  const [errors, setErrors] = useState({});
+  const [phone,    setPhone]    = useState('');
+  const [idNumber, setIdNumber] = useState('');
+  const [errors,   setErrors]   = useState({});
 
   function handleSubmit() {
-    if (!phone.trim()) { setErrors({ phone: 'Phone number is required' }); return; }
+    const errs = {};
+    if (!phone.trim())    errs.phone    = 'Phone number is required';
+    if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
+    if (Object.keys(errs).length) { setErrors(errs); return; }
     onSubmit();
   }
 
@@ -172,24 +176,34 @@ function MpesaFormModal({ onClose, onSubmit }) {
         <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)' }}>
           <div>
             <div className="pay-modal-title">📲 Withdrawal Details</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Enter your M-Pesa number</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Enter your M-Pesa number and National ID</div>
           </div>
           <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#007A3D', background: '#F0FFF4', marginBottom: 20 }}>
-            Enter your M-Pesa number accurately. Funds will be sent directly to this number.
+            Enter your details accurately. Your National ID must match your M-Pesa registration.
           </div>
           <div className="pay-phone-label">M-Pesa Phone Number</div>
           <input
             className="pay-phone-input"
             type="tel"
             value={phone}
-            onChange={e => { setPhone(e.target.value); setErrors({}); }}
+            onChange={e => { setPhone(e.target.value); setErrors(prev => ({ ...prev, phone: undefined })); }}
             placeholder="+254 7XX XXX XXX"
             style={{ borderColor: errors.phone ? '#ef4444' : undefined }}
           />
           {errors.phone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
+          <input
+            className="pay-phone-input"
+            type="text"
+            value={idNumber}
+            onChange={e => { setIdNumber(e.target.value); setErrors(prev => ({ ...prev, idNumber: undefined })); }}
+            placeholder="e.g. 12345678"
+            style={{ borderColor: errors.idNumber ? '#ef4444' : undefined }}
+          />
+          {errors.idNumber && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
           <button
             className="pay-btn"
             style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginTop: 20 }}
