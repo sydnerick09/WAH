@@ -252,6 +252,45 @@ export default async function handler(req, res) {
         return res.json({ data: normWd(data) });
       }
 
+      case 'listUsers': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { data: rows, error: listErr } = await db.from('users')
+          .select('*').order('created_at', { ascending: false });
+        if (listErr) return res.json({ data: [], error: listErr.message });
+        return res.json({ data: (rows || []).map(norm) });
+      }
+
+      case 'adminUpdateUser': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { userId, balance, premium, premiumPaidAt, activatedAt, clearActivation } = p;
+
+        const updates = {};
+        if (balance !== undefined) updates.balance = Number(balance);
+        if (premium !== undefined) updates.premium = Boolean(premium);
+        if (premiumPaidAt !== undefined) updates.premium_paid_at = premiumPaidAt;
+
+        if (clearActivation || activatedAt !== undefined) {
+          const { data: cur } = await db.from('users')
+            .select('task_submissions').eq('id', userId).maybeSingle();
+          const subs = { ...(cur?.task_submissions || {}) };
+          if (clearActivation) {
+            delete subs._act;
+          } else {
+            subs._act = activatedAt;
+          }
+          updates.task_submissions = subs;
+        }
+
+        const { data: updated, error: updErr } = await db.from('users')
+          .update(updates).eq('id', userId).select().single();
+        if (updErr) return res.json({ success: false, error: updErr.message });
+        return res.json({ success: true, user: norm(updated) });
+      }
+
       default:
         return res.status(400).json({ error: `Unknown op: ${op}` });
     }
