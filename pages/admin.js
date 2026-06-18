@@ -62,7 +62,7 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
             </>
           ) : (
             <p style={{ fontSize: 14, color: '#374151' }}>
-              This will restore full access to <strong>{modal.user.fullName}</strong>'s account immediately.
+              This will restore full access to <strong>{modal.user.fullName}</strong>&apos;s account immediately.
             </p>
           )}
           <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
