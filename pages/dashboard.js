@@ -24,8 +24,8 @@ function getOrGenerateWithdrawals() {
     if (stored) return JSON.parse(stored);
   } catch (_) {}
 
-  const sources = [
-    { flag: '🇰🇪', country: 'Kenya',       prefixes: ['+25471','+25472','+25473','+25474','+25475','+25476','+25477','+25478','+25479','+25470'] },
+  const kenyaSrc  = { flag: '🇰🇪', country: 'Kenya', prefixes: ['+25471','+25472','+25473','+25474','+25475','+25476','+25477','+25478','+25479','+25470'] };
+  const otherSrcs = [
     { flag: '🇺🇬', country: 'Uganda',       prefixes: ['+25670','+25678','+25679'] },
     { flag: '🇹🇿', country: 'Tanzania',     prefixes: ['+25575','+25568'] },
     { flag: '🇳🇬', country: 'Nigeria',      prefixes: ['+23481','+23490'] },
@@ -35,12 +35,6 @@ function getOrGenerateWithdrawals() {
     { flag: '🇪🇹', country: 'Ethiopia',     prefixes: ['+25191','+25193'] },
     { flag: '🇨🇲', country: 'Cameroon',     prefixes: ['+23767','+23769'] },
     { flag: '🇲🇼', country: 'Malawi',       prefixes: ['+26599','+26588'] },
-    { flag: '🇿🇲', country: 'Zambia',       prefixes: ['+26097'] },
-    { flag: '🇧🇮', country: 'Burundi',      prefixes: ['+25779'] },
-    { flag: '🇸🇸', country: 'South Sudan',  prefixes: ['+21192'] },
-    { flag: '🇸🇳', country: 'Senegal',      prefixes: ['+22177'] },
-    { flag: '🇨🇮', country: "Ivory Coast",  prefixes: ['+22505'] },
-    { flag: '🇲🇿', country: 'Mozambique',   prefixes: ['+25884'] },
   ];
 
   const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -48,12 +42,28 @@ function getOrGenerateWithdrawals() {
 
   const pinned = { flag: '🇰🇪', country: 'Kenya', phone: '+254111*****12', amount: 3000 };
 
-  const records = Array.from({ length: 50 }, (_, i) => {
-    if (i % 8 === 0) return pinned;
-    const src    = sources[rand(0, sources.length - 1)];
-    const prefix = src.prefixes[rand(0, src.prefixes.length - 1)];
-    return { flag: src.flag, country: src.country, phone: mask(prefix), amount: rand(1200, 4600) };
-  });
+  // 40 Kenyan + 10 other countries (amounts 2562–8928); pinned replaces every other slot
+  const base = [
+    ...Array.from({ length: 40 }, () => {
+      const prefix = kenyaSrc.prefixes[rand(0, kenyaSrc.prefixes.length - 1)];
+      return { flag: kenyaSrc.flag, country: kenyaSrc.country, phone: mask(prefix), amount: rand(2562, 8928) };
+    }),
+    ...Array.from({ length: 10 }, () => {
+      const src    = otherSrcs[rand(0, otherSrcs.length - 1)];
+      const prefix = src.prefixes[rand(0, src.prefixes.length - 1)];
+      return { flag: src.flag, country: src.country, phone: mask(prefix), amount: rand(2562, 8928) };
+    }),
+  ];
+
+  // Shuffle base list so Kenyan/other are mixed
+  for (let i = base.length - 1; i > 0; i--) {
+    const j = rand(0, i);
+    [base[i], base[j]] = [base[j], base[i]];
+  }
+
+  // Build 100-item list: pinned appears at every odd slot (every 2.5 s a random, then pinned, repeat)
+  const records = [];
+  base.forEach(item => { records.push(item); records.push(pinned); });
 
   try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch (_) {}
   return records;
