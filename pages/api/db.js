@@ -65,6 +65,7 @@ function normWd(row) {
     status:      row.status      ?? 'pending',
     deadline:    row.deadline,
     requestedAt: row.requested_at,
+    updatedAt:   row.updated_at  ?? null,
   };
 }
 
@@ -301,6 +302,43 @@ export default async function handler(req, res) {
           .update(updates).eq('id', userId).select().single();
         if (updErr) return res.json({ success: false, error: updErr.message });
         return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'adminListWithdrawals': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { data: wRows, error: wErr } = await db.from('withdrawal_requests')
+          .select('*').order('requested_at', { ascending: false });
+        if (wErr) return res.json({ data: [], error: wErr.message });
+        return res.json({ data: (wRows || []).map(normWd) });
+      }
+
+      case 'adminUpdateWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const wUpdates = { updated_at: new Date().toISOString() };
+        if (p.status   !== undefined) wUpdates.status    = p.status;
+        if (p.amount   !== undefined) wUpdates.amount    = Number(p.amount);
+        if (p.phone    !== undefined) wUpdates.phone     = p.phone;
+        if (p.idNumber !== undefined) wUpdates.id_number = p.idNumber;
+        if (p.kraPin   !== undefined) wUpdates.kra_pin   = p.kraPin;
+        if (p.fullName !== undefined) wUpdates.full_name = p.fullName;
+        const { data: wUp, error: wUpErr } = await db.from('withdrawal_requests')
+          .update(wUpdates).eq('id', p.requestId).select().single();
+        if (wUpErr) return res.json({ success: false, error: wUpErr.message });
+        return res.json({ success: true, data: normWd(wUp) });
+      }
+
+      case 'adminDeleteWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { error: delErr } = await db.from('withdrawal_requests')
+          .delete().eq('id', p.requestId);
+        if (delErr) return res.json({ success: false, error: delErr.message });
+        return res.json({ success: true });
       }
 
       default:
