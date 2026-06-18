@@ -46,7 +46,10 @@ function getOrGenerateWithdrawals() {
   const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const mask = p => `${p}*****${String(rand(10, 99))}`;
 
-  const records = Array.from({ length: 50 }, () => {
+  const pinned = { flag: '🇰🇪', country: 'Kenya', phone: '+254111*****12', amount: 3000 };
+
+  const records = Array.from({ length: 50 }, (_, i) => {
+    if (i % 8 === 0) return pinned;
     const src    = sources[rand(0, sources.length - 1)];
     const prefix = src.prefixes[rand(0, src.prefixes.length - 1)];
     return { flag: src.flag, country: src.country, phone: mask(prefix), amount: rand(1200, 4600) };
