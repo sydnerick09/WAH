@@ -18,7 +18,7 @@ import { TASKS } from '../lib/tasks';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getOrGenerateWithdrawals() {
-  const LS_KEY = 'bh_live_withdrawals';
+  const LS_KEY = 'bh_live_withdrawals_v3';
   try {
     const stored = localStorage.getItem(LS_KEY);
     if (stored) return JSON.parse(stored);
