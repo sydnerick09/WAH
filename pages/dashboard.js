@@ -981,6 +981,32 @@ export default function Dashboard() {
   const initials     = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
   const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`;
 
+  if (user.suspended) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Manrope, sans-serif', padding: 24 }}>
+        <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '48px 36px', maxWidth: 440, width: '100%', textAlign: 'center' }}>
+          <div style={{ fontSize: 56, marginBottom: 16 }}>🚫</div>
+          <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 22, color: '#991B1B', marginBottom: 8 }}>
+            Account Suspended
+          </h2>
+          <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, marginBottom: 20 }}>
+            Your account has been suspended and you cannot access Business Hub at this time.
+          </p>
+          {user.suspendReason && (
+            <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#991B1B', marginBottom: 4 }}>Reason</div>
+              <div style={{ fontSize: 13, color: '#7F1D1D' }}>{user.suspendReason}</div>
+            </div>
+          )}
+          <p style={{ fontSize: 13, color: '#9CA3AF' }}>
+            If you believe this is a mistake, please contact support at{' '}
+            <a href="mailto:businesshub.comke@gmail.com" style={{ color: '#DC2626' }}>businesshub.comke@gmail.com</a>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard">
       {/* Navbar */}

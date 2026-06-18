@@ -22,6 +22,10 @@ function norm(row) {
   const premExpires = paidAt ? paidAt + THREE_DAYS_MS : null;
   const premium     = (row.premium ?? false) && paidAt !== null && (!premExpires || Date.now() <= premExpires);
 
+  const suspended     = subs._suspended ?? false;
+  const suspendedAt   = subs._suspendedAt ?? null;
+  const suspendReason = subs._suspendReason ?? '';
+
   return {
     id:               row.id,
     fullName:         row.full_name        ?? '',
@@ -42,6 +46,9 @@ function norm(row) {
     activeBids:      Number(row.active_bids     ?? 0),
     taskSubmissions: row.task_submissions  ?? {},
     createdAt:       row.created_at,
+    suspended,
+    suspendedAt,
+    suspendReason,
   };
 }
 
@@ -273,15 +280,20 @@ export default async function handler(req, res) {
         if (premium !== undefined) updates.premium = Boolean(premium);
         if (premiumPaidAt !== undefined) updates.premium_paid_at = premiumPaidAt;
 
-        if (clearActivation || activatedAt !== undefined) {
+        if (clearActivation || activatedAt !== undefined || p.suspended !== undefined) {
           const { data: cur } = await db.from('users')
             .select('task_submissions').eq('id', userId).maybeSingle();
           const subs = { ...(cur?.task_submissions || {}) };
-          if (clearActivation) {
-            delete subs._act;
-          } else {
-            subs._act = activatedAt;
+
+          if (clearActivation) delete subs._act;
+          else if (activatedAt !== undefined) subs._act = activatedAt;
+
+          if (p.suspended !== undefined) {
+            subs._suspended   = Boolean(p.suspended);
+            subs._suspendedAt = p.suspended ? Date.now() : null;
+            subs._suspendReason = p.suspendReason ?? '';
           }
+
           updates.task_submissions = subs;
         }
 

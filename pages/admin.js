@@ -32,6 +32,8 @@ export default function AdminPanel() {
   const [edits, setEdits]       = useState({});
   const [saving, setSaving]     = useState({});
   const [msg, setMsg]           = useState({});
+  const [suspendModal, setSuspendModal] = useState(null); // { user, action: 'suspend'|'unsuspend' }
+  const [suspendReason, setSuspendReason] = useState('');
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -107,6 +109,27 @@ export default function AdminPanel() {
     setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[user.id]; return n; }), 3000);
   }
 
+  async function confirmSuspend() {
+    const { user, action } = suspendModal;
+    setSuspendModal(null);
+    setSaving(prev => ({ ...prev, [user.id]: true }));
+    const res = await dbProxy('adminUpdateUser', {
+      adminSecret:   secret,
+      userId:        user.id,
+      suspended:     action === 'suspend',
+      suspendReason: action === 'suspend' ? suspendReason : '',
+    });
+    setSaving(prev => ({ ...prev, [user.id]: false }));
+    setSuspendReason('');
+    if (res.success) {
+      setMsg(prev => ({ ...prev, [user.id]: { type: 'ok', text: action === 'suspend' ? 'Suspended!' : 'Unsuspended!' } }));
+      await refreshUsers();
+    } else {
+      setMsg(prev => ({ ...prev, [user.id]: { type: 'err', text: res.error || 'Failed.' } }));
+    }
+    setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[user.id]; return n; }), 3000);
+  }
+
   const filtered = users.filter(u => {
     const q = search.toLowerCase();
     return !q || u.fullName?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
@@ -142,7 +165,7 @@ export default function AdminPanel() {
       <div style={styles.header}>
         <div>
           <div style={styles.logo}>BUSINESS HUB</div>
-          <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>Admin — Balance Manager</p>
+          <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>Admin — Balance &amp; Account Manager</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 13, color: '#64748B' }}>{users.length} users</span>
@@ -160,6 +183,68 @@ export default function AdminPanel() {
           onChange={e => setSearch(e.target.value)}
         />
       </div>
+
+      {/* Suspend / Unsuspend Confirmation Modal */}
+      {suspendModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={{
+              background: suspendModal.action === 'suspend' ? '#DC2626' : '#059669',
+              borderRadius: '12px 12px 0 0',
+              padding: '20px 24px',
+              color: '#fff',
+            }}>
+              <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17 }}>
+                {suspendModal.action === 'suspend' ? '🚫 Suspend Account' : '✅ Unsuspend Account'}
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
+                {suspendModal.user.fullName} — {suspendModal.user.email}
+              </div>
+            </div>
+            <div style={{ padding: '24px' }}>
+              {suspendModal.action === 'suspend' ? (
+                <>
+                  <p style={{ fontSize: 14, color: '#374151', marginBottom: 14 }}>
+                    This will immediately block the client from accessing their account. They will see a suspension notice when they log in.
+                  </p>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
+                    Reason (shown to client)
+                  </label>
+                  <input
+                    style={{ ...styles.input, marginBottom: 0 }}
+                    placeholder="e.g. Violation of terms of service"
+                    value={suspendReason}
+                    onChange={e => setSuspendReason(e.target.value)}
+                    autoFocus
+                  />
+                </>
+              ) : (
+                <p style={{ fontSize: 14, color: '#374151' }}>
+                  This will restore full access to <strong>{suspendModal.user.fullName}</strong>'s account immediately.
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                <button
+                  style={{
+                    ...styles.btn,
+                    background: suspendModal.action === 'suspend' ? '#DC2626' : '#059669',
+                    flex: 1,
+                  }}
+                  onClick={confirmSuspend}
+                >
+                  {suspendModal.action === 'suspend' ? 'Yes, Suspend' : 'Yes, Unsuspend'}
+                </button>
+                <button
+                  style={{ ...styles.btn, background: '#64748B', flex: 1 }}
+                  onClick={() => { setSuspendModal(null); setSuspendReason(''); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={styles.tableWrap}>
         <table style={styles.table}>
@@ -185,13 +270,25 @@ export default function AdminPanel() {
               const premDaysEdit = getEdit(user.id, 'premiumDays',   premDays ?? (isPrem ? 3 : 0));
 
               return (
-                <tr key={user.id} style={styles.tr}>
+                <tr key={user.id} style={{ ...styles.tr, background: user.suspended ? '#FFF1F1' : undefined }}>
                   <td style={styles.td}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{user.fullName || '—'}</div>
+                    <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {user.fullName || '—'}
+                      {user.suspended && (
+                        <span style={{ ...styles.badge, background: '#FEE2E2', color: '#991B1B', fontSize: 11 }}>
+                          🚫 SUSPENDED
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 12, color: '#64748B' }}>{user.email}</div>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
                       Joined: {fmtDate(user.createdAt)}
                     </div>
+                    {user.suspended && user.suspendReason && (
+                      <div style={{ fontSize: 11, color: '#991B1B', marginTop: 2 }}>
+                        Reason: {user.suspendReason}
+                      </div>
+                    )}
                   </td>
 
                   {/* Balance */}
@@ -267,7 +364,7 @@ export default function AdminPanel() {
                     )}
                   </td>
 
-                  {/* Save */}
+                  {/* Save + Suspend */}
                   <td style={styles.td}>
                     <button
                       style={{ ...styles.btn, padding: '8px 18px', fontSize: 13 }}
@@ -275,6 +372,22 @@ export default function AdminPanel() {
                       onClick={() => saveUser(user)}
                     >
                       {isSaving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      style={{
+                        ...styles.btn,
+                        padding: '8px 18px',
+                        fontSize: 13,
+                        marginTop: 8,
+                        background: user.suspended ? '#059669' : '#DC2626',
+                      }}
+                      disabled={isSaving}
+                      onClick={() => {
+                        setSuspendReason('');
+                        setSuspendModal({ user, action: user.suspended ? 'unsuspend' : 'suspend' });
+                      }}
+                    >
+                      {user.suspended ? '✅ Unsuspend' : '🚫 Suspend'}
                     </button>
                     {m && (
                       <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>
@@ -427,5 +540,22 @@ const styles = {
     borderRadius: 20,
     fontSize: 12,
     fontWeight: 600,
+  },
+  modalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.45)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  modalCard: {
+    background: '#fff',
+    borderRadius: 12,
+    boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+    width: '100%',
+    maxWidth: 440,
+    overflow: 'hidden',
   },
 };
