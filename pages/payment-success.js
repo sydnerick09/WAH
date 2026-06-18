@@ -42,6 +42,7 @@ export default function PaymentSuccess() {
 
       if (plan === 'premium') {
         if (user) await upgradeToPremium(user.id);
+        alert('Premium upgrade successful! You can now submit tasks via email.');
         router.replace('/dashboard');
 
       } else if (plan === 'training') {
@@ -49,8 +50,11 @@ export default function PaymentSuccess() {
         router.replace('/dashboard');
 
       } else if (plan === 'withdrawal_fee') {
-        // Redirect back to dashboard with params so it can unlock the withdrawal form
         router.replace(`/dashboard?plan=withdrawal_fee&reference=${encodeURIComponent(reference)}`);
+
+      } else if (plan === 'mpesa_withdrawal_fee') {
+        // Redirect back to dashboard so it can open the M-Pesa withdrawal form
+        router.replace(`/dashboard?plan=mpesa_withdrawal_fee&reference=${encodeURIComponent(reference)}`);
 
       } else {
         // Default: account activation (KES 50)

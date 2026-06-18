@@ -2,7 +2,7 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { email, amount, phone, plan } = req.body;
+  const { email, amount, currency, phone, plan } = req.body;
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app';
   // Always route through /payment-success so verification happens server-side
@@ -17,7 +17,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         email,
-        amount: amount * 100, // convert to lowest denomination
+        amount: amount * 100, // convert to lowest denomination (cents / kobo)
+        ...(currency ? { currency } : {}),
         channels: ["card", "mobile_money"],
         metadata: {
           phone,

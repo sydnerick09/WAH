@@ -7,30 +7,30 @@
 /* ── CSS Variables ──────────────────────────────────────────────────────────── */
 :root {
   /* Core Green Palette */
-  --green:       #1A7A4A;
-  --green-dark:  #125C37;
-  --green-light: #2EAA6A;
-  --green-pale:  #E8F5EE;
+  --green:       #0F766E;
+  --green-dark:  #115E59;
+  --green-light: #14B8A6;
+  --green-pale:  #E6FFFA;
 
   /* Gold Accents */
-  --gold:        #C9933A;
-  --gold-dark:   #A8722A;
-  --gold-light:  #E6B05A;
-  --gold-pale:   #FDF4E3;
+  --gold:        #D97706;
+  --gold-dark:   #B45309;
+  --gold-light:  #F59E0B;
+  --gold-pale:   #FFF7ED;
 
-  /* M-Pesa brand green */
-  --mpesa-green: #00A651;
-  --mpesa-red:   #E30613;
+  /* Payment Brand */
+  --mpesa-green: #10B981;
+  --mpesa-red:   #DC2626;
 
   /* Neutrals */
-  --cream:       #F9F6F0;
-  --cream-dark:  #EDE8DF;
-  --black:       #1C1C1C;
-  --black-soft:  #2A2A2A;
+  --cream:       #FAFAF9;
+  --cream-dark:  #F1F5F9;
+  --black:       #111827;
+  --black-soft:  #1F2937;
   --white:       #FFFFFF;
-  --white-off:   #F9F6F0;
-  --gray:        #6B7280;
-  --gray-light:  #E5E0D8;
+  --white-off:   #F8FAFC;
+  --gray:        #64748B;
+  --gray-light:  #E2E8F0;
 
   /* Typography */
   --font-display: 'Poppins', sans-serif;

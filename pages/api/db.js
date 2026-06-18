@@ -8,8 +8,13 @@ function getAdmin() {
   );
 }
 
+const PREMIUM_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
 function norm(row) {
   if (!row) return null;
+  const paidAt    = row.premium_paid_at ?? null;
+  const expiresAt = paidAt ? paidAt + PREMIUM_WEEK_MS : null;
+  const active    = (row.premium ?? false) && (!expiresAt || Date.now() <= expiresAt);
   return {
     id:              row.id,
     fullName:        row.full_name        ?? '',
@@ -18,8 +23,9 @@ function norm(row) {
     country:         row.country          ?? '',
     password:        row.password         ?? '',
     activated:       row.activated        ?? false,
-    premium:         row.premium          ?? false,
-    premiumPaidAt:   row.premium_paid_at  ?? null,
+    premium:         active,
+    premiumPaidAt:   paidAt,
+    premiumExpiresAt: expiresAt,
     balance:         Number(row.balance   ?? 0),
     referralCount:   Number(row.referral_count  ?? 0),
     referredBy:      row.referred_by      ?? null,
