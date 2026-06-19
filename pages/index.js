@@ -682,13 +682,25 @@ export default function Home() {
               <li>
   <a href="https://swastaskhub.github.io/manual/" target="_blank" rel="noopener noreferrer">Help Center</a>
 </li>
-              <li>
-                <a href="#">Terms of Service</a>
-              </li>
 
-              <li>
-                <a href="#">Privacy Policy</a>
-              </li>
+                <li>
+  <a href="https://swastaskhub.github.io/terms-/" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+</li>
+
+                 <li>
+  <a href=" https://swastaskhub.github.io/conduct/" target="_blank" rel="noopener noreferrer">conducts and policies</a>
+</li>
+
+                 <li>
+  <a href="  https://swastaskhub.github.io/privacy/" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+</li>
+
+
+
+
+                
+             
+
 
               <li>
                 <a href="mailto:businesshub.coke@gmail.com">
