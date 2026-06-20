@@ -526,6 +526,164 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Task Categories */}
+      <section style={{ padding: '80px 24px', background: '#F8FAFC' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div className="section-header">
+            <div className="section-tag">What You Can Earn From</div>
+            <h2 className="section-title">
+              Task <span className="blue">Categories</span>
+            </h2>
+            <p className="section-desc">
+              Pick tasks that match your skills. New categories launching soon.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            {[
+              { icon: '✅', label: 'Social Media Tasks',    desc: 'Likes, follows, reviews & more',        live: true  },
+              { icon: '✍️', label: 'Writing & Articles',    desc: 'Blog posts, captions, copy',            live: false },
+              { icon: '📋', label: 'Data Entry',            desc: 'Forms, spreadsheets, databases',        live: false },
+              { icon: '🔍', label: 'Online Research',       desc: 'Market research & fact-finding',        live: false },
+              { icon: '🎓', label: 'Academic Assignments',  desc: 'Essays, homework & study tasks',        live: false },
+              { icon: '📺', label: 'Video Watching',        desc: 'Watch & review video content',          live: false },
+              { icon: '📊', label: 'Survey & Feedback',     desc: 'Fill surveys, share opinions',          live: false },
+              { icon: '🏢', label: 'Business Support',      desc: 'Virtual assistance & admin tasks',      live: false },
+            ].map(cat => (
+              <div key={cat.label} style={{
+                background: '#fff',
+                border: '1.5px solid',
+                borderColor: cat.live ? 'var(--blue)' : '#E2E8F0',
+                borderRadius: 14,
+                padding: '22px 20px',
+                position: 'relative',
+                opacity: cat.live ? 1 : 0.85,
+                transition: 'box-shadow 0.2s',
+              }}>
+                {!cat.live && (
+                  <span style={{
+                    position: 'absolute', top: 12, right: 12,
+                    background: '#FEF3C7', color: '#92400E',
+                    fontSize: 10, fontWeight: 700, padding: '3px 8px',
+                    borderRadius: 20, letterSpacing: 0.5,
+                  }}>
+                    COMING SOON
+                  </span>
+                )}
+                {cat.live && (
+                  <span style={{
+                    position: 'absolute', top: 12, right: 12,
+                    background: '#D1FAE5', color: '#065F46',
+                    fontSize: 10, fontWeight: 700, padding: '3px 8px',
+                    borderRadius: 20, letterSpacing: 0.5,
+                  }}>
+                    LIVE
+                  </span>
+                )}
+                <div style={{ fontSize: 30, marginBottom: 10 }}>{cat.icon}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: 'var(--black)', marginBottom: 6 }}>{cat.label}</div>
+                <div style={{ fontSize: 13, color: 'var(--gray)', lineHeight: 1.5 }}>{cat.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Partner Platforms */}
+      <section style={{ padding: '80px 24px', background: '#0B0F19' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div className="section-header">
+            <div className="section-tag" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)' }}>
+              Partner Platforms
+            </div>
+            <h2 className="section-title" style={{ color: '#fff' }}>
+              More Ways to <span className="blue">Earn Online</span>
+            </h2>
+            <p className="section-desc" style={{ color: 'rgba(255,255,255,0.6)' }}>
+              These top platforms are coming to Business Hub. Click any card to visit them directly.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+            {[
+              {
+                name: 'Upwork',
+                icon: '🟢',
+                desc: 'Global freelance jobs for professionals',
+                url: 'https://www.upwork.com',
+                color: '#14A800',
+              },
+              {
+                name: 'EasyPro',
+                icon: '⚡',
+                desc: 'Earn easily with quick digital tasks',
+                url: 'https://easypro.app',
+                color: '#F59E0B',
+              },
+              {
+                name: 'Studypool',
+                icon: '📚',
+                desc: 'Get paid to help students with homework',
+                url: 'https://www.studypool.com',
+                color: '#3B82F6',
+              },
+              {
+                name: 'Outlier',
+                icon: '🤖',
+                desc: 'Train AI models and earn per task',
+                url: 'https://outlier.ai',
+                color: '#8B5CF6',
+              },
+              {
+                name: 'Fiverr',
+                icon: '🎯',
+                desc: 'Sell your skills as freelance services',
+                url: 'https://www.fiverr.com',
+                color: '#1DBF73',
+              },
+            ].map(p => (
+              <a
+                key={p.name}
+                href={p.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  borderRadius: 14,
+                  padding: '24px 20px',
+                  textDecoration: 'none',
+                  transition: 'background 0.2s, transform 0.2s',
+                  cursor: 'pointer',
+                  position: 'relative',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.10)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <span style={{
+                  position: 'absolute', top: 12, right: 12,
+                  background: 'rgba(254,243,199,0.15)', color: '#FCD34D',
+                  fontSize: 10, fontWeight: 700, padding: '3px 8px',
+                  borderRadius: 20, letterSpacing: 0.5,
+                }}>
+                  COMING SOON
+                </span>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>{p.icon}</div>
+                <div style={{
+                  fontFamily: 'var(--font-display)', fontWeight: 700,
+                  fontSize: 17, color: p.color, marginBottom: 6,
+                }}>{p.name}</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>{p.desc}</div>
+                <div style={{ marginTop: 14, fontSize: 12, color: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  Visit platform →
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Why Choose Us */}
       <section id="why-choose-us" className="why-section">
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
