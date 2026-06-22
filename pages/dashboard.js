@@ -18,7 +18,7 @@ import { TASKS } from '../lib/tasks';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getOrGenerateWithdrawals() {
-  const LS_KEY = 'bh_live_withdrawals_v3';
+  const LS_KEY = 'bh_live_withdrawals_v4';
   try {
     const stored = localStorage.getItem(LS_KEY);
     if (stored) return JSON.parse(stored);
@@ -40,30 +40,24 @@ function getOrGenerateWithdrawals() {
   const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const mask = p => `${p}*****${String(rand(10, 99))}`;
 
-  const pinned = { flag: '🇰🇪', country: 'Kenya', phone: '+254111*****12', amount: 3000 };
-
-  // 40 Kenyan + 10 other countries (amounts 2562–8928); pinned replaces every other slot
-  const base = [
-    ...Array.from({ length: 40 }, () => {
+  // 70 payouts today: 63 Kenyan + 7 other countries (amounts KES 2,100–9,300)
+  const records = [
+    ...Array.from({ length: 63 }, () => {
       const prefix = kenyaSrc.prefixes[rand(0, kenyaSrc.prefixes.length - 1)];
-      return { flag: kenyaSrc.flag, country: kenyaSrc.country, phone: mask(prefix), amount: rand(2562, 8928) };
+      return { flag: kenyaSrc.flag, country: kenyaSrc.country, phone: mask(prefix), amount: rand(2100, 9300) };
     }),
-    ...Array.from({ length: 10 }, () => {
+    ...Array.from({ length: 7 }, () => {
       const src    = otherSrcs[rand(0, otherSrcs.length - 1)];
       const prefix = src.prefixes[rand(0, src.prefixes.length - 1)];
-      return { flag: src.flag, country: src.country, phone: mask(prefix), amount: rand(2562, 8928) };
+      return { flag: src.flag, country: src.country, phone: mask(prefix), amount: rand(2100, 9300) };
     }),
   ];
 
-  // Shuffle base list so Kenyan/other are mixed
-  for (let i = base.length - 1; i > 0; i--) {
+  // Shuffle so Kenyan/other are mixed
+  for (let i = records.length - 1; i > 0; i--) {
     const j = rand(0, i);
-    [base[i], base[j]] = [base[j], base[i]];
+    [records[i], records[j]] = [records[j], records[i]];
   }
-
-  // Build 100-item list: pinned appears at every odd slot (every 2.5 s a random, then pinned, repeat)
-  const records = [];
-  base.forEach(item => { records.push(item); records.push(pinned); });
 
   try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch (_) {}
   return records;
