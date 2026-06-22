@@ -507,12 +507,12 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
           {step === 'prompt' && (
             <>
               <div className="pay-message">
-                Pay <strong>KES 50</strong> to unlock bidding on tasks for <strong style={{ color: 'var(--green)' }}>3 days</strong>. Renew every 3 days to keep access.
+                Pay <strong>KES 50</strong> to unlock bidding on tasks for <strong style={{ color: 'var(--green)' }}>1 month</strong>. Renew every month to keep access.
               </div>
               <div className="pay-amount">
                 <div className="pay-amount-label">Activation Fee</div>
-                <div className="pay-amount-value">KES 50<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/3 days</span></div>
-                <div className="pay-amount-sub">Valid for 3 days • Renew to continue bidding</div>
+                <div className="pay-amount-value">KES 50<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/month</span></div>
+                <div className="pay-amount-sub">Valid for 1 month • Renew to continue bidding</div>
               </div>
               <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
               <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
@@ -562,7 +562,7 @@ function UpgradeModal({ user, onClose }) {
         <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>
           <div>
             <div className="pay-modal-title">⭐ PREMIUM</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>KES 480 / 3 days • Required to submit tasks</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>KES 480 / month • Required to submit tasks</div>
           </div>
           <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
         </div>
@@ -583,8 +583,8 @@ function UpgradeModal({ user, onClose }) {
           </div>
           <div className="pay-amount" style={{ marginTop: 20 }}>
             <div className="pay-amount-label">Premium — Submit Tasks</div>
-            <div className="pay-amount-value">KES 480<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/3 days</span></div>
-            <div className="pay-amount-sub">Valid for 3 days • Required to submit tasks</div>
+            <div className="pay-amount-value">KES 480<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/month</span></div>
+            <div className="pay-amount-sub">Valid for 1 month • Required to submit tasks</div>
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
           <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
@@ -1034,7 +1034,7 @@ export default function Dashboard() {
             <p>{user.email} • {user.country}</p>
             <div style={{ marginTop: 12 }}>
               <span className={`status-badge ${user.activated ? 'status-active' : 'status-inactive'}`}>
-                {user.activated ? '✅ Active — Access valid 3 days' : '⚠️ Inactive — Pay KES 50 to Bid'}
+                {user.activated ? '✅ Active — Access valid 1 month' : '⚠️ Inactive — Pay KES 50 to Bid'}
               </span>
             </div>
           </div>

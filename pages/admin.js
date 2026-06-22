@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 async function dbProxy(op, params = {}) {
   const r = await fetch('/api/db', {
@@ -18,7 +18,7 @@ function fmtDate(ts) {
 
 function daysLeft(paidAt) {
   if (!paidAt) return null;
-  const left = Math.ceil((paidAt + THREE_DAYS_MS - Date.now()) / (1000 * 60 * 60 * 24));
+  const left = Math.ceil((paidAt + ONE_MONTH_MS - Date.now()) / (1000 * 60 * 60 * 24));
   return left > 0 ? left : 0;
 }
 
@@ -111,7 +111,7 @@ function UsersTab({ users, secret, onRefresh }) {
     };
 
     if (premiumDays !== null && premium) {
-      params.premiumPaidAt = Date.now() - (THREE_DAYS_MS - premiumDays * 24 * 60 * 60 * 1000);
+      params.premiumPaidAt = Date.now() - (ONE_MONTH_MS - premiumDays * 24 * 60 * 60 * 1000);
     } else if (!premium) {
       params.premiumPaidAt = null;
     }
@@ -119,7 +119,7 @@ function UsersTab({ users, secret, onRefresh }) {
     const actEdit = e.activatedDays;
     if (actEdit !== undefined) {
       if (Number(actEdit) <= 0) params.clearActivation = true;
-      else params.activatedAt = Date.now() - (THREE_DAYS_MS - Number(actEdit) * 24 * 60 * 60 * 1000);
+      else params.activatedAt = Date.now() - (ONE_MONTH_MS - Number(actEdit) * 24 * 60 * 60 * 1000);
     }
 
     setSaving(prev => ({ ...prev, [user.id]: true }));
@@ -203,8 +203,8 @@ function UsersTab({ users, secret, onRefresh }) {
 
               const balVal       = getEdit(user.id, 'balance',       user.balance);
               const premVal      = getEdit(user.id, 'premium',       isPrem);
-              const actDaysEdit  = getEdit(user.id, 'activatedDays', actDays ?? (isAct ? 3 : 0));
-              const premDaysEdit = getEdit(user.id, 'premiumDays',   premDays ?? (isPrem ? 3 : 0));
+              const actDaysEdit  = getEdit(user.id, 'activatedDays', actDays ?? (isAct ? 30 : 0));
+              const premDaysEdit = getEdit(user.id, 'premiumDays',   premDays ?? (isPrem ? 30 : 0));
 
               return (
                 <tr key={user.id} style={{ ...styles.tr, background: isSusp ? '#FFF1F1' : undefined }}>

@@ -8,18 +8,18 @@ function getAdmin() {
   );
 }
 
-const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 function norm(row) {
   if (!row) return null;
   const subs = row.task_submissions ?? {};
 
   const actAt      = subs._act ?? null;
-  const actExpires = actAt ? actAt + THREE_DAYS_MS : null;
+  const actExpires = actAt ? actAt + ONE_MONTH_MS : null;
   const activated  = actAt !== null && (!actExpires || Date.now() <= actExpires);
 
   const paidAt      = row.premium_paid_at ?? null;
-  const premExpires = paidAt ? paidAt + THREE_DAYS_MS : null;
+  const premExpires = paidAt ? paidAt + ONE_MONTH_MS : null;
   const premium     = (row.premium ?? false) && paidAt !== null && (!premExpires || Date.now() <= premExpires);
 
   const suspended     = subs._suspended ?? false;
