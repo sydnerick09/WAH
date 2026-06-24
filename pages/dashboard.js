@@ -387,6 +387,85 @@ function MpesaWithdrawModal({ user, onClose, initialStep = 'fee' }) {
   return <MpesaFailedModal onClose={onClose} onReset={handleReset} />;
 }
 
+// ─── International Withdrawal (Other Countries) — Account Number Form ─────────
+function OtherCountryFormModal({ onClose, onSubmit }) {
+  const [accountName,   setAccountName]   = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [errors,        setErrors]        = useState({});
+
+  function handleSubmit() {
+    const errs = {};
+    if (!accountName.trim())   errs.accountName   = 'Account holder name is required';
+    if (!accountNumber.trim()) errs.accountNumber = 'Account number is required';
+    else if (!/^\d{6,20}$/.test(accountNumber.replace(/[\s-]/g, ''))) errs.accountNumber = 'Enter a valid account number (digits only)';
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    onSubmit();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)' }}>
+          <div>
+            <div className="pay-modal-title">🌍 Withdraw from Other Countries</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Enter your bank account details</div>
+          </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+        </div>
+        <div className="pay-modal-body">
+          <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 20 }}>
+            For withdrawals outside Kenya, enter the bank account number that will receive your payout. Make sure it matches your registered name.
+          </div>
+          <div className="pay-phone-label">Account Holder Name</div>
+          <input
+            className="pay-phone-input"
+            type="text"
+            value={accountName}
+            onChange={e => { setAccountName(e.target.value); setErrors(prev => ({ ...prev, accountName: undefined })); }}
+            placeholder="e.g. John Brown"
+            style={{ borderColor: errors.accountName ? '#ef4444' : undefined }}
+          />
+          {errors.accountName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.accountName}</div>}
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>Account Number</div>
+          <input
+            className="pay-phone-input"
+            type="text"
+            inputMode="numeric"
+            value={accountNumber}
+            onChange={e => { setAccountNumber(e.target.value); setErrors(prev => ({ ...prev, accountNumber: undefined })); }}
+            placeholder="e.g. 0123456789"
+            style={{ borderColor: errors.accountNumber ? '#ef4444' : undefined }}
+          />
+          {errors.accountNumber && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.accountNumber}</div>}
+          <button
+            className="pay-btn"
+            style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)', marginTop: 20 }}
+            onClick={handleSubmit}
+          >
+            💸 Submit Withdrawal Request
+          </button>
+          <div className="pay-secure">🔐 Your account details are encrypted and secure</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── International Withdrawal Controller ──────────────────────────────────────
+function OtherCountryWithdrawModal({ onClose }) {
+  const [step, setStep] = useState('form');
+
+  const handleReset = useCallback(() => setStep('form'), []);
+
+  if (step === 'form') {
+    return <OtherCountryFormModal onClose={onClose} onSubmit={() => setStep('pending')} />;
+  }
+  if (step === 'pending') {
+    return <MpesaPendingModal onClose={onClose} onExpired={() => setStep('failed')} />;
+  }
+  return <MpesaFailedModal onClose={onClose} onReset={handleReset} />;
+}
+
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
 function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick }) {
   if (!task) return null;
@@ -809,12 +888,13 @@ function LiveWithdrawalsTicker({ withdrawals }) {
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onReferral, onTraining, onLogout }) {
+function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onLogout }) {
   const items = [
     { icon: '🏠', label: 'Dashboard',            action: () => { onClose(); } },
     { icon: '⭐', label: 'Upgrade to Premium',   action: () => { onClose(); onUpgrade(); } },
     { icon: '✅', label: 'Awarded Tasks',         action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: '📲', label: 'Withdraw with M-Pesa', action: () => { onClose(); onMpesaWithdraw(); } },
+    { icon: '🌍', label: 'Withdraw from Other Countries', action: () => { onClose(); onOtherWithdraw(); } },
     { icon: '🎓', label: 'Apply for Training',    action: () => { onClose(); onTraining(); } },
     { icon: '🔗', label: 'My Referral Link',      action: () => { onClose(); onReferral(); } },
   ];
@@ -871,6 +951,7 @@ export default function Dashboard() {
   const [payTask,             setPayTask]             = useState(null);
   const [showUpgrade,         setShowUpgrade]         = useState(false);
   const [showMpesaWithdraw,   setShowMpesaWithdraw]   = useState(false);
+  const [showOtherWithdraw,   setShowOtherWithdraw]   = useState(false);
   const [mpesaInitialStep,    setMpesaInitialStep]    = useState('fee');
   const [showReferral,        setShowReferral]        = useState(false);
   const [showMenu,            setShowMenu]            = useState(false);
@@ -1172,12 +1253,17 @@ export default function Dashboard() {
         />
       )}
 
+      {showOtherWithdraw && (
+        <OtherCountryWithdrawModal onClose={() => setShowOtherWithdraw(false)} />
+      )}
+
       {showMenu && (
         <HamburgerMenu
           user={user}
           onClose={() => setShowMenu(false)}
           onUpgrade={() => setShowUpgrade(true)}
           onMpesaWithdraw={() => setShowMpesaWithdraw(true)}
+          onOtherWithdraw={() => setShowOtherWithdraw(true)}
           onReferral={() => setShowReferral(true)}
           onTraining={() => setShowTraining(true)}
           onLogout={handleLogout}
