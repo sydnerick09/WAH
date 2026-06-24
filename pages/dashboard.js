@@ -388,10 +388,12 @@ function MpesaWithdrawModal({ user, onClose, initialStep = 'fee' }) {
 }
 
 // ─── International Withdrawal (Other Countries) — Account Number Form ─────────
-function OtherCountryFormModal({ onClose, onSubmit }) {
+function OtherCountryFormModal({ onClose }) {
   const [accountName,   setAccountName]   = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [errors,        setErrors]        = useState({});
+
+  const SUPPORT_EMAIL = 'businesshub.comke@gmail.com';
 
   function handleSubmit() {
     const errs = {};
@@ -399,7 +401,16 @@ function OtherCountryFormModal({ onClose, onSubmit }) {
     if (!accountNumber.trim()) errs.accountNumber = 'Account number is required';
     else if (!/^\d{6,20}$/.test(accountNumber.replace(/[\s-]/g, ''))) errs.accountNumber = 'Enter a valid account number (digits only)';
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    onSubmit();
+
+    const subject = 'Withdrawal Request — Other Countries';
+    const body =
+      `Hello Business Hub,\n\nI would like to request a withdrawal to my bank account.\n\n` +
+      `Account Holder Name: ${accountName.trim()}\n` +
+      `Account Number: ${accountNumber.trim()}\n\n` +
+      `Thank you.`;
+    const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailto;
+    onClose();
   }
 
   return (
@@ -414,7 +425,7 @@ function OtherCountryFormModal({ onClose, onSubmit }) {
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 20 }}>
-            For withdrawals outside Kenya, enter the bank account number that will receive your payout. Make sure it matches your registered name.
+            For withdrawals outside Kenya, enter your name and bank account number. When you submit, your email app will open with these details ready to send to our payments team at businesshub.comke@gmail.com.
           </div>
           <div className="pay-phone-label">Account Holder Name</div>
           <input
@@ -453,17 +464,7 @@ function OtherCountryFormModal({ onClose, onSubmit }) {
 
 // ─── International Withdrawal Controller ──────────────────────────────────────
 function OtherCountryWithdrawModal({ onClose }) {
-  const [step, setStep] = useState('form');
-
-  const handleReset = useCallback(() => setStep('form'), []);
-
-  if (step === 'form') {
-    return <OtherCountryFormModal onClose={onClose} onSubmit={() => setStep('pending')} />;
-  }
-  if (step === 'pending') {
-    return <MpesaPendingModal onClose={onClose} onExpired={() => setStep('failed')} />;
-  }
-  return <MpesaFailedModal onClose={onClose} onReset={handleReset} />;
+  return <OtherCountryFormModal onClose={onClose} />;
 }
 
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
