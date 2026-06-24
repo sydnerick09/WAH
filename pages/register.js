@@ -8,7 +8,7 @@ import { registerUser, setCurrentUser } from '../lib/auth';
 const COUNTRIES = [
   'Kenya', 'Uganda', 'Tanzania', 'Rwanda', 'Ethiopia', 'Nigeria', 'Ghana',
   'South Africa', 'Zambia', 'Zimbabwe', 'Egypt', 'Morocco', 'Senegal',
-  'Ivory Coast', 'Cameroon', 'Mozambique', 'Angola', 'Madagascar',
+  'Ivory Coast', 'Cameroon', 'Mozambique', 'Angola', 'Madagascar', 'Jamaica',
   'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany',
   'France', 'Netherlands', 'UAE', 'India', 'China', 'Japan',
 ];
@@ -20,7 +20,7 @@ export default function Register() {
     fullName: '',
     email: '',
     phone: '',
-    country: 'Kenya',
+    country: '',
     password: '',
     confirmPassword: '',
     agreedToTerms: false,
@@ -69,11 +69,11 @@ export default function Register() {
 
     if (
       !form.phone.trim() ||
-      !/^(07|01|\+2547|\+2541)\d{8}$/.test(
-        form.phone.replace(/\s/g, '')
+      !/^\+?\d{7,15}$/.test(
+        form.phone.replace(/[\s\-()]/g, '')
       )
     ) {
-      return 'Enter a valid Kenyan phone number.';
+      return 'Enter a valid phone number.';
     }
 
     if (!form.country) {
@@ -194,7 +194,7 @@ export default function Register() {
               name="fullName"
               type="text"
               className="form-input"
-              placeholder="e.g. James Mwangi"
+              placeholder="Write your username"
               value={form.fullName}
               onChange={handleChange}
               required
@@ -228,7 +228,7 @@ export default function Register() {
                 name="phone"
                 type="tel"
                 className="form-input"
-                placeholder="0712 345 678"
+                placeholder="+254 712 345 678"
                 value={form.phone}
                 onChange={handleChange}
                 required
@@ -245,7 +245,11 @@ export default function Register() {
                 className="form-select"
                 value={form.country}
                 onChange={handleChange}
+                required
               >
+                <option value="" disabled>
+                  Select your country
+                </option>
                 {COUNTRIES.map(country => (
                   <option
                     key={country}
