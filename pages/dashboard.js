@@ -18,38 +18,27 @@ import { TASKS } from '../lib/tasks';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getOrGenerateWithdrawals() {
-  const LS_KEY = 'bh_live_withdrawals_v4';
+  const LS_KEY = 'bh_live_withdrawals_v5';
   try {
     const stored = localStorage.getItem(LS_KEY);
     if (stored) return JSON.parse(stored);
   } catch (_) {}
 
-  const kenyaSrc  = { flag: '🇰🇪', country: 'Kenya', prefixes: ['+25471','+25472','+25473','+25474','+25475','+25476','+25477','+25478','+25479','+25470'] };
-  const otherSrcs = [
-    { flag: '🇺🇬', country: 'Uganda',       prefixes: ['+25670','+25678','+25679'] },
-    { flag: '🇹🇿', country: 'Tanzania',     prefixes: ['+25575','+25568'] },
-    { flag: '🇳🇬', country: 'Nigeria',      prefixes: ['+23481','+23490'] },
-    { flag: '🇬🇭', country: 'Ghana',        prefixes: ['+23354','+23324'] },
-    { flag: '🇷🇼', country: 'Rwanda',       prefixes: ['+25078','+25072'] },
-    { flag: '🇿🇦', country: 'South Africa', prefixes: ['+27821','+27831'] },
-    { flag: '🇪🇹', country: 'Ethiopia',     prefixes: ['+25191','+25193'] },
-    { flag: '🇨🇲', country: 'Cameroon',     prefixes: ['+23767','+23769'] },
-    { flag: '🇲🇼', country: 'Malawi',       prefixes: ['+26599','+26588'] },
-  ];
+  const kenyaSrc   = { flag: '🇰🇪', country: 'Kenya',   prefixes: ['+25471','+25472','+25473','+25474','+25475','+25476','+25477','+25478','+25479','+25470'] };
+  const jamaicaSrc = { flag: '🇯🇲', country: 'Jamaica', prefixes: ['+1876','+1658'] };
 
   const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const mask = p => `${p}*****${String(rand(10, 99))}`;
 
-  // 70 payouts today: 63 Kenyan + 7 other countries (amounts KES 2,100–9,300)
+  // 70 payouts today: 63 Kenyan (KES 2,100–9,300) + 7 Jamaican (KES 2,100–7,200)
   const records = [
     ...Array.from({ length: 63 }, () => {
       const prefix = kenyaSrc.prefixes[rand(0, kenyaSrc.prefixes.length - 1)];
       return { flag: kenyaSrc.flag, country: kenyaSrc.country, phone: mask(prefix), amount: rand(2100, 9300) };
     }),
     ...Array.from({ length: 7 }, () => {
-      const src    = otherSrcs[rand(0, otherSrcs.length - 1)];
-      const prefix = src.prefixes[rand(0, src.prefixes.length - 1)];
-      return { flag: src.flag, country: src.country, phone: mask(prefix), amount: rand(2100, 9300) };
+      const prefix = jamaicaSrc.prefixes[rand(0, jamaicaSrc.prefixes.length - 1)];
+      return { flag: jamaicaSrc.flag, country: jamaicaSrc.country, phone: mask(prefix), amount: rand(2100, 7200) };
     }),
   ];
 
