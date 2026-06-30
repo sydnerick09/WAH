@@ -387,25 +387,119 @@ function MpesaWithdrawModal({ user, onClose, initialStep = 'fee' }) {
   return <MpesaFailedModal onClose={onClose} onReset={handleReset} />;
 }
 
+// ─── International Withdrawal (Other Countries) — Worldwide Bank Directory ─────
+// Each country defines the icon (flag), a sample account-number placeholder, and
+// a validator. The account-number field shows the selected bank's placeholder,
+// and the Submit button only appears when the typed number matches that format.
+const COUNTRY_META = {
+  // IBAN countries — account numbers start with the 2-letter country code
+  GB: { country: 'United Kingdom', flag: '🇬🇧', ph: 'GB29 NWBK 6016 1331 9268 19',   re: /^GB[0-9A-Z]{6,30}$/i },
+  DE: { country: 'Germany',        flag: '🇩🇪', ph: 'DE89 3704 0044 0532 0130 00',   re: /^DE[0-9A-Z]{6,30}$/i },
+  FR: { country: 'France',         flag: '🇫🇷', ph: 'FR14 2004 1010 0505 0001 3M02 606', re: /^FR[0-9A-Z]{6,30}$/i },
+  ES: { country: 'Spain',          flag: '🇪🇸', ph: 'ES91 2100 0418 4502 0005 1332', re: /^ES[0-9A-Z]{6,30}$/i },
+  IT: { country: 'Italy',          flag: '🇮🇹', ph: 'IT60 X054 2811 1010 0000 0123 456', re: /^IT[0-9A-Z]{6,30}$/i },
+  NL: { country: 'Netherlands',    flag: '🇳🇱', ph: 'NL91 ABNA 0417 1643 00',        re: /^NL[0-9A-Z]{6,30}$/i },
+  CH: { country: 'Switzerland',    flag: '🇨🇭', ph: 'CH93 0076 2011 6238 5295 7',    re: /^CH[0-9A-Z]{6,30}$/i },
+  IE: { country: 'Ireland',        flag: '🇮🇪', ph: 'IE29 AIBK 9311 5212 3456 78',   re: /^IE[0-9A-Z]{6,30}$/i },
+  BE: { country: 'Belgium',        flag: '🇧🇪', ph: 'BE68 5390 0754 7034',           re: /^BE[0-9A-Z]{6,30}$/i },
+  PT: { country: 'Portugal',       flag: '🇵🇹', ph: 'PT50 0002 0123 1234 5678 9015 4', re: /^PT[0-9A-Z]{6,30}$/i },
+  SE: { country: 'Sweden',         flag: '🇸🇪', ph: 'SE45 5000 0000 0583 9825 7466', re: /^SE[0-9A-Z]{6,30}$/i },
+  NO: { country: 'Norway',         flag: '🇳🇴', ph: 'NO93 8601 1117 947',            re: /^NO[0-9A-Z]{6,30}$/i },
+  PL: { country: 'Poland',         flag: '🇵🇱', ph: 'PL61 1090 1014 0000 0712 1981 2874', re: /^PL[0-9A-Z]{6,30}$/i },
+  AE: { country: 'United Arab Emirates', flag: '🇦🇪', ph: 'AE07 0331 2345 6789 0123 456', re: /^AE[0-9A-Z]{6,30}$/i },
+  SA: { country: 'Saudi Arabia',   flag: '🇸🇦', ph: 'SA03 8000 0000 6080 1016 7519', re: /^SA[0-9A-Z]{6,30}$/i },
+  BR: { country: 'Brazil',         flag: '🇧🇷', ph: 'BR18 0036 0305 0000 1000 9795 493 C1', re: /^BR[0-9A-Z]{6,30}$/i },
+  EG: { country: 'Egypt',          flag: '🇪🇬', ph: 'EG38 0019 0005 0000 0000 2631 8000 2', re: /^EG[0-9A-Z]{6,30}$/i },
+  PK: { country: 'Pakistan',       flag: '🇵🇰', ph: 'PK36 SCBL 0000 0011 2345 6702', re: /^PK[0-9A-Z]{6,30}$/i },
+  KE: { country: 'Kenya',          flag: '🇰🇪', ph: 'KE12 3456 7890 1234 5678 90',   re: /^KE[0-9A-Z]{6,30}$/i },
+  // Numeric-account countries
+  US: { country: 'United States',  flag: '🇺🇸', ph: '0123 4567 8901',         re: /^\d{8,17}$/ },
+  CA: { country: 'Canada',         flag: '🇨🇦', ph: '0123 4567 89',           re: /^\d{7,12}$/ },
+  NG: { country: 'Nigeria',        flag: '🇳🇬', ph: '0123456789',             re: /^\d{10}$/ },
+  ZA: { country: 'South Africa',   flag: '🇿🇦', ph: '0123 4567 89',           re: /^\d{9,11}$/ },
+  GH: { country: 'Ghana',          flag: '🇬🇭', ph: '0123 4567 8901 23',      re: /^\d{10,16}$/ },
+  IN: { country: 'India',          flag: '🇮🇳', ph: '0123 4567 8901 2345',    re: /^\d{9,18}$/ },
+  CN: { country: 'China',          flag: '🇨🇳', ph: '6212 3456 7890 1234 567', re: /^\d{16,19}$/ },
+  JP: { country: 'Japan',          flag: '🇯🇵', ph: '1234567',                re: /^\d{7,8}$/ },
+  AU: { country: 'Australia',      flag: '🇦🇺', ph: '0123 4567',              re: /^\d{6,10}$/ },
+  SG: { country: 'Singapore',      flag: '🇸🇬', ph: '012 345678 9',           re: /^\d{9,12}$/ },
+  JM: { country: 'Jamaica',        flag: '🇯🇲', ph: '0123 4567 8901',         re: /^\d{8,14}$/ },
+  MX: { country: 'Mexico',         flag: '🇲🇽', ph: '0123 4567 8901 2345 67', re: /^\d{18}$/ },
+};
+
+const BANKS_BY_COUNTRY = {
+  GB: ['Barclays Bank', 'HSBC UK', 'Lloyds Bank', 'NatWest', 'Standard Chartered'],
+  DE: ['Deutsche Bank', 'Commerzbank', 'DZ Bank'],
+  FR: ['BNP Paribas', 'Société Générale', 'Crédit Agricole'],
+  ES: ['Banco Santander', 'BBVA', 'CaixaBank'],
+  IT: ['UniCredit', 'Intesa Sanpaolo'],
+  NL: ['ING Bank', 'Rabobank', 'ABN AMRO'],
+  CH: ['UBS', 'Credit Suisse'],
+  IE: ['Allied Irish Banks (AIB)', 'Bank of Ireland'],
+  BE: ['KBC Bank'],
+  PT: ['Millennium BCP'],
+  SE: ['Nordea', 'SEB'],
+  NO: ['DNB'],
+  PL: ['PKO Bank Polski'],
+  AE: ['Emirates NBD', 'First Abu Dhabi Bank'],
+  SA: ['Al Rajhi Bank', 'Saudi National Bank'],
+  BR: ['Itaú Unibanco', 'Banco Bradesco', 'Banco do Brasil'],
+  EG: ['National Bank of Egypt'],
+  PK: ['HBL (Habib Bank)', 'United Bank (UBL)'],
+  KE: ['Equity Bank', 'KCB Bank', 'Co-operative Bank', 'Absa Bank Kenya'],
+  US: ['Bank of America', 'JPMorgan Chase', 'Wells Fargo', 'Citibank'],
+  CA: ['RBC Royal Bank', 'TD Canada Trust', 'Scotiabank'],
+  NG: ['Guaranty Trust Bank (GTBank)', 'Access Bank', 'First Bank of Nigeria', 'Zenith Bank'],
+  ZA: ['Standard Bank', 'First National Bank (FNB)', 'Absa', 'Capitec', 'Nedbank'],
+  GH: ['Ecobank Ghana', 'GCB Bank'],
+  IN: ['State Bank of India (SBI)', 'HDFC Bank', 'ICICI Bank', 'Axis Bank'],
+  CN: ['ICBC', 'Bank of China', 'China Construction Bank'],
+  JP: ['MUFG Bank', 'Sumitomo Mitsui (SMBC)'],
+  AU: ['Commonwealth Bank', 'ANZ', 'Westpac', 'NAB'],
+  SG: ['DBS Bank', 'OCBC Bank', 'UOB'],
+  JM: ['National Commercial Bank (NCB)', 'Scotiabank Jamaica', 'JN Bank'],
+  MX: ['BBVA México', 'Banorte', 'Citibanamex'],
+};
+
+const WORLD_BANKS = Object.entries(BANKS_BY_COUNTRY).flatMap(([code, names]) =>
+  names.map(name => ({ id: `${code}-${name}`, name, code, ...COUNTRY_META[code] }))
+).sort((a, b) => a.name.localeCompare(b.name));
+
 // ─── International Withdrawal (Other Countries) — Account Number Form ─────────
 function OtherCountryFormModal({ onClose }) {
   const [accountName,   setAccountName]   = useState('');
+  const [selectedBank,  setSelectedBank]  = useState(null);
+  const [bankOpen,      setBankOpen]      = useState(false);
+  const [bankQuery,     setBankQuery]     = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [errors,        setErrors]        = useState({});
 
   const SUPPORT_EMAIL = 'businesshub.comke@gmail.com';
 
-  function handleSubmit() {
-    const errs = {};
-    if (!accountName.trim())   errs.accountName   = 'Account holder name is required';
-    if (!accountNumber.trim()) errs.accountNumber = 'Account number is required';
-    else if (!/^\d{6,20}$/.test(accountNumber.replace(/[\s-]/g, ''))) errs.accountNumber = 'Enter a valid account number (digits only)';
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+  const q = bankQuery.trim().toLowerCase();
+  const filteredBanks = q
+    ? WORLD_BANKS.filter(b => b.name.toLowerCase().includes(q) || b.country.toLowerCase().includes(q))
+    : WORLD_BANKS;
 
+  const cleanedAcct = accountNumber.replace(/[\s-]/g, '');
+  const acctValid   = !!selectedBank && selectedBank.re.test(cleanedAcct);
+  const formValid   = accountName.trim().length > 0 && !!selectedBank && acctValid;
+
+  function selectBank(b) {
+    setSelectedBank(b);
+    setBankOpen(false);
+    setBankQuery('');
+    setAccountNumber('');
+    setErrors(prev => ({ ...prev, bank: undefined, accountNumber: undefined }));
+  }
+
+  function handleSubmit() {
+    if (!formValid) return;
     const subject = 'Withdrawal Request — Other Countries';
     const body =
       `Hello Business Hub,\n\nI would like to request a withdrawal to my bank account.\n\n` +
       `Account Holder Name: ${accountName.trim()}\n` +
+      `Bank: ${selectedBank.name} (${selectedBank.country})\n` +
       `Account Number: ${accountNumber.trim()}\n\n` +
       `Thank you.`;
     const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -425,8 +519,10 @@ function OtherCountryFormModal({ onClose }) {
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 20 }}>
-            For withdrawals outside Kenya, enter your name and bank account number. When you submit, your email app will open with these details ready to send to our payments team at businesshub.comke@gmail.com.
+            For withdrawals outside Kenya, enter your name, choose your bank, and type your account number in the format shown. When you submit, your email app will open with these details ready to send to our payments team at businesshub.comke@gmail.com.
           </div>
+
+          {/* 1 — Account holder name */}
           <div className="pay-phone-label">Account Holder Name</div>
           <input
             className="pay-phone-input"
@@ -437,24 +533,124 @@ function OtherCountryFormModal({ onClose }) {
             style={{ borderColor: errors.accountName ? '#ef4444' : undefined }}
           />
           {errors.accountName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.accountName}</div>}
+
+          {/* 2 — Searchable bank selector with icons */}
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>Bank</div>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="pay-phone-input"
+              onClick={() => setBankOpen(o => !o)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: 8, width: '100%', textAlign: 'left', cursor: 'pointer', background: '#fff',
+                borderColor: errors.bank ? '#ef4444' : undefined,
+              }}
+            >
+              {selectedBank ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>{selectedBank.flag}</span>
+                  <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedBank.name}</span>
+                  <span style={{ color: '#9ca3af', fontSize: 12, whiteSpace: 'nowrap' }}>· {selectedBank.country}</span>
+                </span>
+              ) : (
+                <span style={{ color: '#9ca3af' }}>Select your bank</span>
+              )}
+              <span style={{ color: '#9ca3af', fontSize: 12 }}>{bankOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {bankOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 50,
+                background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12,
+                boxShadow: '0 12px 32px rgba(0,0,0,0.18)', overflow: 'hidden',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: 16 }}>🔍</span>
+                  <input
+                    autoFocus
+                    value={bankQuery}
+                    onChange={e => setBankQuery(e.target.value)}
+                    placeholder="Search banks worldwide…"
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, background: 'transparent' }}
+                  />
+                </div>
+                <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {filteredBanks.length === 0 && (
+                    <div style={{ padding: 16, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No banks found</div>
+                  )}
+                  {filteredBanks.map(b => {
+                    const active = selectedBank && selectedBank.id === b.id;
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => selectBank(b)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                          padding: '10px 12px', border: 'none', cursor: 'pointer',
+                          background: active ? '#EFF6FF' : '#fff',
+                        }}
+                      >
+                        <span style={{ fontSize: 20, lineHeight: 1, width: 24, textAlign: 'center' }}>{b.flag}</span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block', fontWeight: 600, fontSize: 14, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
+                          <span style={{ display: 'block', fontSize: 12, color: '#9ca3af' }}>{b.country}</span>
+                        </span>
+                        {active && <span style={{ color: '#2563EB' }}>✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          {errors.bank && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.bank}</div>}
+
+          {/* 3 — Account number with bank-specific placeholder */}
           <div className="pay-phone-label" style={{ marginTop: 16 }}>Account Number</div>
           <input
             className="pay-phone-input"
             type="text"
-            inputMode="numeric"
             value={accountNumber}
             onChange={e => { setAccountNumber(e.target.value); setErrors(prev => ({ ...prev, accountNumber: undefined })); }}
-            placeholder="e.g. 0123456789"
-            style={{ borderColor: errors.accountNumber ? '#ef4444' : undefined }}
+            placeholder={selectedBank ? selectedBank.ph : 'Select a bank first'}
+            disabled={!selectedBank}
+            style={{
+              borderColor: accountNumber && !acctValid ? '#ef4444' : undefined,
+              background: selectedBank ? '#fff' : '#f3f4f6',
+              cursor: selectedBank ? 'text' : 'not-allowed',
+            }}
           />
-          {errors.accountNumber && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.accountNumber}</div>}
-          <button
-            className="pay-btn"
-            style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)', marginTop: 20 }}
-            onClick={handleSubmit}
-          >
-            💸 Submit Withdrawal Request
-          </button>
+          {selectedBank && (
+            <div style={{ fontSize: 12, marginTop: 4, color: accountNumber && !acctValid ? '#ef4444' : '#9ca3af' }}>
+              {accountNumber && !acctValid
+                ? `Doesn't match ${selectedBank.name}. It should look like: ${selectedBank.ph}`
+                : `Format for ${selectedBank.name}: ${selectedBank.ph}`}
+            </div>
+          )}
+
+          {/* Submit only appears once everything matches */}
+          {formValid ? (
+            <button
+              className="pay-btn"
+              style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)', marginTop: 20 }}
+              onClick={handleSubmit}
+            >
+              💸 Submit Withdrawal Request
+            </button>
+          ) : (
+            <div style={{
+              marginTop: 20, textAlign: 'center', fontSize: 13, color: '#9ca3af',
+              padding: '12px', background: '#f9fafb', borderRadius: 10, border: '1px dashed #e5e7eb',
+            }}>
+              {!accountName.trim()
+                ? 'Enter your name to continue'
+                : !selectedBank
+                ? 'Select your bank to continue'
+                : 'Enter a valid account number to reveal Submit'}
+            </div>
+          )}
           <div className="pay-secure">🔐 Your account details are encrypted and secure</div>
         </div>
       </div>
