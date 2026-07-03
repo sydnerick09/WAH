@@ -65,8 +65,8 @@ export default function PaymentSuccess() {
         router.replace(`/dashboard?plan=withdrawal_fee&reference=${encodeURIComponent(reference)}`);
 
       } else if (plan === 'mpesa_withdrawal_fee') {
-        // Redirect back to dashboard so it can open the M-Pesa withdrawal form
-        router.replace(`/dashboard?plan=mpesa_withdrawal_fee&reference=${encodeURIComponent(reference)}`);
+        // Fee paid — open the M-Pesa withdrawal form on the withdraw page
+        router.replace('/withdraw?method=mpesa&step=form');
 
       } else {
         // Default: account activation (KES 50)

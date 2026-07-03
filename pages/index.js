@@ -755,7 +755,7 @@ export default function Home() {
               fontWeight: 600,
             }}
           >
-            📧 businesshub.coke@gmail.com
+            📧 businesshub.comke@gmail.com
           </div>
         </div>
       </section>
@@ -861,8 +861,8 @@ export default function Home() {
 
 
               <li>
-                <a href="mailto:businesshub.coke@gmail.com">
-                  businesshub.coke@gmail.com
+                <a href="mailto:businesshub.comke@gmail.com">
+                  businesshub.comke@gmail.com
                 </a>
               </li>
             </ul>
