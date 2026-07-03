@@ -32,13 +32,13 @@
   --gray:        #64748B;
   --gray-light:  #E2E8F0;
 
-  /* Typography */
-  --font-display: 'Poppins', sans-serif;
-  --font-body:    'Manrope', sans-serif;
-  --font-mono:    'Inter', sans-serif;
-  --font-sub:     'Open Sans', sans-serif;
-  --font-utility: 'Roboto', sans-serif;
-  --font-accent:  'DM Sans', sans-serif;
+  /* Typography — Inter (UI/body) + Poppins (display headings), professionally paired */
+  --font-display: 'Poppins', 'Inter', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-mono:    'Inter', system-ui, sans-serif;
+  --font-sub:     'Inter', system-ui, sans-serif;
+  --font-utility: 'Inter', system-ui, sans-serif;
+  --font-accent:  'Inter', system-ui, sans-serif;
 
   /* Shadows */
   --shadow-sm:  0 2px 8px rgba(0,0,0,0.06);

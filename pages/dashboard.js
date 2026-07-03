@@ -12,7 +12,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { getCurrentUser, logout, awardQuizBonus, activateWithBalance, awardPremiumTest, upgradePremiumWithBalance } from '../lib/auth';
+import { getCurrentUser, logout, awardQuizBonus } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -712,18 +712,44 @@ function OtherCountryWithdrawModal({ onClose }) {
 }
 
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
+// Send a task submission via the automated email endpoint. Falls back to opening
+// the user's email app if server-side email isn't configured yet — so it always
+// works, and upgrades to fully-automated (with client auto-reply) once SMTP is set.
+async function sendTaskSubmission(user, task) {
+  const details =
+    `Task: ${task.title}\n` +
+    `Category: ${task.category}\n` +
+    `Payment: KES ${task.payment.toLocaleString()}\n` +
+    `Submitted by: ${user?.fullName || ''} (${user?.email || ''})`;
+  try {
+    const res  = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'Task Submission', name: user?.fullName || '', email: user?.email || '',
+        phone: user?.phone || '', subject: `Task Submission: ${task.title}`, details,
+      }),
+    });
+    const data = await res.json();
+    if (data && data.success) return true;   // emailed automatically
+  } catch (_) {}
+  const subject = encodeURIComponent('Task Submission: ' + task.title);
+  const body    = encodeURIComponent(
+    `Hello Business Hub,\n\nI am submitting my completed task for review.\n\n${details}\n\n[Add your work here]\n\nThank you,\n${user?.fullName || ''}`
+  );
+  window.location.href = `mailto:businesshub.comke@gmail.com?subject=${subject}&body=${body}`;
+  return false;                              // opened email app instead
+}
+
 function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick }) {
   if (!task) return null;
   const isActivated = user?.activated;
   const isPremium   = user?.premium;
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!isPremium) { onClose(); onUpgradeClick(); return; }
-    const subject = encodeURIComponent('Task Submission: ' + task.title);
-    const body    = encodeURIComponent(
-      `Hello Business Hub,\n\nI am submitting my completed task for review.\n\nTask: ${task.title}\nCategory: ${task.category}\nPayment: KES ${task.payment.toLocaleString()}\n\nPlease find my submission below:\n\n[Add your work here]\n\nThank you,\n${user?.fullName || ''}`
-    );
-    window.location.href = `mailto:businesshub.comke@gmail.com?subject=${subject}&body=${body}`;
+    const emailed = await sendTaskSubmission(user, task);
+    if (emailed) alert('✅ Submitted! A confirmation email has been sent to you, and our team has been notified.');
   }
 
   return (
@@ -783,11 +809,21 @@ function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick }) {
 // The user is never told whether an answer was right — they just move on, and
 // the total earned is revealed on the final screen.
 const QUIZ_QUESTIONS = [
-  { q: 'Quick maths — what is 15 + 27?',                                    options: ['32', '42', '52', '48'],                                            answer: '42' },
-  { q: 'A shirt costs KES 800. With a 25% discount, how much do you pay?',  options: ['KES 550', 'KES 600', 'KES 650', 'KES 700'],                        answer: 'KES 600' },
-  { q: 'Which is the largest continent on Earth by land area?',            options: ['Africa', 'Asia', 'Europe', 'North America'],                       answer: 'Asia' },
-  { q: 'What is the next number in the sequence: 2, 4, 8, 16, __ ?',        options: ['20', '24', '30', '32'],                                            answer: '32' },
-  { q: 'Which gas do humans need to breathe in to stay alive?',            options: ['Carbon dioxide', 'Nitrogen', 'Oxygen', 'Hydrogen'],                answer: 'Oxygen' },
+  { q: 'Rearrange these words into a correct sentence: “client / the / satisfied / was / very”',
+    options: ['Very the client was satisfied', 'The client was very satisfied', 'Satisfied the client was very', 'Was the client very satisfied'],
+    answer: 'The client was very satisfied' },
+  { q: 'A freelancer earns KES 1,500 per task and finishes 4 tasks. After a 10% platform fee, how much do they keep?',
+    options: ['KES 6,000', 'KES 5,850', 'KES 5,400', 'KES 5,000'],
+    answer: 'KES 5,400' },
+  { q: 'What number comes next in the pattern:  3, 6, 11, 18, 27, __ ?',
+    options: ['35', '36', '38', '40'],
+    answer: '38' },
+  { q: 'Which sentence is written correctly?',
+    options: ["She don't have no experience.", 'She doesn’t have any experience.', 'She not have experience.', 'She haven’t any experience.'],
+    answer: 'She doesn’t have any experience.' },
+  { q: 'If every designer can use a computer, and John is a designer, then John…',
+    options: ['cannot use a computer', 'can use a computer', 'is not a designer', 'only uses a phone'],
+    answer: 'can use a computer' },
 ];
 
 function QuizModal({ user, onComplete }) {
@@ -841,7 +877,7 @@ function QuizModal({ user, onComplete }) {
           {!isResult && (
             <>
               <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', marginBottom: 18 }}>
-                Answer these <strong>5 quick questions</strong> (a little maths &amp; general knowledge). Each correct answer earns you <strong style={{ color: '#059669' }}>KES 10</strong> — get all 5 and your <strong>KES 50</strong> activation is covered!
+                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#059669' }}>KES 10</strong> — get all 5 and your <strong>KES 50</strong> activation is covered!
               </div>
 
               {/* Progress bar */}
@@ -915,461 +951,6 @@ function QuizModal({ user, onComplete }) {
                 onClick={() => onComplete(doneUser)}
               >
                 Continue to Dashboard →
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Balance / Top-up Activation Modal ───────────────────────────────────────
-// Triggered when a user tries to bid on a task while not activated.
-//  • balance ≥ 50 → confirm → enter password → activate using balance.
-//  • balance < 50 → top up the shortfall (50 − balance) via Paystack.
-function ActivationModal({ user, onClose, onActivated }) {
-  const FEE     = 50;
-  const balance = Number(user?.balance || 0);
-  const enough  = balance >= FEE;
-  const topup   = Math.max(0, FEE - balance);
-
-  const [step,     setStep]     = useState(enough ? 'confirm' : 'topup');
-  const [password, setPassword] = useState('');
-  const [phone,    setPhone]    = useState(user?.phone || '');
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [doneUser, setDoneUser] = useState(null);
-
-  async function submitPassword() {
-    if (!password) { setError('Please enter your password.'); return; }
-    if (password !== user.password) { setError('Incorrect password. Please try again.'); return; }
-    setError('');
-    setLoading(true);
-    const updated = await activateWithBalance(user.id);
-    setLoading(false);
-    if (updated) { setDoneUser(updated); setStep('success'); }
-    else setError('Activation failed. Please try again.');
-  }
-
-  async function payTopup() {
-    if (!phone.trim()) { setError('Enter your phone number.'); return; }
-    setError('');
-    setLoading(true);
-    try {
-      const res  = await fetch('/api/paystack/initialize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: topup, phone, plan: 'activation_topup' }),
-      });
-      const data = await res.json();
-      if (data.status) { window.location.href = data.data.authorization_url; return; }
-      setError('Payment could not be started. Please try again.');
-    } catch {
-      setError('Network error. Please try again.');
-    }
-    setLoading(false);
-  }
-
-  return (
-    <div className="modal-overlay" onClick={step === 'success' ? undefined : onClose}>
-      <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header">
-          <div>
-            <div className="pay-modal-title">🔓 Activate Your Account</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>KES 50 one-time activation • unlocks bidding</div>
-          </div>
-          {step !== 'success' && (
-            <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
-          )}
-        </div>
-
-        <div className="pay-modal-body">
-          {/* Balance summary */}
-          <div className="pay-amount" style={{ marginBottom: 18 }}>
-            <div className="pay-amount-label">Your Balance</div>
-            <div className="pay-amount-value" style={{ color: enough ? '#059669' : '#111827' }}>KES {balance.toLocaleString()}</div>
-            <div className="pay-amount-sub">Activation fee: KES 50{enough ? ' • fully covered by your balance' : ` • short by KES ${topup}`}</div>
-          </div>
-
-          {/* Step: confirm using balance */}
-          {step === 'confirm' && (
-            <>
-              <div className="pay-message" style={{ borderColor: '#125C37', background: '#F0FFF4', marginBottom: 18 }}>
-                Are you sure you want to use your balance to activate your account? <strong>KES 50</strong> will be deducted from your balance as the activation fee.
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="pay-btn" style={{ flex: 1, background: '#E5E7EB', color: '#374151' }} onClick={onClose}>Cancel</button>
-                <button className="pay-btn" style={{ flex: 2 }} onClick={() => { setError(''); setStep('password'); }}>✅ Yes, activate</button>
-              </div>
-            </>
-          )}
-
-          {/* Step: password confirmation */}
-          {step === 'password' && (
-            <>
-              <div className="pay-message" style={{ marginBottom: 16 }}>
-                For your security, enter your account password to confirm activation using your balance.
-              </div>
-              <div className="pay-phone-label">Password</div>
-              <input
-                className="pay-phone-input"
-                type="password"
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError(''); }}
-                placeholder="Enter your password"
-                onKeyDown={e => { if (e.key === 'Enter') submitPassword(); }}
-                style={{ borderColor: error ? '#ef4444' : undefined }}
-              />
-              {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
-              <button className="pay-btn" style={{ marginTop: 18 }} onClick={submitPassword} disabled={loading}>
-                {loading ? <><span className="spinner" /> Activating…</> : '🔒 Confirm & Activate'}
-              </button>
-              <div className="pay-secure">🔐 KES 50 will be deducted from your balance</div>
-            </>
-          )}
-
-          {/* Step: top-up shortfall via Paystack */}
-          {step === 'topup' && (
-            <>
-              <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 18 }}>
-                Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Add <strong style={{ color: '#1D4ED8' }}>KES {topup}</strong> via Paystack to activate your account.
-              </div>
-              <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
-              <input
-                className="pay-phone-input"
-                value={phone}
-                onChange={e => { setPhone(e.target.value); setError(''); }}
-                placeholder="+254 7XX XXX XXX"
-                style={{ borderColor: error ? '#ef4444' : undefined }}
-              />
-              {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
-              <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
-                {loading ? <><span className="spinner" /> Processing…</> : `🔒 Add KES ${topup} via Paystack`}
-              </button>
-              <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
-            </>
-          )}
-
-          {/* Step: success */}
-          {step === 'success' && (
-            <div style={{ textAlign: 'center', padding: '10px 0' }}>
-              <div style={{ fontSize: 56, marginBottom: 8 }}>✅</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: '#059669', marginBottom: 6 }}>
-                Account Activated!
-              </div>
-              <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', textAlign: 'left', marginTop: 12 }}>
-                Your account is now active. KES 50 has been applied as your activation fee — you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
-              </div>
-              <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)', marginTop: 20 }} onClick={() => onActivated(doneUser)}>
-                🚀 Start Bidding
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Premium Math Test — earn toward premium (hamburger menu) ────────────────
-// Five tough, multi-step calculus problems. KES 200 per correct answer, credited
-// to the SEPARATE premium balance (never the main dashboard balance). One-time.
-// Pasted answers or impossibly-fast completion are flagged as AI-assisted.
-const PREMIUM_QUESTIONS = [
-  { q: 'Evaluate the definite integral:  ∫₀² (3x² − 4x + 5) dx',                                       answer: 10,  tip: 'Antiderivative: x³ − 2x² + 5x' },
-  { q: 'The function f(x) = x³ − 6x² + 9x + 2 has a local minimum. At what value of x does it occur?', answer: 3,   tip: 'Solve f′(x)=0, then test which is the minimum' },
-  { q: 'Evaluate the limit:  limₓ→₀ (1 − cos x) / x²',                                                  answer: 0.5, tip: 'Use the Taylor series of cos x, or L’Hôpital twice' },
-  { q: 'Evaluate the definite integral:  ∫₁⁹ (1/√x) dx',                                                answer: 4,   tip: 'Antiderivative: 2√x' },
-  { q: 'Given f(x) = ln(x) / x, find f′(1)',                                                            answer: 1,   tip: 'Quotient rule: (1 − ln x)/x²' },
-];
-const PREMIUM_FEE = 480;
-
-function PremiumTestModal({ user, onClose, onComplete }) {
-  const already = user?.premiumTestDone;
-  const [answers,  setAnswers]  = useState(Array(PREMIUM_QUESTIONS.length).fill(''));
-  const [aiFlag,   setAiFlag]   = useState(false);
-  const [saving,   setSaving]   = useState(false);
-  const [result,   setResult]   = useState(null);   // { correct, earned, updated, ai }
-  const startRef = useRef(Date.now());
-
-  function setAnswer(i, v) {
-    setAnswers(prev => { const n = [...prev]; n[i] = v; return n; });
-  }
-
-  async function handleSubmit() {
-    const elapsedSec = (Date.now() - startRef.current) / 1000;
-    // AI heuristic: any pasted answer, or the whole test finished implausibly fast
-    const tooFast = elapsedSec < 20;
-    if (aiFlag || tooFast) {
-      setResult({ ai: true, correct: 0, earned: 0 });
-      return;
-    }
-    let correct = 0;
-    PREMIUM_QUESTIONS.forEach((qq, i) => {
-      const val = parseFloat(String(answers[i]).replace(/[^0-9.\-]/g, ''));
-      if (!Number.isNaN(val) && Math.abs(val - qq.answer) < 0.01) correct += 1;
-    });
-    const earned = correct * 200;
-    setSaving(true);
-    const updated = await awardPremiumTest(user.id, correct);
-    setSaving(false);
-    setResult({ correct, earned, updated: updated || user, ai: false });
-  }
-
-  const allFilled = answers.every(a => String(a).trim() !== '');
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="pay-modal-card" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #4C1D95, #6D28D9)' }}>
-          <div>
-            <div className="pay-modal-title">🧮 Premium Math Challenge</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>KES 200 per correct answer → premium balance</div>
-          </div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
-        </div>
-
-        <div className="pay-modal-body">
-          {already && !result && (
-            <div style={{ textAlign: 'center', padding: '10px 0' }}>
-              <div style={{ fontSize: 48, marginBottom: 8 }}>🔒</div>
-              <div style={{ fontWeight: 700, fontSize: 17, color: '#111827', marginBottom: 6 }}>You’ve already taken this challenge</div>
-              <div className="pay-amount" style={{ marginTop: 8 }}>
-                <div className="pay-amount-label">Your Premium Balance</div>
-                <div className="pay-amount-value" style={{ color: '#6D28D9' }}>KES {Number(user?.premiumBalance || 0).toLocaleString()}</div>
-                <div className="pay-amount-sub">Use it toward your KES 480 premium subscription</div>
-              </div>
-              <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #4C1D95, #6D28D9)', marginTop: 18 }} onClick={onClose}>Close</button>
-            </div>
-          )}
-
-          {!already && !result && (
-            <>
-              <div className="pay-message" style={{ borderColor: '#6D28D9', background: '#F5F3FF', marginBottom: 16 }}>
-                Solve all <strong>5 calculus problems</strong>. Each correct answer adds <strong style={{ color: '#6D28D9' }}>KES 200</strong> to your <strong>premium balance</strong> — money you can use toward the <strong>KES 480</strong> premium fee. Enter numeric answers only (e.g. <em>0.5</em>).
-                <br /><br />
-                ⚠️ <strong>Solve it yourself.</strong> Pasted answers and AI-assisted attempts are detected and earn nothing — the steps matter.
-              </div>
-
-              {PREMIUM_QUESTIONS.map((qq, i) => (
-                <div key={i} style={{ marginBottom: 14 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 6 }}>
-                    {i + 1}. {qq.q}
-                  </div>
-                  <input
-                    className="pay-phone-input"
-                    style={{ marginBottom: 0 }}
-                    inputMode="decimal"
-                    value={answers[i]}
-                    onChange={e => setAnswer(i, e.target.value)}
-                    onPaste={e => { e.preventDefault(); setAiFlag(true); }}
-                    placeholder="Your answer (number)"
-                  />
-                </div>
-              ))}
-
-              <button
-                className="pay-btn"
-                style={{ background: 'linear-gradient(135deg, #4C1D95, #6D28D9)', marginTop: 8, opacity: allFilled ? 1 : 0.55 }}
-                onClick={handleSubmit}
-                disabled={!allFilled || saving}
-              >
-                {saving ? <><span className="spinner" /> Marking…</> : '📝 Submit Answers'}
-              </button>
-              <div className="pay-secure">🔐 Your work is checked instantly • no AI allowed</div>
-            </>
-          )}
-
-          {result && result.ai && (
-            <div style={{ textAlign: 'center', padding: '10px 0' }}>
-              <div style={{ fontSize: 52, marginBottom: 8 }}>🤖🚫</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: '#DC2626', marginBottom: 6 }}>
-                AI / Pasted Answer Detected
-              </div>
-              <div className="pay-message" style={{ borderColor: '#FECACA', background: '#FEF2F2', textAlign: 'left', marginTop: 12, color: '#7F1D1D' }}>
-                This challenge must be solved by hand — the steps matter. We detected pasted input or an impossibly fast completion, so <strong>no premium balance was awarded</strong>. Work through the calculus yourself and it will count.
-              </div>
-              <button className="pay-btn" style={{ background: '#DC2626', marginTop: 18 }} onClick={onClose}>Close</button>
-            </div>
-          )}
-
-          {result && !result.ai && (
-            <div style={{ textAlign: 'center', padding: '10px 0' }}>
-              <div style={{ fontSize: 52, marginBottom: 8 }}>{result.earned >= PREMIUM_FEE ? '🏆' : result.earned > 0 ? '🎯' : '📚'}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 800, color: '#6D28D9', marginBottom: 4 }}>
-                +KES {result.earned}
-              </div>
-              <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 6 }}>
-                You solved <strong>{result.correct} of {PREMIUM_QUESTIONS.length}</strong> correctly.
-              </div>
-              <div className="pay-amount" style={{ marginTop: 8 }}>
-                <div className="pay-amount-label">Premium Balance</div>
-                <div className="pay-amount-value" style={{ color: '#6D28D9' }}>KES {Number(result.updated?.premiumBalance || 0).toLocaleString()}</div>
-                <div className="pay-amount-sub">
-                  {Number(result.updated?.premiumBalance || 0) >= PREMIUM_FEE
-                    ? 'Enough to unlock premium! Open “Upgrade to Premium”.'
-                    : `Add KES ${(PREMIUM_FEE - Number(result.updated?.premiumBalance || 0)).toLocaleString()} more to reach the KES 480 premium fee.`}
-                </div>
-              </div>
-              <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #4C1D95, #6D28D9)', marginTop: 18 }} onClick={() => onComplete(result.updated)}>
-                Continue →
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Upgrade to Premium Modal (pay with premium balance or top up) ───────────
-function UpgradeModal({ user, onClose, onUpgraded }) {
-  const pbal   = Number(user?.premiumBalance || 0);
-  const enough = pbal >= PREMIUM_FEE;
-  const topup  = Math.max(0, PREMIUM_FEE - pbal);
-
-  const [step,     setStep]     = useState('info');   // info → (password | topup) → success
-  const [password, setPassword] = useState('');
-  const [phone,    setPhone]    = useState(user?.phone || '');
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [doneUser, setDoneUser] = useState(null);
-
-  async function payWithBalance() {
-    if (!password) { setError('Please enter your password.'); return; }
-    if (password !== user.password) { setError('Incorrect password. Please try again.'); return; }
-    setError('');
-    setLoading(true);
-    const updated = await upgradePremiumWithBalance(user.id);
-    setLoading(false);
-    if (updated) { setDoneUser(updated); setStep('success'); }
-    else setError('Upgrade failed. Please try again.');
-  }
-
-  async function payTopup() {
-    if (!phone.trim()) { setError('Enter your phone number.'); return; }
-    setError('');
-    setLoading(true);
-    try {
-      const res  = await fetch('/api/paystack/initialize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: topup, phone, plan: 'premium_topup' }),
-      });
-      const data = await res.json();
-      if (data.status) { window.location.href = data.data.authorization_url; return; }
-      setError('Payment could not be started. Please try again.');
-    } catch {
-      setError('Network error. Please try again.');
-    }
-    setLoading(false);
-  }
-
-  return (
-    <div className="modal-overlay" onClick={step === 'success' ? undefined : onClose}>
-      <div className="pay-modal-card" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>
-          <div>
-            <div className="pay-modal-title">⭐ PREMIUM</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>KES 480 / month • Required to submit tasks</div>
-          </div>
-          {step !== 'success' && (
-            <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
-          )}
-        </div>
-        <div className="pay-modal-body">
-          {/* Premium balance summary */}
-          <div className="pay-amount" style={{ marginBottom: 16 }}>
-            <div className="pay-amount-label">Your Premium Balance (from the Math Challenge)</div>
-            <div className="pay-amount-value" style={{ color: enough ? '#059669' : '#6D28D9' }}>KES {pbal.toLocaleString()}</div>
-            <div className="pay-amount-sub">Premium fee: KES 480{enough ? ' • fully covered!' : ` • short by KES ${topup}`}</div>
-          </div>
-
-          {step === 'info' && (
-            <>
-              <div className="premium-features">
-                {[
-                  ['🚀', 'Unlimited task bidding'],
-                  ['💰', 'Priority payouts & withdrawals'],
-                  ['📊', 'Advanced earnings dashboard'],
-                  ['🎯', 'Exclusive high-paying tasks'],
-                  ['🏆', 'Premium badge on your profile'],
-                  ['📞', 'Dedicated support line'],
-                ].map(([icon, text]) => (
-                  <div key={text} className="premium-feature-item">
-                    <span>{icon}</span><span>{text}</span>
-                  </div>
-                ))}
-              </div>
-              {enough ? (
-                <button className="pay-btn" style={{ marginTop: 18, background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }} onClick={() => { setError(''); setStep('password'); }}>
-                  ⭐ Use my premium balance (KES 480)
-                </button>
-              ) : (
-                <button className="pay-btn" style={{ marginTop: 18 }} onClick={() => { setError(''); setStep('topup'); }}>
-                  💳 Add KES {topup} & Upgrade
-                </button>
-              )}
-              <div className="pay-secure" style={{ marginTop: 10 }}>🧮 Earn more in the Premium Math Challenge to cut this cost</div>
-            </>
-          )}
-
-          {step === 'password' && (
-            <>
-              <div className="pay-message" style={{ marginBottom: 16 }}>
-                Enter your account password to confirm upgrading to premium using your <strong>premium balance</strong> (KES 480 will be deducted).
-              </div>
-              <div className="pay-phone-label">Password</div>
-              <input
-                className="pay-phone-input"
-                type="password"
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError(''); }}
-                placeholder="Enter your password"
-                onKeyDown={e => { if (e.key === 'Enter') payWithBalance(); }}
-                style={{ borderColor: error ? '#ef4444' : undefined }}
-              />
-              {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
-              <button className="pay-btn" style={{ marginTop: 18, background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }} onClick={payWithBalance} disabled={loading}>
-                {loading ? <><span className="spinner" /> Upgrading…</> : '🔒 Confirm & Upgrade'}
-              </button>
-              <div className="pay-secure">🔐 KES 480 will be deducted from your premium balance</div>
-            </>
-          )}
-
-          {step === 'topup' && (
-            <>
-              <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 16 }}>
-                Your premium balance is <strong>KES {pbal}</strong>, but premium costs <strong>KES 480</strong>. Add <strong style={{ color: '#1D4ED8' }}>KES {topup}</strong> via Paystack to unlock premium.
-              </div>
-              <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
-              <input
-                className="pay-phone-input"
-                value={phone}
-                onChange={e => { setPhone(e.target.value); setError(''); }}
-                placeholder="+254 7XX XXX XXX"
-                style={{ borderColor: error ? '#ef4444' : undefined }}
-              />
-              {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
-              <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
-                {loading ? <><span className="spinner" /> Processing…</> : `🔒 Add KES ${topup} via Paystack`}
-              </button>
-              <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
-            </>
-          )}
-
-          {step === 'success' && (
-            <div style={{ textAlign: 'center', padding: '10px 0' }}>
-              <div style={{ fontSize: 52, marginBottom: 8 }}>⭐</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: '#125C37', marginBottom: 6 }}>
-                Premium Activated!
-              </div>
-              <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', textAlign: 'left', marginTop: 12 }}>
-                You’re now a premium member and can submit tasks. Remaining premium balance: <strong>KES {Number(doneUser?.premiumBalance || 0).toLocaleString()}</strong>.
-              </div>
-              <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)', marginTop: 18 }} onClick={() => onUpgraded(doneUser)}>
-                🚀 Continue
               </button>
             </div>
           )}
@@ -1694,7 +1275,7 @@ function ActivityFeed({ withdrawals, pending }) {
 function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onPremiumTest, onLogout }) {
   const items = [
     { icon: '🏠', label: 'Dashboard',            action: () => { onClose(); } },
-    { icon: '🧮', label: 'Premium Math Challenge', action: () => { onClose(); onPremiumTest(); } },
+    { icon: '🧠', label: 'Premium Skills Test', action: () => { onClose(); onPremiumTest(); } },
     { icon: '⭐', label: 'Upgrade to Premium',   action: () => { onClose(); onUpgrade(); } },
     { icon: '✅', label: 'Awarded Tasks',         action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: '📲', label: 'Withdraw with M-Pesa', action: () => { onClose(); onMpesaWithdraw(); } },
@@ -1741,8 +1322,8 @@ function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithd
             style={{ width: '100%', textAlign: 'left', border: '1px solid #DDD6FE', background: '#F5F3FF', borderRadius: 12, padding: '10px 12px', marginBottom: 14, cursor: 'pointer' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 11, color: '#6D28D9', fontWeight: 700 }}>🧮 Premium Balance</span>
-              <span style={{ fontSize: 11, color: '#6D28D9' }}>Math Challenge ›</span>
+              <span style={{ fontSize: 11, color: '#6D28D9', fontWeight: 700 }}>🧠 Premium Balance</span>
+              <span style={{ fontSize: 11, color: '#6D28D9' }}>Skills Test ›</span>
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: '#6D28D9', marginTop: 2 }}>
               KES {(user?.premiumBalance || 0).toLocaleString()}
@@ -1765,8 +1346,6 @@ export default function Dashboard() {
   const [mounted, setMounted] = useState(false);
 
   const [selectedTask,        setSelectedTask]        = useState(null);
-  const [payTask,             setPayTask]             = useState(null);
-  const [showUpgrade,         setShowUpgrade]         = useState(false);
   const [showMpesaWithdraw,   setShowMpesaWithdraw]   = useState(false);
   const [showOtherWithdraw,   setShowOtherWithdraw]   = useState(false);
   const [mpesaInitialStep,    setMpesaInitialStep]    = useState('fee');
@@ -1774,7 +1353,6 @@ export default function Dashboard() {
   const [showMenu,            setShowMenu]            = useState(false);
   const [showTraining,        setShowTraining]        = useState(false);
   const [showQuiz,            setShowQuiz]            = useState(false);
-  const [showPremiumTest,     setShowPremiumTest]     = useState(false);
 
   const [liveWithdrawals, setLiveWithdrawals] = useState([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState([]);
@@ -1829,20 +1407,14 @@ export default function Dashboard() {
 
   const handleLogout       = useCallback(() => { logout(); router.push('/'); }, [router]);
   const handleViewTask     = useCallback(task => {
-    if (!user?.activated) { setPayTask(task); } else { setSelectedTask(task); }
-  }, [user]);
-  const handleBidClick     = useCallback(task => { setSelectedTask(null); setPayTask(task); }, []);
+    if (!user?.activated) { router.push('/activate'); } else { setSelectedTask(task); }
+  }, [user, router]);
+  const handleBidClick     = useCallback(() => { setSelectedTask(null); router.push('/activate'); }, [router]);
 
-  function handleSubmitTask(task) {
-    if (!user.premium) {
-      setShowUpgrade(true);
-      return;
-    }
-    const subject = encodeURIComponent('Task Submission: ' + task.title);
-    const body    = encodeURIComponent(
-      `Hello Business Hub,\n\nPlease submit your tasks on email for review.\n\nTask: ${task.title}\nCategory: ${task.category}\nPayment: KES ${task.payment.toLocaleString()}\n\nYour submission:\n\n[Add your work here]\n\nSubmitted by: ${user?.fullName || ''}\nEmail: ${user?.email || ''}`
-    );
-    window.location.href = `mailto:businesshub.comke@gmail.com?subject=${subject}&body=${body}`;
+  async function handleSubmitTask(task) {
+    if (!user.premium) { router.push('/premium'); return; }
+    const emailed = await sendTaskSubmission(user, task);
+    if (emailed) alert('✅ Submitted! A confirmation email has been sent to you, and our team has been notified.');
   }
 
   const filteredTasks = (TASKS || []).filter(t => {
@@ -1954,7 +1526,7 @@ export default function Dashboard() {
 
         {/* Quick Action Tiles */}
         <div className="quick-actions">
-          <button className="quick-action-card" onClick={() => setShowUpgrade(true)}>
+          <button className="quick-action-card" onClick={() => router.push('/premium')}>
             <span className="quick-action-icon">⭐</span>
             <span className="quick-action-label">{user?.premium ? 'Renew Premium' : 'Upgrade Premium'}</span>
           </button>
@@ -2062,28 +1634,7 @@ export default function Dashboard() {
       )}
 
       {selectedTask && (
-        <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} onUpgradeClick={() => setShowUpgrade(true)} />
-      )}
-      {payTask && !user.activated && (
-        <ActivationModal
-          user={user}
-          onClose={() => setPayTask(null)}
-          onActivated={(u) => { if (u) setUser(u); setPayTask(null); }}
-        />
-      )}
-      {showUpgrade  && (
-        <UpgradeModal
-          user={user}
-          onClose={() => setShowUpgrade(false)}
-          onUpgraded={(u) => { if (u) setUser(u); setShowUpgrade(false); }}
-        />
-      )}
-      {showPremiumTest && (
-        <PremiumTestModal
-          user={user}
-          onClose={() => setShowPremiumTest(false)}
-          onComplete={(u) => { if (u) setUser(u); setShowPremiumTest(false); }}
-        />
+        <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} onUpgradeClick={() => router.push('/premium')} />
       )}
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
       {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}
@@ -2104,12 +1655,12 @@ export default function Dashboard() {
         <HamburgerMenu
           user={user}
           onClose={() => setShowMenu(false)}
-          onUpgrade={() => setShowUpgrade(true)}
+          onUpgrade={() => router.push('/premium')}
           onMpesaWithdraw={() => setShowMpesaWithdraw(true)}
           onOtherWithdraw={() => setShowOtherWithdraw(true)}
           onReferral={() => setShowReferral(true)}
           onTraining={() => setShowTraining(true)}
-          onPremiumTest={() => setShowPremiumTest(true)}
+          onPremiumTest={() => router.push('/skills-test')}
           onLogout={handleLogout}
         />
       )}
