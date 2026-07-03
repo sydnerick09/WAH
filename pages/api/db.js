@@ -26,6 +26,9 @@ function norm(row) {
   const suspendedAt   = subs._suspendedAt ?? null;
   const suspendReason = subs._suspendReason ?? '';
 
+  const quiz  = subs._quiz  ?? null;
+  const ptest = subs._ptest ?? null;
+
   return {
     id:               row.id,
     fullName:         row.full_name        ?? '',
@@ -49,6 +52,12 @@ function norm(row) {
     suspended,
     suspendedAt,
     suspendReason,
+    quizDone:        quiz !== null,
+    quizScore:       Number(quiz?.score  ?? 0),
+    quizEarned:      Number(quiz?.earned ?? 0),
+    premiumBalance:  Number(subs._pbal   ?? 0),
+    premiumTestDone: ptest !== null,
+    premiumTestScore: Number(ptest?.score ?? 0),
   };
 }
 
@@ -181,6 +190,90 @@ export default async function handler(req, res) {
           }
         }
 
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'awardQuiz': {
+        const { userId, correctCount } = p;
+        const count  = Math.max(0, Math.min(5, Number(correctCount) || 0));
+        const earned = count * 10;
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+
+        const subs = { ...(u.task_submissions || {}) };
+        if (subs._quiz) return res.json({ data: norm(u) });   // already claimed
+
+        subs._quiz = { score: count, earned, at: Date.now() };
+        const { data: updated } = await db.from('users').update({
+          task_submissions: subs,
+          balance:          (u.balance || 0) + earned,
+        }).eq('id', userId).select().single();
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'awardPremiumTest': {
+        const { userId, correctCount } = p;
+        const count  = Math.max(0, Math.min(5, Number(correctCount) || 0));
+        const earned = count * 200;
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+
+        const subs = { ...(u.task_submissions || {}) };
+        if (subs._ptest) return res.json({ data: norm(u) });   // already taken
+
+        subs._ptest = { score: count, earned, at: Date.now() };
+        subs._pbal  = Number(subs._pbal || 0) + earned;
+        const { data: updated } = await db.from('users').update({
+          task_submissions: subs,
+        }).eq('id', userId).select().single();
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'upgradePremiumWithBalance': {
+        const { userId } = p;
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+
+        const subs     = { ...(u.task_submissions || {}) };
+        const pbal     = Number(subs._pbal || 0);
+        const consumed = Math.min(pbal, 480);
+        subs._pbal     = pbal - consumed;
+        const { data: updated } = await db.from('users').update({
+          premium:          true,
+          premium_paid_at:  Date.now(),
+          task_submissions: subs,
+        }).eq('id', userId).select().single();
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'activateWithBalance': {
+        const { userId } = p;
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+
+        const balance  = Number(u.balance || 0);
+        const consumed = Math.min(balance, 50);
+        const subs = { ...(u.task_submissions || {}), _act: Date.now() };
+        const { data: updated } = await db.from('users').update({
+          activated:        true,
+          task_submissions: subs,
+          balance:          balance - consumed,
+        }).eq('id', userId).select().single();
+
+        if (u.referred_by && u.referred_by !== userId) {
+          const { data: ref } = await db.from('users')
+            .select('balance,referral_count').eq('id', u.referred_by).maybeSingle();
+          if (ref) {
+            await db.from('users').update({
+              balance:        (ref.balance || 0) + 132,
+              referral_count: (ref.referral_count || 0) + 1,
+            }).eq('id', u.referred_by);
+          }
+        }
         return res.json({ data: norm(updated) });
       }
 

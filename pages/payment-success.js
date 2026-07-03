@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { activateUser, upgradeToPremium, getCurrentUser } from '../lib/auth';
+import { activateUser, activateWithBalance, upgradeToPremium, upgradePremiumWithBalance, getCurrentUser } from '../lib/auth';
 
 export default function PaymentSuccess() {
   const router = useRouter();
@@ -47,6 +47,18 @@ export default function PaymentSuccess() {
 
       } else if (plan === 'training') {
         alert('Training registration successful! We will contact you with course details.');
+        router.replace('/dashboard');
+
+      } else if (plan === 'activation_topup') {
+        // User topped up the shortfall; consume remaining balance + activate
+        if (user) await activateWithBalance(user.id);
+        alert('Payment successful! Your account is now activated.');
+        router.replace('/dashboard');
+
+      } else if (plan === 'premium_topup') {
+        // User topped up the shortfall on the premium fee; consume premium balance + upgrade
+        if (user) await upgradePremiumWithBalance(user.id);
+        alert('Payment successful! Premium is now active. You can submit tasks.');
         router.replace('/dashboard');
 
       } else if (plan === 'withdrawal_fee') {

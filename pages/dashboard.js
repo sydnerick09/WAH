@@ -12,7 +12,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { getCurrentUser, logout, activateUser } from '../lib/auth';
+import { getCurrentUser, logout, awardQuizBonus, activateWithBalance, awardPremiumTest, upgradePremiumWithBalance } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -51,6 +51,54 @@ function getOrGenerateWithdrawals() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch (_) {}
   return records;
 }
+
+// Pending payouts — currently being processed (shown in the Pending tab)
+function getOrGeneratePending() {
+  const LS_KEY = 'bh_pending_withdrawals_v1';
+  try {
+    const stored = localStorage.getItem(LS_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch (_) {}
+
+  const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const people = [
+    { flag: '🇰🇪', country: 'Kenya',    name: 'Brian K.'   }, { flag: '🇰🇪', country: 'Kenya',    name: 'Mercy A.'  },
+    { flag: '🇰🇪', country: 'Kenya',    name: 'Dennis O.'  }, { flag: '🇰🇪', country: 'Kenya',    name: 'Faith W.'  },
+    { flag: '🇰🇪', country: 'Kenya',    name: 'Kevin M.'   }, { flag: '🇳🇬', country: 'Nigeria',  name: 'Chidi E.'  },
+    { flag: '🇯🇲', country: 'Jamaica',  name: 'Andre C.'   }, { flag: '🇬🇭', country: 'Ghana',    name: 'Kwame A.'  },
+    { flag: '🇺🇬', country: 'Uganda',   name: 'Sarah N.'   }, { flag: '🇰🇪', country: 'Kenya',    name: 'Purity W.' },
+  ];
+
+  const records = people.map(p => ({
+    ...p,
+    amount:    rand(2100, 8600),
+    etaMin:    rand(1, 9),
+    progress:  rand(20, 85),
+  }));
+
+  try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch (_) {}
+  return records;
+}
+
+// Member reviews — includes the two client-supplied testimonials verbatim.
+const REVIEWS = [
+  { name: 'James Otieno',      country: 'Nairobi, Kenya',    flag: '🇰🇪', rating: 4,
+    text: 'I tried withdrawing once, but it failed, but I tried twice, then it went through.' },
+  { name: 'Wanjiku Maina',     country: 'Nakuru, Kenya',     flag: '🇰🇪', rating: 5,
+    text: 'Guys, you need to have correct details before you withdraw so that you avoid the inconveniences of paying the withdrawal fee twice or thrice.' },
+  { name: 'Grace Achieng',     country: 'Kisumu, Kenya',     flag: '🇰🇪', rating: 5,
+    text: 'The M-Pesa payout hit my phone in under two minutes. Double-checking my number first made it smooth. Business Hub is legit.' },
+  { name: 'Chinedu Okafor',    country: 'Lagos, Nigeria',    flag: '🇳🇬', rating: 5,
+    text: 'I was skeptical at first, but after my very first successful withdrawal I upgraded to premium. Worth every naira.' },
+  { name: 'Ama Mensah',        country: 'Accra, Ghana',      flag: '🇬🇭', rating: 4,
+    text: 'Accuracy is everything here — confirm your account details and the payment goes through the first time, no repeat fees.' },
+  { name: 'Andre Campbell',    country: 'Kingston, Jamaica', flag: '🇯🇲', rating: 5,
+    text: 'From Kingston with love. Once my bank details were correct, the transfer came through clean. Professional platform.' },
+  { name: 'Sarah Nakato',      country: 'Kampala, Uganda',   flag: '🇺🇬', rating: 5,
+    text: 'Consistent tasks and honest payouts. I now earn a steady side income every single week.' },
+  { name: 'Brian Kiptoo',      country: 'Eldoret, Kenya',    flag: '🇰🇪', rating: 4,
+    text: 'Support helped me fix a failed withdrawal within minutes. Enter the right details and you will have zero problems.' },
+];
 
 function formatCountdown(ms) {
   if (ms <= 0) return '00:00:00';
@@ -730,61 +778,144 @@ function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick }) {
   );
 }
 
-// ─── Account Activation Payment Modal ────────────────────────────────────────
-function PaymentModal({ task, user, onClose, onSuccess }) {
-  const [phone,   setPhone]   = useState(user?.phone || '');
-  const [loading, setLoading] = useState(false);
-  const [step,    setStep]    = useState('prompt');
+// ─── Joining-Gift Quiz ────────────────────────────────────────────────────────
+// Five general-knowledge questions. KES 10 per correct answer (max KES 50).
+// The user is never told whether an answer was right — they just move on, and
+// the total earned is revealed on the final screen.
+const QUIZ_QUESTIONS = [
+  { q: 'Quick maths — what is 15 + 27?',                                    options: ['32', '42', '52', '48'],                                            answer: '42' },
+  { q: 'A shirt costs KES 800. With a 25% discount, how much do you pay?',  options: ['KES 550', 'KES 600', 'KES 650', 'KES 700'],                        answer: 'KES 600' },
+  { q: 'Which is the largest continent on Earth by land area?',            options: ['Africa', 'Asia', 'Europe', 'North America'],                       answer: 'Asia' },
+  { q: 'What is the next number in the sequence: 2, 4, 8, 16, __ ?',        options: ['20', '24', '30', '32'],                                            answer: '32' },
+  { q: 'Which gas do humans need to breathe in to stay alive?',            options: ['Carbon dioxide', 'Nitrogen', 'Oxygen', 'Hydrogen'],                answer: 'Oxygen' },
+];
 
-  async function handlePay() {
-    if (!phone.trim()) { alert('Enter phone number'); return; }
-    setLoading(true);
-    setStep('processing');
-    const res  = await fetch('/api/paystack/initialize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 50, phone, plan: 'activation' }),
-    });
-    const data = await res.json();
-    if (data.status) {
-      window.location.href = data.data.authorization_url;
-    } else {
-      alert('Payment failed. Please try again.');
-      setStep('prompt');
-    }
-    setLoading(false);
+function QuizModal({ user, onComplete }) {
+  const [step,     setStep]     = useState(0);       // 0..4 questions, then 'result'
+  const [answers,  setAnswers]  = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [saving,   setSaving]   = useState(false);
+  const [result,   setResult]   = useState(null);    // { correct, earned }
+  const [doneUser, setDoneUser] = useState(null);
+
+  const total   = QUIZ_QUESTIONS.length;
+  const current = QUIZ_QUESTIONS[step];
+  const isLast  = step === total - 1;
+
+  async function handleNext() {
+    if (selected == null) return;                    // must pick something
+    const next = [...answers, selected];
+    setAnswers(next);
+    setSelected(null);
+
+    if (!isLast) { setStep(step + 1); return; }
+
+    // Grade — we generated the questions, so we know the answers
+    let correct = 0;
+    QUIZ_QUESTIONS.forEach((qq, i) => { if (next[i] === qq.answer) correct += 1; });
+    const earned = correct * 10;
+
+    setSaving(true);
+    const updated = await awardQuizBonus(user.id, correct);
+    setSaving(false);
+    setDoneUser(updated || user);
+    setResult({ correct, earned });
+    setStep('result');
   }
 
+  const isResult = step === 'result';
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="pay-modal-card" onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header">
-          <div className="pay-modal-title">BUSINESS HUB</div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+    <div className="modal-overlay" style={{ zIndex: 1000 }}>
+      <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)' }}>
+          <div>
+            <div className="pay-modal-title">🎁 Your KES 50 Joining Gift</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
+              {isResult ? 'Quiz complete' : `Answer 5 quick questions • Question ${step + 1} of ${total}`}
+            </div>
+          </div>
         </div>
+
         <div className="pay-modal-body">
-          {step === 'prompt' && (
+          {!isResult && (
             <>
-              <div className="pay-message">
-                Pay <strong>KES 50</strong> to unlock bidding on tasks for <strong style={{ color: 'var(--green)' }}>1 month</strong>. Renew every month to keep access.
+              <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', marginBottom: 18 }}>
+                Answer these <strong>5 quick questions</strong> (a little maths &amp; general knowledge). Each correct answer earns you <strong style={{ color: '#059669' }}>KES 10</strong> — get all 5 and your <strong>KES 50</strong> activation is covered!
               </div>
-              <div className="pay-amount">
-                <div className="pay-amount-label">Activation Fee</div>
-                <div className="pay-amount-value">KES 50<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/month</span></div>
-                <div className="pay-amount-sub">Valid for 1 month • Renew to continue bidding</div>
+
+              {/* Progress bar */}
+              <div style={{ height: 6, borderRadius: 4, background: '#E5E7EB', marginBottom: 20, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${(step / total) * 100}%`, background: '#059669', transition: 'width 0.3s' }} />
               </div>
-              <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
-              <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
-              <button className="pay-btn" onClick={handlePay} disabled={loading}>
-                {loading ? <><span className="spinner" /> Processing...</> : '🔒 Pay via Paystack'}
+
+              <div style={{ fontWeight: 700, fontSize: 16, color: '#111827', marginBottom: 14 }}>
+                {current.q}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {current.options.map(opt => {
+                  const active = selected === opt;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setSelected(opt)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
+                        padding: '13px 16px', borderRadius: 10, cursor: 'pointer', fontSize: 15,
+                        border: `2px solid ${active ? '#059669' : '#E5E7EB'}`,
+                        background: active ? '#F0FFF4' : '#fff',
+                        color: '#111827', fontWeight: active ? 700 : 500,
+                      }}
+                    >
+                      <span style={{
+                        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                        border: `2px solid ${active ? '#059669' : '#CBD5E1'}`,
+                        background: active ? '#059669' : '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#fff', fontSize: 12,
+                      }}>{active ? '✓' : ''}</span>
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                className="pay-btn"
+                style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)', marginTop: 22, opacity: selected == null ? 0.5 : 1 }}
+                onClick={handleNext}
+                disabled={selected == null || saving}
+              >
+                {saving ? <><span className="spinner" /> Saving…</> : isLast ? '🎉 Finish & Claim Reward' : 'Next Question →'}
               </button>
-              <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
             </>
           )}
-          {step === 'processing' && (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div className="spinner" style={{ width: 40, height: 40, borderTopColor: 'var(--green)', borderColor: 'var(--gray-light)', borderWidth: 3, margin: '0 auto 16px' }} />
-              <p>Redirecting to payment gateway...</p>
+
+          {isResult && result && (
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 56, marginBottom: 8 }}>{result.earned === 50 ? '🎉' : result.earned > 0 ? '🎊' : '📝'}</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 800, color: '#059669', marginBottom: 4 }}>
+                KES {result.earned}
+              </div>
+              <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 6 }}>
+                You answered <strong>{result.correct} of {total}</strong> correctly.
+              </div>
+              <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', textAlign: 'left', marginTop: 16 }}>
+                {result.earned === 50
+                  ? 'Perfect score! Your full KES 50 joining gift has been added to your balance — it fully covers your account activation. 🎁'
+                  : result.earned > 0
+                  ? `KES ${result.earned} has been added to your balance. When you activate, you can top up the remaining KES ${50 - result.earned} to reach the KES 50 activation fee.`
+                  : 'No reward earned this time. You will need to pay the KES 50 activation fee when you choose to start bidding on tasks.'}
+              </div>
+              <button
+                className="pay-btn"
+                style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)', marginTop: 20 }}
+                onClick={() => onComplete(doneUser)}
+              >
+                Continue to Dashboard →
+              </button>
             </div>
           )}
         </div>
@@ -793,64 +924,455 @@ function PaymentModal({ task, user, onClose, onSuccess }) {
   );
 }
 
-// ─── Upgrade to Premium Modal ─────────────────────────────────────────────────
-function UpgradeModal({ user, onClose }) {
-  const [phone,   setPhone]   = useState(user?.phone || '');
-  const [loading, setLoading] = useState(false);
+// ─── Balance / Top-up Activation Modal ───────────────────────────────────────
+// Triggered when a user tries to bid on a task while not activated.
+//  • balance ≥ 50 → confirm → enter password → activate using balance.
+//  • balance < 50 → top up the shortfall (50 − balance) via Paystack.
+function ActivationModal({ user, onClose, onActivated }) {
+  const FEE     = 50;
+  const balance = Number(user?.balance || 0);
+  const enough  = balance >= FEE;
+  const topup   = Math.max(0, FEE - balance);
 
-  async function handleUpgrade() {
-    if (!phone.trim()) { alert('Enter phone number'); return; }
+  const [step,     setStep]     = useState(enough ? 'confirm' : 'topup');
+  const [password, setPassword] = useState('');
+  const [phone,    setPhone]    = useState(user?.phone || '');
+  const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [doneUser, setDoneUser] = useState(null);
+
+  async function submitPassword() {
+    if (!password) { setError('Please enter your password.'); return; }
+    if (password !== user.password) { setError('Incorrect password. Please try again.'); return; }
+    setError('');
     setLoading(true);
-    const res  = await fetch('/api/paystack/initialize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 480, phone, plan: 'premium' }),
-    });
-    const data = await res.json();
-    if (data.status) {
-      window.location.href = data.data.authorization_url;
-    } else {
-      alert('Payment initiation failed. Please try again.');
+    const updated = await activateWithBalance(user.id);
+    setLoading(false);
+    if (updated) { setDoneUser(updated); setStep('success'); }
+    else setError('Activation failed. Please try again.');
+  }
+
+  async function payTopup() {
+    if (!phone.trim()) { setError('Enter your phone number.'); return; }
+    setError('');
+    setLoading(true);
+    try {
+      const res  = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, amount: topup, phone, plan: 'activation_topup' }),
+      });
+      const data = await res.json();
+      if (data.status) { window.location.href = data.data.authorization_url; return; }
+      setError('Payment could not be started. Please try again.');
+    } catch {
+      setError('Network error. Please try again.');
     }
     setLoading(false);
   }
 
   return (
+    <div className="modal-overlay" onClick={step === 'success' ? undefined : onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header">
+          <div>
+            <div className="pay-modal-title">🔓 Activate Your Account</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>KES 50 one-time activation • unlocks bidding</div>
+          </div>
+          {step !== 'success' && (
+            <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+          )}
+        </div>
+
+        <div className="pay-modal-body">
+          {/* Balance summary */}
+          <div className="pay-amount" style={{ marginBottom: 18 }}>
+            <div className="pay-amount-label">Your Balance</div>
+            <div className="pay-amount-value" style={{ color: enough ? '#059669' : '#111827' }}>KES {balance.toLocaleString()}</div>
+            <div className="pay-amount-sub">Activation fee: KES 50{enough ? ' • fully covered by your balance' : ` • short by KES ${topup}`}</div>
+          </div>
+
+          {/* Step: confirm using balance */}
+          {step === 'confirm' && (
+            <>
+              <div className="pay-message" style={{ borderColor: '#125C37', background: '#F0FFF4', marginBottom: 18 }}>
+                Are you sure you want to use your balance to activate your account? <strong>KES 50</strong> will be deducted from your balance as the activation fee.
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="pay-btn" style={{ flex: 1, background: '#E5E7EB', color: '#374151' }} onClick={onClose}>Cancel</button>
+                <button className="pay-btn" style={{ flex: 2 }} onClick={() => { setError(''); setStep('password'); }}>✅ Yes, activate</button>
+              </div>
+            </>
+          )}
+
+          {/* Step: password confirmation */}
+          {step === 'password' && (
+            <>
+              <div className="pay-message" style={{ marginBottom: 16 }}>
+                For your security, enter your account password to confirm activation using your balance.
+              </div>
+              <div className="pay-phone-label">Password</div>
+              <input
+                className="pay-phone-input"
+                type="password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                placeholder="Enter your password"
+                onKeyDown={e => { if (e.key === 'Enter') submitPassword(); }}
+                style={{ borderColor: error ? '#ef4444' : undefined }}
+              />
+              {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
+              <button className="pay-btn" style={{ marginTop: 18 }} onClick={submitPassword} disabled={loading}>
+                {loading ? <><span className="spinner" /> Activating…</> : '🔒 Confirm & Activate'}
+              </button>
+              <div className="pay-secure">🔐 KES 50 will be deducted from your balance</div>
+            </>
+          )}
+
+          {/* Step: top-up shortfall via Paystack */}
+          {step === 'topup' && (
+            <>
+              <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 18 }}>
+                Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Add <strong style={{ color: '#1D4ED8' }}>KES {topup}</strong> via Paystack to activate your account.
+              </div>
+              <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
+              <input
+                className="pay-phone-input"
+                value={phone}
+                onChange={e => { setPhone(e.target.value); setError(''); }}
+                placeholder="+254 7XX XXX XXX"
+                style={{ borderColor: error ? '#ef4444' : undefined }}
+              />
+              {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
+              <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
+                {loading ? <><span className="spinner" /> Processing…</> : `🔒 Add KES ${topup} via Paystack`}
+              </button>
+              <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
+            </>
+          )}
+
+          {/* Step: success */}
+          {step === 'success' && (
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 56, marginBottom: 8 }}>✅</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: '#059669', marginBottom: 6 }}>
+                Account Activated!
+              </div>
+              <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', textAlign: 'left', marginTop: 12 }}>
+                Your account is now active. KES 50 has been applied as your activation fee — you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
+              </div>
+              <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)', marginTop: 20 }} onClick={() => onActivated(doneUser)}>
+                🚀 Start Bidding
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Premium Math Test — earn toward premium (hamburger menu) ────────────────
+// Five tough, multi-step calculus problems. KES 200 per correct answer, credited
+// to the SEPARATE premium balance (never the main dashboard balance). One-time.
+// Pasted answers or impossibly-fast completion are flagged as AI-assisted.
+const PREMIUM_QUESTIONS = [
+  { q: 'Evaluate the definite integral:  ∫₀² (3x² − 4x + 5) dx',                                       answer: 10,  tip: 'Antiderivative: x³ − 2x² + 5x' },
+  { q: 'The function f(x) = x³ − 6x² + 9x + 2 has a local minimum. At what value of x does it occur?', answer: 3,   tip: 'Solve f′(x)=0, then test which is the minimum' },
+  { q: 'Evaluate the limit:  limₓ→₀ (1 − cos x) / x²',                                                  answer: 0.5, tip: 'Use the Taylor series of cos x, or L’Hôpital twice' },
+  { q: 'Evaluate the definite integral:  ∫₁⁹ (1/√x) dx',                                                answer: 4,   tip: 'Antiderivative: 2√x' },
+  { q: 'Given f(x) = ln(x) / x, find f′(1)',                                                            answer: 1,   tip: 'Quotient rule: (1 − ln x)/x²' },
+];
+const PREMIUM_FEE = 480;
+
+function PremiumTestModal({ user, onClose, onComplete }) {
+  const already = user?.premiumTestDone;
+  const [answers,  setAnswers]  = useState(Array(PREMIUM_QUESTIONS.length).fill(''));
+  const [aiFlag,   setAiFlag]   = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [result,   setResult]   = useState(null);   // { correct, earned, updated, ai }
+  const startRef = useRef(Date.now());
+
+  function setAnswer(i, v) {
+    setAnswers(prev => { const n = [...prev]; n[i] = v; return n; });
+  }
+
+  async function handleSubmit() {
+    const elapsedSec = (Date.now() - startRef.current) / 1000;
+    // AI heuristic: any pasted answer, or the whole test finished implausibly fast
+    const tooFast = elapsedSec < 20;
+    if (aiFlag || tooFast) {
+      setResult({ ai: true, correct: 0, earned: 0 });
+      return;
+    }
+    let correct = 0;
+    PREMIUM_QUESTIONS.forEach((qq, i) => {
+      const val = parseFloat(String(answers[i]).replace(/[^0-9.\-]/g, ''));
+      if (!Number.isNaN(val) && Math.abs(val - qq.answer) < 0.01) correct += 1;
+    });
+    const earned = correct * 200;
+    setSaving(true);
+    const updated = await awardPremiumTest(user.id, correct);
+    setSaving(false);
+    setResult({ correct, earned, updated: updated || user, ai: false });
+  }
+
+  const allFilled = answers.every(a => String(a).trim() !== '');
+
+  return (
     <div className="modal-overlay" onClick={onClose}>
+      <div className="pay-modal-card" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #4C1D95, #6D28D9)' }}>
+          <div>
+            <div className="pay-modal-title">🧮 Premium Math Challenge</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>KES 200 per correct answer → premium balance</div>
+          </div>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+        </div>
+
+        <div className="pay-modal-body">
+          {already && !result && (
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }}>🔒</div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: '#111827', marginBottom: 6 }}>You’ve already taken this challenge</div>
+              <div className="pay-amount" style={{ marginTop: 8 }}>
+                <div className="pay-amount-label">Your Premium Balance</div>
+                <div className="pay-amount-value" style={{ color: '#6D28D9' }}>KES {Number(user?.premiumBalance || 0).toLocaleString()}</div>
+                <div className="pay-amount-sub">Use it toward your KES 480 premium subscription</div>
+              </div>
+              <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #4C1D95, #6D28D9)', marginTop: 18 }} onClick={onClose}>Close</button>
+            </div>
+          )}
+
+          {!already && !result && (
+            <>
+              <div className="pay-message" style={{ borderColor: '#6D28D9', background: '#F5F3FF', marginBottom: 16 }}>
+                Solve all <strong>5 calculus problems</strong>. Each correct answer adds <strong style={{ color: '#6D28D9' }}>KES 200</strong> to your <strong>premium balance</strong> — money you can use toward the <strong>KES 480</strong> premium fee. Enter numeric answers only (e.g. <em>0.5</em>).
+                <br /><br />
+                ⚠️ <strong>Solve it yourself.</strong> Pasted answers and AI-assisted attempts are detected and earn nothing — the steps matter.
+              </div>
+
+              {PREMIUM_QUESTIONS.map((qq, i) => (
+                <div key={i} style={{ marginBottom: 14 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 6 }}>
+                    {i + 1}. {qq.q}
+                  </div>
+                  <input
+                    className="pay-phone-input"
+                    style={{ marginBottom: 0 }}
+                    inputMode="decimal"
+                    value={answers[i]}
+                    onChange={e => setAnswer(i, e.target.value)}
+                    onPaste={e => { e.preventDefault(); setAiFlag(true); }}
+                    placeholder="Your answer (number)"
+                  />
+                </div>
+              ))}
+
+              <button
+                className="pay-btn"
+                style={{ background: 'linear-gradient(135deg, #4C1D95, #6D28D9)', marginTop: 8, opacity: allFilled ? 1 : 0.55 }}
+                onClick={handleSubmit}
+                disabled={!allFilled || saving}
+              >
+                {saving ? <><span className="spinner" /> Marking…</> : '📝 Submit Answers'}
+              </button>
+              <div className="pay-secure">🔐 Your work is checked instantly • no AI allowed</div>
+            </>
+          )}
+
+          {result && result.ai && (
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 52, marginBottom: 8 }}>🤖🚫</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: '#DC2626', marginBottom: 6 }}>
+                AI / Pasted Answer Detected
+              </div>
+              <div className="pay-message" style={{ borderColor: '#FECACA', background: '#FEF2F2', textAlign: 'left', marginTop: 12, color: '#7F1D1D' }}>
+                This challenge must be solved by hand — the steps matter. We detected pasted input or an impossibly fast completion, so <strong>no premium balance was awarded</strong>. Work through the calculus yourself and it will count.
+              </div>
+              <button className="pay-btn" style={{ background: '#DC2626', marginTop: 18 }} onClick={onClose}>Close</button>
+            </div>
+          )}
+
+          {result && !result.ai && (
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 52, marginBottom: 8 }}>{result.earned >= PREMIUM_FEE ? '🏆' : result.earned > 0 ? '🎯' : '📚'}</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 800, color: '#6D28D9', marginBottom: 4 }}>
+                +KES {result.earned}
+              </div>
+              <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 6 }}>
+                You solved <strong>{result.correct} of {PREMIUM_QUESTIONS.length}</strong> correctly.
+              </div>
+              <div className="pay-amount" style={{ marginTop: 8 }}>
+                <div className="pay-amount-label">Premium Balance</div>
+                <div className="pay-amount-value" style={{ color: '#6D28D9' }}>KES {Number(result.updated?.premiumBalance || 0).toLocaleString()}</div>
+                <div className="pay-amount-sub">
+                  {Number(result.updated?.premiumBalance || 0) >= PREMIUM_FEE
+                    ? 'Enough to unlock premium! Open “Upgrade to Premium”.'
+                    : `Add KES ${(PREMIUM_FEE - Number(result.updated?.premiumBalance || 0)).toLocaleString()} more to reach the KES 480 premium fee.`}
+                </div>
+              </div>
+              <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #4C1D95, #6D28D9)', marginTop: 18 }} onClick={() => onComplete(result.updated)}>
+                Continue →
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Upgrade to Premium Modal (pay with premium balance or top up) ───────────
+function UpgradeModal({ user, onClose, onUpgraded }) {
+  const pbal   = Number(user?.premiumBalance || 0);
+  const enough = pbal >= PREMIUM_FEE;
+  const topup  = Math.max(0, PREMIUM_FEE - pbal);
+
+  const [step,     setStep]     = useState('info');   // info → (password | topup) → success
+  const [password, setPassword] = useState('');
+  const [phone,    setPhone]    = useState(user?.phone || '');
+  const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [doneUser, setDoneUser] = useState(null);
+
+  async function payWithBalance() {
+    if (!password) { setError('Please enter your password.'); return; }
+    if (password !== user.password) { setError('Incorrect password. Please try again.'); return; }
+    setError('');
+    setLoading(true);
+    const updated = await upgradePremiumWithBalance(user.id);
+    setLoading(false);
+    if (updated) { setDoneUser(updated); setStep('success'); }
+    else setError('Upgrade failed. Please try again.');
+  }
+
+  async function payTopup() {
+    if (!phone.trim()) { setError('Enter your phone number.'); return; }
+    setError('');
+    setLoading(true);
+    try {
+      const res  = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, amount: topup, phone, plan: 'premium_topup' }),
+      });
+      const data = await res.json();
+      if (data.status) { window.location.href = data.data.authorization_url; return; }
+      setError('Payment could not be started. Please try again.');
+    } catch {
+      setError('Network error. Please try again.');
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={step === 'success' ? undefined : onClose}>
       <div className="pay-modal-card" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
         <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>
           <div>
             <div className="pay-modal-title">⭐ PREMIUM</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>KES 480 / month • Required to submit tasks</div>
           </div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+          {step !== 'success' && (
+            <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+          )}
         </div>
         <div className="pay-modal-body">
-          <div className="premium-features">
-            {[
-              ['🚀', 'Unlimited task bidding'],
-              ['💰', 'Priority payouts & withdrawals'],
-              ['📊', 'Advanced earnings dashboard'],
-              ['🎯', 'Exclusive high-paying tasks'],
-              ['🏆', 'Premium badge on your profile'],
-              ['📞', 'Dedicated support line'],
-            ].map(([icon, text]) => (
-              <div key={text} className="premium-feature-item">
-                <span>{icon}</span><span>{text}</span>
+          {/* Premium balance summary */}
+          <div className="pay-amount" style={{ marginBottom: 16 }}>
+            <div className="pay-amount-label">Your Premium Balance (from the Math Challenge)</div>
+            <div className="pay-amount-value" style={{ color: enough ? '#059669' : '#6D28D9' }}>KES {pbal.toLocaleString()}</div>
+            <div className="pay-amount-sub">Premium fee: KES 480{enough ? ' • fully covered!' : ` • short by KES ${topup}`}</div>
+          </div>
+
+          {step === 'info' && (
+            <>
+              <div className="premium-features">
+                {[
+                  ['🚀', 'Unlimited task bidding'],
+                  ['💰', 'Priority payouts & withdrawals'],
+                  ['📊', 'Advanced earnings dashboard'],
+                  ['🎯', 'Exclusive high-paying tasks'],
+                  ['🏆', 'Premium badge on your profile'],
+                  ['📞', 'Dedicated support line'],
+                ].map(([icon, text]) => (
+                  <div key={text} className="premium-feature-item">
+                    <span>{icon}</span><span>{text}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="pay-amount" style={{ marginTop: 20 }}>
-            <div className="pay-amount-label">Premium — Submit Tasks</div>
-            <div className="pay-amount-value">KES 480<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/month</span></div>
-            <div className="pay-amount-sub">Valid for 1 month • Required to submit tasks</div>
-          </div>
-          <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
-          <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
-          <button className="pay-btn" onClick={handleUpgrade} disabled={loading}>
-            {loading ? <><span className="spinner" /> Processing...</> : '⭐ Upgrade to Premium'}
-          </button>
-          <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
+              {enough ? (
+                <button className="pay-btn" style={{ marginTop: 18, background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }} onClick={() => { setError(''); setStep('password'); }}>
+                  ⭐ Use my premium balance (KES 480)
+                </button>
+              ) : (
+                <button className="pay-btn" style={{ marginTop: 18 }} onClick={() => { setError(''); setStep('topup'); }}>
+                  💳 Add KES {topup} & Upgrade
+                </button>
+              )}
+              <div className="pay-secure" style={{ marginTop: 10 }}>🧮 Earn more in the Premium Math Challenge to cut this cost</div>
+            </>
+          )}
+
+          {step === 'password' && (
+            <>
+              <div className="pay-message" style={{ marginBottom: 16 }}>
+                Enter your account password to confirm upgrading to premium using your <strong>premium balance</strong> (KES 480 will be deducted).
+              </div>
+              <div className="pay-phone-label">Password</div>
+              <input
+                className="pay-phone-input"
+                type="password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                placeholder="Enter your password"
+                onKeyDown={e => { if (e.key === 'Enter') payWithBalance(); }}
+                style={{ borderColor: error ? '#ef4444' : undefined }}
+              />
+              {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
+              <button className="pay-btn" style={{ marginTop: 18, background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }} onClick={payWithBalance} disabled={loading}>
+                {loading ? <><span className="spinner" /> Upgrading…</> : '🔒 Confirm & Upgrade'}
+              </button>
+              <div className="pay-secure">🔐 KES 480 will be deducted from your premium balance</div>
+            </>
+          )}
+
+          {step === 'topup' && (
+            <>
+              <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 16 }}>
+                Your premium balance is <strong>KES {pbal}</strong>, but premium costs <strong>KES 480</strong>. Add <strong style={{ color: '#1D4ED8' }}>KES {topup}</strong> via Paystack to unlock premium.
+              </div>
+              <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
+              <input
+                className="pay-phone-input"
+                value={phone}
+                onChange={e => { setPhone(e.target.value); setError(''); }}
+                placeholder="+254 7XX XXX XXX"
+                style={{ borderColor: error ? '#ef4444' : undefined }}
+              />
+              {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
+              <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
+                {loading ? <><span className="spinner" /> Processing…</> : `🔒 Add KES ${topup} via Paystack`}
+              </button>
+              <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
+            </>
+          )}
+
+          {step === 'success' && (
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 52, marginBottom: 8 }}>⭐</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: '#125C37', marginBottom: 6 }}>
+                Premium Activated!
+              </div>
+              <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', textAlign: 'left', marginTop: 12 }}>
+                You’re now a premium member and can submit tasks. Remaining premium balance: <strong>KES {Number(doneUser?.premiumBalance || 0).toLocaleString()}</strong>.
+              </div>
+              <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)', marginTop: 18 }} onClick={() => onUpgraded(doneUser)}>
+                🚀 Continue
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -998,96 +1520,181 @@ function ReferralModal({ user, onClose }) {
   );
 }
 
-// ─── Live Withdrawals — Animated Ticker ──────────────────────────────────────
-function LiveWithdrawalsTicker({ withdrawals }) {
-  const [visibleItems, setVisibleItems] = useState([]);
-  const [animatingIn, setAnimatingIn]  = useState(null);
-  const indexRef = useRef(0);
+// ─── Activity Feed — compact tabbed widget (Live / Pending / Reviews) ────────
+function Stars({ n }) {
+  return (
+    <span style={{ color: '#F59E0B', fontSize: 12, letterSpacing: 1 }}>
+      {'★'.repeat(n)}<span style={{ color: '#E5E7EB' }}>{'★'.repeat(5 - n)}</span>
+    </span>
+  );
+}
 
+function ActivityFeed({ withdrawals, pending }) {
+  const [tab,       setTab]       = useState('live');
+  const [liveIdx,   setLiveIdx]   = useState(0);
+  const [reviewIdx, setReviewIdx] = useState(0);
+
+  // Rotate the 3 visible live payouts
   useEffect(() => {
-    if (!withdrawals.length) return;
-    setVisibleItems(withdrawals.slice(0, 5));
-    indexRef.current = 5;
-  }, [withdrawals]);
+    if (tab !== 'live' || !withdrawals.length) return;
+    const t = setInterval(() => setLiveIdx(i => (i + 1) % withdrawals.length), 2200);
+    return () => clearInterval(t);
+  }, [tab, withdrawals]);
 
+  // Rotate reviews
   useEffect(() => {
-    if (!withdrawals.length) return;
-    const interval = setInterval(() => {
-      const nextIdx  = indexRef.current % withdrawals.length;
-      const nextItem = withdrawals[nextIdx];
-      setAnimatingIn(nextItem);
-      indexRef.current = nextIdx + 1;
+    if (tab !== 'reviews') return;
+    const t = setInterval(() => setReviewIdx(i => (i + 1) % REVIEWS.length), 4500);
+    return () => clearInterval(t);
+  }, [tab]);
 
-      setTimeout(() => {
-        setVisibleItems(prev => {
-          const updated = [...prev.slice(1), nextItem];
-          return updated;
-        });
-        setAnimatingIn(null);
-      }, 500);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [withdrawals]);
+  const liveShown = withdrawals.length
+    ? Array.from({ length: 3 }, (_, k) => withdrawals[(liveIdx + k) % withdrawals.length])
+    : [];
+  const review = REVIEWS[reviewIdx % REVIEWS.length];
+
+  const TABS = [
+    { id: 'live',    label: 'Live',    icon: '💸' },
+    { id: 'pending', label: 'Pending', icon: '⏳' },
+    { id: 'reviews', label: 'Reviews', icon: '⭐' },
+  ];
+
+  const row = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 10, background: '#F9FAFB', border: '1px solid #F1F5F9' };
 
   return (
-    <div className="withdrawals-feed">
-      <div className="withdrawals-header">
-        <div className="withdrawals-title">
-          <span className="live-dot" />
-          Live Withdrawals
+    <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 16, padding: 14, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+      {/* Header + tabs */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14, color: '#111827' }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E', boxShadow: '0 0 0 3px rgba(34,197,94,0.2)' }} />
+          Withdrawals & Reviews
         </div>
-        <div className="withdrawals-badge">Instant M-Pesa Payouts</div>
-      </div>
-
-      <div className="ticker-strip">
-        <div className="ticker-track">
-          {[...withdrawals, ...withdrawals].map((item, i) => (
-            <div key={i} className="ticker-pill">
-              <span className="ticker-flag">{item.flag}</span>
-              <span className="ticker-phone">{item.phone}</span>
-              <span className="ticker-amount">KES {item.amount.toLocaleString()}</span>
-              <span className="ticker-success">✓</span>
-            </div>
+        <div style={{ display: 'flex', gap: 4, background: '#F3F4F6', padding: 3, borderRadius: 10 }}>
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', border: 'none', cursor: 'pointer',
+                borderRadius: 8, fontSize: 12.5, fontWeight: 700,
+                background: tab === t.id ? '#fff' : 'transparent',
+                color: tab === t.id ? '#111827' : '#6B7280',
+                boxShadow: tab === t.id ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+              }}
+            >
+              <span>{t.icon}</span>{t.label}
+            </button>
           ))}
         </div>
       </div>
 
-      <div className="withdrawals-list">
-        {visibleItems.map((item, index) => (
-          <div
-            key={`${item.phone}-${index}`}
-            className={`withdrawal-item ${animatingIn && index === visibleItems.length - 1 ? 'slide-in' : ''}`}
-          >
-            <div className="withdrawal-user">
-              <div className="withdrawal-avatar">{item.flag}</div>
-              <div className="withdrawal-info">
-                <h4>{item.phone}</h4>
-                <p>{item.country}</p>
+      {/* Live marquee (only on Live tab) */}
+      {tab === 'live' && withdrawals.length > 0 && (
+        <div className="ticker-strip" style={{ marginBottom: 10 }}>
+          <div className="ticker-track">
+            {[...withdrawals.slice(0, 20), ...withdrawals.slice(0, 20)].map((item, i) => (
+              <div key={i} className="ticker-pill">
+                <span className="ticker-flag">{item.flag}</span>
+                <span className="ticker-phone">{item.phone}</span>
+                <span className="ticker-amount">KES {item.amount.toLocaleString()}</span>
+                <span className="ticker-success">✓</span>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Content — fixed compact height */}
+      <div style={{ minHeight: 132 }}>
+        {tab === 'live' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {liveShown.map((item, i) => (
+              <div key={`${item.phone}-${i}`} style={row}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <span style={{ fontSize: 18 }}>{item.flag}</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{item.phone}</div>
+                    <div style={{ fontSize: 11, color: '#9CA3AF' }}>{item.country}</div>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: '#059669' }}>KES {item.amount.toLocaleString()}</div>
+                  <div style={{ fontSize: 10.5, color: '#059669', fontWeight: 600 }}>✓ Successful</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'pending' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 200, overflowY: 'auto' }}>
+            {pending.map((p, i) => (
+              <div key={i} style={{ ...row, flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    <span style={{ fontSize: 18 }}>{p.flag}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: '#9CA3AF' }}>{p.country}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: '#111827' }}>KES {p.amount.toLocaleString()}</div>
+                    <div style={{ fontSize: 10.5, color: '#D97706', fontWeight: 700 }}>⏳ Processing • ~{p.etaMin} min</div>
+                  </div>
+                </div>
+                <div style={{ height: 5, borderRadius: 3, background: '#FDE68A', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${p.progress}%`, background: 'linear-gradient(90deg,#F59E0B,#F97316)' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'reviews' && review && (
+          <div style={{ background: '#F9FAFB', border: '1px solid #F1F5F9', borderRadius: 12, padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <span style={{ width: 34, height: 34, borderRadius: '50%', background: '#125C37', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>
+                  {review.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                </span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{review.name} <span style={{ fontWeight: 400 }}>{review.flag}</span></div>
+                  <div style={{ fontSize: 11, color: '#9CA3AF' }}>{review.country}</div>
+                </div>
+              </div>
+              <Stars n={review.rating} />
             </div>
-            <div className="withdrawal-amount">
-              <h3>KES {item.amount.toLocaleString()}</h3>
-              <span className="withdrawal-status-badge">
-                <span className="wd-dot" />
-                Successful
-              </span>
+            <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>“{review.text}”</p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 12 }}>
+              {REVIEWS.map((_, i) => (
+                <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i === reviewIdx % REVIEWS.length ? '#125C37' : '#D1D5DB' }} />
+              ))}
             </div>
           </div>
-        ))}
+        )}
       </div>
 
-      <div className="wd-footer">
-        <span className="wd-footer-text">🔒 All payouts verified & secured</span>
-        <span className="wd-footer-count">{withdrawals.length} payouts today</span>
+      {/* Footer */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '1px solid #F1F5F9', fontSize: 11.5, color: '#9CA3AF' }}>
+        <span>🔒 All payouts verified & secured</span>
+        <span>
+          {tab === 'pending'
+            ? `${pending.length} processing now`
+            : tab === 'reviews'
+            ? `${REVIEWS.length} member reviews`
+            : `${withdrawals.length} payouts today`}
+        </span>
       </div>
     </div>
   );
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onLogout }) {
+function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onPremiumTest, onLogout }) {
   const items = [
     { icon: '🏠', label: 'Dashboard',            action: () => { onClose(); } },
+    { icon: '🧮', label: 'Premium Math Challenge', action: () => { onClose(); onPremiumTest(); } },
     { icon: '⭐', label: 'Upgrade to Premium',   action: () => { onClose(); onUpgrade(); } },
     { icon: '✅', label: 'Awarded Tasks',         action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: '📲', label: 'Withdraw with M-Pesa', action: () => { onClose(); onMpesaWithdraw(); } },
@@ -1126,9 +1733,22 @@ function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithd
         </nav>
         <div className="hamburger-footer">
           <div style={{ fontSize: 11, color: 'var(--gray)', marginBottom: 8 }}>Account Balance</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--green)', marginBottom: 16 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--green)', marginBottom: 12 }}>
             KES {(user?.balance || 0).toLocaleString()}
           </div>
+          <button
+            onClick={() => { onClose(); onPremiumTest(); }}
+            style={{ width: '100%', textAlign: 'left', border: '1px solid #DDD6FE', background: '#F5F3FF', borderRadius: 12, padding: '10px 12px', marginBottom: 14, cursor: 'pointer' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, color: '#6D28D9', fontWeight: 700 }}>🧮 Premium Balance</span>
+              <span style={{ fontSize: 11, color: '#6D28D9' }}>Math Challenge ›</span>
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: '#6D28D9', marginTop: 2 }}>
+              KES {(user?.premiumBalance || 0).toLocaleString()}
+            </div>
+            <div style={{ fontSize: 10.5, color: '#8B5CF6' }}>Use toward your KES 480 premium fee</div>
+          </button>
           <button className="logout-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={onLogout}>
             ⏏ Sign Out
           </button>
@@ -1153,8 +1773,11 @@ export default function Dashboard() {
   const [showReferral,        setShowReferral]        = useState(false);
   const [showMenu,            setShowMenu]            = useState(false);
   const [showTraining,        setShowTraining]        = useState(false);
+  const [showQuiz,            setShowQuiz]            = useState(false);
+  const [showPremiumTest,     setShowPremiumTest]     = useState(false);
 
   const [liveWithdrawals, setLiveWithdrawals] = useState([]);
+  const [pendingWithdrawals, setPendingWithdrawals] = useState([]);
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
 
@@ -1170,6 +1793,9 @@ export default function Dashboard() {
       if (!u) { router.replace('/login'); return; }
       setUser(u);
       setLiveWithdrawals(getOrGenerateWithdrawals());
+      setPendingWithdrawals(getOrGeneratePending());
+      // Joining-gift quiz appears once, right after the first successful sign-up / sign-in
+      if (!u.quizDone) setShowQuiz(true);
     }
     init();
   }, [router]);
@@ -1206,10 +1832,6 @@ export default function Dashboard() {
     if (!user?.activated) { setPayTask(task); } else { setSelectedTask(task); }
   }, [user]);
   const handleBidClick     = useCallback(task => { setSelectedTask(null); setPayTask(task); }, []);
-  const handlePaySuccess   = useCallback(async () => {
-    const updated = await activateUser(user.id);
-    if (updated) setUser(updated);
-  }, [user]);
 
   function handleSubmitTask(task) {
     if (!user.premium) {
@@ -1369,7 +1991,7 @@ export default function Dashboard() {
         </div>
 
         {/* Live Withdrawals Ticker */}
-        <LiveWithdrawalsTicker withdrawals={liveWithdrawals} />
+        <ActivityFeed withdrawals={liveWithdrawals} pending={pendingWithdrawals} />
 
         {/* Tasks Section */}
         <div id="tasks-section">
@@ -1432,13 +2054,37 @@ export default function Dashboard() {
       </main>
 
       {/* ── Modals ── */}
+      {showQuiz && user && !user.quizDone && (
+        <QuizModal
+          user={user}
+          onComplete={(u) => { if (u) setUser(u); setShowQuiz(false); }}
+        />
+      )}
+
       {selectedTask && (
         <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} onUpgradeClick={() => setShowUpgrade(true)} />
       )}
-      {payTask && (
-        <PaymentModal task={payTask} user={user} onClose={() => setPayTask(null)} onSuccess={handlePaySuccess} />
+      {payTask && !user.activated && (
+        <ActivationModal
+          user={user}
+          onClose={() => setPayTask(null)}
+          onActivated={(u) => { if (u) setUser(u); setPayTask(null); }}
+        />
       )}
-      {showUpgrade  && <UpgradeModal  user={user} onClose={() => setShowUpgrade(false)} />}
+      {showUpgrade  && (
+        <UpgradeModal
+          user={user}
+          onClose={() => setShowUpgrade(false)}
+          onUpgraded={(u) => { if (u) setUser(u); setShowUpgrade(false); }}
+        />
+      )}
+      {showPremiumTest && (
+        <PremiumTestModal
+          user={user}
+          onClose={() => setShowPremiumTest(false)}
+          onComplete={(u) => { if (u) setUser(u); setShowPremiumTest(false); }}
+        />
+      )}
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
       {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}
 
@@ -1463,6 +2109,7 @@ export default function Dashboard() {
           onOtherWithdraw={() => setShowOtherWithdraw(true)}
           onReferral={() => setShowReferral(true)}
           onTraining={() => setShowTraining(true)}
+          onPremiumTest={() => setShowPremiumTest(true)}
           onLogout={handleLogout}
         />
       )}
