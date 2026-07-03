@@ -102,44 +102,15 @@ const REVIEWS = [
 
 
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
-// Send a task submission via the automated email endpoint. Falls back to opening
-// the user's email app if server-side email isn't configured yet — so it always
-// works, and upgrades to fully-automated (with client auto-reply) once SMTP is set.
-async function sendTaskSubmission(user, task) {
-  const details =
-    `Task: ${task.title}\n` +
-    `Category: ${task.category}\n` +
-    `Payment: KES ${task.payment.toLocaleString()}\n` +
-    `Submitted by: ${user?.fullName || ''} (${user?.email || ''})`;
-  try {
-    const res  = await fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'Task Submission', name: user?.fullName || '', email: user?.email || '',
-        phone: user?.phone || '', subject: `Task Submission: ${task.title}`, details,
-      }),
-    });
-    const data = await res.json();
-    if (data && data.success) return true;   // emailed automatically
-  } catch (_) {}
-  const subject = encodeURIComponent('Task Submission: ' + task.title);
-  const body    = encodeURIComponent(
-    `Hello Business Hub,\n\nI am submitting my completed task for review.\n\n${details}\n\n[Add your work here]\n\nThank you,\n${user?.fullName || ''}`
-  );
-  window.location.href = `mailto:businesshub.comke@gmail.com?subject=${subject}&body=${body}`;
-  return false;                              // opened email app instead
-}
-
-function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick }) {
+function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick, onSubmit }) {
   if (!task) return null;
   const isActivated = user?.activated;
   const isPremium   = user?.premium;
 
-  async function handleSubmit() {
+  function handleSubmit() {
     if (!isPremium) { onClose(); onUpgradeClick(); return; }
-    const emailed = await sendTaskSubmission(user, task);
-    if (emailed) alert('✅ Submitted! A confirmation email has been sent to you, and our team has been notified.');
+    onClose();
+    onSubmit(task);   // → file-upload submission page
   }
 
   return (
@@ -784,10 +755,9 @@ export default function Dashboard() {
   }, [user, router]);
   const handleBidClick     = useCallback(() => { setSelectedTask(null); router.push('/activate'); }, [router]);
 
-  async function handleSubmitTask(task) {
+  function handleSubmitTask(task) {
     if (!user.premium) { router.push('/premium'); return; }
-    const emailed = await sendTaskSubmission(user, task);
-    if (emailed) alert('✅ Submitted! A confirmation email has been sent to you, and our team has been notified.');
+    router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }
 
   const filteredTasks = (TASKS || []).filter(t => {
@@ -990,7 +960,7 @@ export default function Dashboard() {
                 <div className="task-desc">{task.description}</div>
                 <div className="task-actions">
                   <button className="task-view-btn" onClick={() => handleViewTask(task)}>👁️ View / Bid</button>
-                  <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Submit this task via email">📤 Submit</button>
+                  <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Attach your work & submit">📤 Submit</button>
                 </div>
               </div>
             ))}
@@ -1007,7 +977,7 @@ export default function Dashboard() {
       )}
 
       {selectedTask && (
-        <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} onUpgradeClick={() => router.push('/premium')} />
+        <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} onUpgradeClick={() => router.push('/premium')} onSubmit={handleSubmitTask} />
       )}
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
       {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}

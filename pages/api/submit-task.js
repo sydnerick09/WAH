@@ -44,6 +44,8 @@ export default async function handler(req, res) {
   const taskTitle = get("taskTitle") || "Unknown Task";
   const userId    = get("userId");
   const userEmail = get("userEmail");
+  const userName  = get("userName");
+  const note      = get("note");
 
   // ── 3. Get uploaded file ──────────────────────────────────────────────────
   const uploadedFile = files.file?.[0] || files.file;
@@ -72,11 +74,17 @@ export default async function handler(req, res) {
     "application/zip",
     "application/x-rar-compressed",
     "application/vnd.rar",
+    // images (screenshots of completed work)
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/gif",
+    "image/webp",
   ];
 
   if (!allowedTypes.includes(mimeType)) {
     try { fs.unlinkSync(filePath); } catch (_) {}
-    return res.status(400).json({ success: false, message: "Invalid file type. Images are not accepted." });
+    return res.status(400).json({ success: false, message: "Unsupported file type. Please upload a document, image, audio, video or zip." });
   }
 
   // ── 5. Read file ──────────────────────────────────────────────────────────
@@ -109,14 +117,17 @@ export default async function handler(req, res) {
   const mailOptions = {
     from: `"Business Hub" <${process.env.SMTP_USER}>`,
     to: destination,
-    subject: `[Task Submission] ${taskTitle} — User ${userId}`,
+    replyTo: userEmail && userEmail !== "N/A" ? userEmail : undefined,
+    subject: `[Task Submission] ${taskTitle} — ${userName !== "N/A" ? userName : "User " + userId}`,
     html: `
       <h2>New Task Submission</h2>
-      <table cellpadding="8" style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
+      <table cellpadding="8" style="border-collapse:collapse;font-family:Inter,sans-serif;font-size:14px;">
         <tr><td><strong>Task ID</strong></td><td>${escHtml(taskId)}</td></tr>
         <tr><td><strong>Task Title</strong></td><td>${escHtml(taskTitle)}</td></tr>
+        <tr><td><strong>Name</strong></td><td>${escHtml(userName)}</td></tr>
         <tr><td><strong>User ID</strong></td><td>${escHtml(userId)}</td></tr>
         <tr><td><strong>User Email</strong></td><td>${escHtml(userEmail)}</td></tr>
+        <tr><td valign="top"><strong>Note</strong></td><td><pre style="margin:0;font-family:inherit;white-space:pre-wrap;">${escHtml(note)}</pre></td></tr>
         <tr><td><strong>File Name</strong></td><td>${escHtml(fileName)}</td></tr>
         <tr><td><strong>Submitted At</strong></td><td>${new Date().toLocaleString("en-KE")}</td></tr>
       </table>
@@ -132,6 +143,25 @@ export default async function handler(req, res) {
   } catch (err) {
     emailSent = false;
     console.error("[submit-task] Email send error:", err);
+  }
+
+  // Auto-reply confirmation to the client
+  if (userEmail && userEmail !== "N/A") {
+    try {
+      await transporter.sendMail({
+        from: `"Business Hub" <${process.env.SMTP_USER}>`,
+        to: userEmail,
+        subject: `We received your submission — ${taskTitle}`,
+        html: `
+          <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;">
+            <p>Hi ${escHtml(userName !== "N/A" ? userName : "there")},</p>
+            <p>Thank you — we’ve received your submission for <strong>${escHtml(taskTitle)}</strong> with your attached file <strong>${escHtml(fileName)}</strong>. Our team will review it and get back to you.</p>
+            <p>Warm regards,<br/>The Business Hub Team</p>
+          </div>`,
+      });
+    } catch (err) {
+      console.error("[submit-task] client auto-reply error:", err.message);
+    }
   }
 
   // ── 8. Cleanup temp file ───────────────────────────────────────────────────
