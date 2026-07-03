@@ -215,7 +215,7 @@ export default async function handler(req, res) {
       case 'awardPremiumTest': {
         const { userId, correctCount } = p;
         const count  = Math.max(0, Math.min(5, Number(correctCount) || 0));
-        const earned = count * 200;
+        const earned = count * 42;
         const { data: u } = await db.from('users')
           .select('*').eq('id', userId).maybeSingle();
         if (!u) return res.json({ data: null });

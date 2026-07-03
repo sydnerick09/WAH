@@ -39,7 +39,7 @@ export default function SkillsTestPage() {
   async function handleSubmit() {
     let correct = 0;
     PREMIUM_QUESTIONS.forEach((qq, i) => { if (answers[i] === qq.answer) correct += 1; });
-    const earned = correct * 200;
+    const earned = correct * 42;
     setSaving(true);
     const updated = await awardPremiumTest(user.id, correct);
     setSaving(false);
@@ -57,7 +57,7 @@ export default function SkillsTestPage() {
   const already = user.premiumTestDone;
 
   return (
-    <FlowShell title="Premium Skills Test" subtitle="KES 200 per correct answer → premium balance" icon="🧠" accent="linear-gradient(135deg, #4C1D95, #6D28D9)">
+    <FlowShell title="Premium Skills Test" subtitle="KES 42 per correct answer → premium balance" icon="🧠" accent="linear-gradient(135deg, #4C1D95, #6D28D9)">
       {already && !result && (
         <div style={{ textAlign: 'center', padding: '10px 0' }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>🔒</div>
@@ -74,7 +74,7 @@ export default function SkillsTestPage() {
       {!already && !result && (
         <>
           <div className="pay-message" style={{ borderColor: '#6D28D9', background: '#F5F3FF', marginBottom: 16 }}>
-            Answer these <strong>5 skills questions</strong> — the practical abilities every strong freelancer needs. Each correct answer adds <strong style={{ color: '#6D28D9' }}>KES 200</strong> to your <strong>premium balance</strong>, which you can put toward the <strong>KES 480</strong> premium fee.
+            Answer these <strong>5 skills questions</strong> — the practical abilities every strong freelancer needs. Each correct answer adds <strong style={{ color: '#6D28D9' }}>KES 42</strong> to your <strong>premium balance</strong>, which you can put toward the <strong>KES 480</strong> premium fee.
           </div>
 
           {PREMIUM_QUESTIONS.map((qq, i) => (

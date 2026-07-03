@@ -756,6 +756,7 @@ export default function Dashboard() {
   const handleBidClick     = useCallback(() => { setSelectedTask(null); router.push('/activate'); }, [router]);
 
   function handleSubmitTask(task) {
+    if (!user?.activated) { router.push('/activate'); return; }   // active account required first
     if (!user.premium) { router.push('/premium'); return; }
     router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }

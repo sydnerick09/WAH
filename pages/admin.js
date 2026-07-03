@@ -2,6 +2,21 @@ import { useState, useEffect } from 'react';
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
+const BROADCAST_DEFAULT_SUBJECT = 'Welcome to Business Hub';
+const BROADCAST_DEFAULT_BODY = `Dear Client,
+
+Welcome to Business Hub! We are delighted to have you as part of our community.
+
+We have been working hard to improve our services and address your concerns. We are pleased to introduce a few simple steps that will make it easier for you to manage your Activation Fee and Premium Fee at your convenience.
+
+We also encourage you to carefully complete the available tasks and assessments, as they provide genuine earning opportunities that can help you cover your activation and premium fees.
+
+For your security, we kindly ask you to withdraw your earnings promptly. In line with our policies, Business Hub does not hold clients' funds. We operate as a secure bridge between clients and service providers, not as a bank.
+
+Our mission is to create opportunities, empower our community, and give back to society through a reliable and transparent platform.
+
+Thank you for choosing Business Hub. We look forward to supporting your success.`;
+
 async function dbProxy(op, params = {}) {
   const r = await fetch('/api/db', {
     method: 'POST',
@@ -475,6 +490,93 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
   );
 }
 
+// ─── Broadcast Email Tab ──────────────────────────────────────────────────────
+function BroadcastTab({ secret, userCount }) {
+  const [subject, setSubject] = useState(BROADCAST_DEFAULT_SUBJECT);
+  const [body,    setBody]    = useState(BROADCAST_DEFAULT_BODY);
+  const [sending, setSending] = useState(false);
+  const [result,  setResult]  = useState(null);
+
+  async function send(test) {
+    if (!body.trim() || !subject.trim()) {
+      setResult({ ok: false, text: 'Subject and message cannot be empty.' });
+      return;
+    }
+    if (!test && !confirm(`Send this email to ALL ${userCount} client(s) in the database? This cannot be undone.`)) {
+      return;
+    }
+    setSending(true);
+    setResult(null);
+    try {
+      const r = await fetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminSecret: secret, subject, body, test }),
+      });
+      const data = await r.json();
+      if (data.success) {
+        setResult({
+          ok: true,
+          text: test
+            ? `Test email sent to your own inbox (${data.sent} sent).`
+            : `Done — ${data.sent} sent, ${data.failed} failed out of ${data.total} client(s).`,
+        });
+      } else {
+        setResult({ ok: false, text: data.message || 'Failed to send.' });
+      }
+    } catch (err) {
+      setResult({ ok: false, text: err.message || 'Network error.' });
+    }
+    setSending(false);
+  }
+
+  return (
+    <div style={{ padding: '20px 32px', maxWidth: 720 }}>
+      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24 }}>
+        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#0F766E', marginBottom: 4 }}>
+          📣 Email All Clients
+        </div>
+        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
+          This sends the message below to every registered client&apos;s email address ({userCount} on file). Use “Send test to myself” first to preview it.
+        </p>
+
+        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Subject</label>
+        <input style={{ ...styles.input, marginBottom: 16 }} value={subject} onChange={e => setSubject(e.target.value)} />
+
+        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Message</label>
+        <textarea
+          style={{ ...styles.input, minHeight: 260, resize: 'vertical', fontFamily: 'Manrope, sans-serif', lineHeight: 1.6 }}
+          value={body}
+          onChange={e => setBody(e.target.value)}
+        />
+
+        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+          <button
+            style={{ ...styles.btn, background: '#64748B', flex: 1 }}
+            disabled={sending}
+            onClick={() => send(true)}
+          >
+            {sending ? 'Sending…' : '✉️ Send test to myself'}
+          </button>
+          <button
+            style={{ ...styles.btn, flex: 2 }}
+            disabled={sending}
+            onClick={() => send(false)}
+          >
+            {sending ? 'Sending…' : `📣 Send to all ${userCount} client(s)`}
+          </button>
+        </div>
+
+        {result && (
+          <p style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: result.ok ? '#065F46' : '#991B1B' }}>
+            {result.text}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 export default function AdminPanel() {
   const [secret,      setSecret]      = useState('');
@@ -545,6 +647,7 @@ export default function AdminPanel() {
         {[
           { key: 'users',       label: `👤 Users (${users.length})` },
           { key: 'withdrawals', label: `💸 Withdrawals (${withdrawals.length})` },
+          { key: 'broadcast',   label: '📣 Broadcast' },
         ].map(t => (
           <button key={t.key} style={{ ...styles.tabBtn, ...(tab === t.key ? styles.tabBtnActive : {}) }}
             onClick={() => setTab(t.key)}>
@@ -555,6 +658,7 @@ export default function AdminPanel() {
 
       {tab === 'users'       && <UsersTab       users={users}             secret={secret} onRefresh={refresh} />}
       {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} secret={secret} onRefresh={refresh} />}
+      {tab === 'broadcast'   && <BroadcastTab   secret={secret} userCount={users.length} />}
     </div>
   );
 }

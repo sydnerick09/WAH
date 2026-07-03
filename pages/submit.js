@@ -63,6 +63,18 @@ export default function SubmitPage() {
     </div>;
   }
 
+  // An active account is required before submitting any task
+  if (!user.activated) {
+    return (
+      <FlowShell title="Submit Task" subtitle="Active account required" icon="📤">
+        <div className="pay-message" style={{ borderColor: '#125C37', background: '#F0FFF4', marginBottom: 18 }}>
+          You need an <strong>active account</strong> before you can submit tasks. Activate your account to get started.
+        </div>
+        <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }} onClick={() => router.push('/activate')}>✅ Activate My Account</button>
+      </FlowShell>
+    );
+  }
+
   // Premium is required to submit
   if (!user.premium) {
     return (
