@@ -880,7 +880,8 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 .wd-footer-count { font-family: var(--font-utility); font-size: 12px; font-weight: 700; color: var(--green); background: var(--green-pale); padding: 4px 10px; border-radius: 100px; }
 
 /* ── Hamburger Button ── */
-.hamburger-btn { display: none; flex-direction: column; gap: 5px; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 8px; border: none; cursor: pointer; transition: background 0.2s; }
+/* Shown on every screen size (desktop + mobile) so laptop users can open the menu too */
+.hamburger-btn { display: flex; flex-direction: column; gap: 5px; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 8px; border: none; cursor: pointer; transition: background 0.2s; }
 .hamburger-btn:hover { background: rgba(255,255,255,0.3); }
 .hamburger-btn span { display: block; width: 20px; height: 2px; background: var(--white); border-radius: 2px; }
 
