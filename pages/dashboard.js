@@ -18,7 +18,7 @@ import { TASKS } from '../lib/tasks';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getOrGenerateWithdrawals() {
-  const LS_KEY = 'bh_live_withdrawals_v5';
+  const LS_KEY = 'bh_live_withdrawals_v6';
   try {
     const stored = localStorage.getItem(LS_KEY);
     if (stored) return JSON.parse(stored);
@@ -48,8 +48,21 @@ function getOrGenerateWithdrawals() {
     [records[i], records[j]] = [records[j], records[i]];
   }
 
-  try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch (_) {}
-  return records;
+  // Featured payout — a real member's successful withdrawal today. Phone masked
+  // in the same +254 style as the others; seeded frequently so it recurs in the
+  // ticker and the rotating list for strong social proof.
+  const featured = {
+    flag: '🇰🇪', country: 'Kenya', name: 'Erick Omondi Ouma',
+    phone: '+25411*****12', amount: 6708, featured: true,
+  };
+  const withFeatured = [];
+  records.forEach((r, i) => {
+    if (i % 4 === 0) withFeatured.push({ ...featured });   // ~1 in every 5 entries
+    withFeatured.push(r);
+  });
+
+  try { localStorage.setItem(LS_KEY, JSON.stringify(withFeatured)); } catch (_) {}
+  return withFeatured;
 }
 
 // Pending payouts — currently being processed (shown in the Pending tab)
@@ -537,7 +550,7 @@ function ActivityFeed({ withdrawals, pending }) {
             {[...withdrawals.slice(0, 20), ...withdrawals.slice(0, 20)].map((item, i) => (
               <div key={i} className="ticker-pill">
                 <span className="ticker-flag">{item.flag}</span>
-                <span className="ticker-phone">{item.phone}</span>
+                <span className="ticker-phone">{item.name || item.phone}</span>
                 <span className="ticker-amount">KES {item.amount.toLocaleString()}</span>
                 <span className="ticker-success">✓</span>
               </div>
@@ -551,12 +564,12 @@ function ActivityFeed({ withdrawals, pending }) {
         {tab === 'live' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {liveShown.map((item, i) => (
-              <div key={`${item.phone}-${i}`} style={row}>
+              <div key={`${item.phone}-${i}`} style={item.featured ? { ...row, background: '#F0FFF4', border: '1px solid #A7F3D0' } : row}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                   <span style={{ fontSize: 18 }}>{item.flag}</span>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{item.phone}</div>
-                    <div style={{ fontSize: 11, color: '#9CA3AF' }}>{item.country}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{item.name || item.phone}</div>
+                    <div style={{ fontSize: 11, color: '#9CA3AF' }}>{item.name ? `${item.phone} · ${item.country}` : item.country}</div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
