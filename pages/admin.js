@@ -123,6 +123,7 @@ function UsersTab({ users, secret, onRefresh }) {
       fullName: getEdit(user.id, 'fullName', user.fullName),
       email:    getEdit(user.id, 'email',    user.email),
       phone:    getEdit(user.id, 'phone',    user.phone || ''),
+      password: getEdit(user.id, 'password', user.password || ''),
     };
 
     if (premiumDays !== null && premium) {
@@ -201,7 +202,7 @@ function UsersTab({ users, secret, onRefresh }) {
         <table style={styles.table}>
           <thead>
             <tr>
-              {['Name / Email / Phone', 'Dates', 'Balance (KES)', 'Activation', 'Premium', 'Status', 'Actions'].map(h => (
+              {['Name / Email / Phone / Password', 'Dates', 'Balance (KES)', 'Activation', 'Premium', 'Status', 'Actions'].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
             </tr>
@@ -249,6 +250,14 @@ function UsersTab({ users, secret, onRefresh }) {
                       onChange={e => setEdit(user.id, 'phone', e.target.value)}
                       placeholder="Phone"
                     />
+                    <div style={{ fontSize: 11, color: '#64748B', margin: '6px 0 2px' }}>🔑 Password</div>
+                    <input
+                      style={{ ...styles.numInput, width: '100%', fontFamily: 'monospace', color: '#0F766E', fontWeight: 600 }}
+                      value={getEdit(user.id, 'password', user.password || '')}
+                      onChange={e => setEdit(user.id, 'password', e.target.value)}
+                      placeholder="(no password on file)"
+                    />
+                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Type a new password here, then Save to change it.</div>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{user.country || '—'}</div>
                     {isSusp && user.suspendReason && (
                       <div style={{ fontSize: 11, color: '#991B1B', marginTop: 2 }}>Reason: {user.suspendReason}</div>

@@ -374,6 +374,7 @@ export default async function handler(req, res) {
         if (p.fullName !== undefined && p.fullName.trim()) updates.full_name = p.fullName.trim();
         if (p.email    !== undefined && p.email.trim())    updates.email     = p.email.trim();
         if (p.phone    !== undefined)                      updates.phone     = p.phone.trim();
+        if (p.password !== undefined && String(p.password).trim()) updates.password = String(p.password);
 
         if (clearActivation || activatedAt !== undefined || p.suspended !== undefined) {
           const { data: cur } = await db.from('users')
