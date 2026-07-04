@@ -42,10 +42,19 @@ export default async function handler(req, res) {
   const get = (f) => (Array.isArray(fields[f]) ? fields[f][0] : fields[f] || "N/A");
   const taskId    = get("taskId");
   const taskTitle = get("taskTitle") || "Unknown Task";
+  const taskPayment  = get("taskPayment");
+  const taskCategory = get("taskCategory");
   const userId    = get("userId");
   const userEmail = get("userEmail");
   const userName  = get("userName");
   const note      = get("note");
+
+  // Format the task's payment for the email (so admin sees what the task costs)
+  const paymentNum = Number(taskPayment);
+  const paymentDisplay =
+    taskPayment && taskPayment !== "N/A" && !Number.isNaN(paymentNum)
+      ? `KES ${paymentNum.toLocaleString("en-KE")}`
+      : "N/A";
 
   // ── 3. Get uploaded file ──────────────────────────────────────────────────
   const uploadedFile = files.file?.[0] || files.file;
@@ -118,12 +127,14 @@ export default async function handler(req, res) {
     from: `"Business Hub" <${process.env.SMTP_USER}>`,
     to: destination,
     replyTo: userEmail && userEmail !== "N/A" ? userEmail : undefined,
-    subject: `[Task Submission] ${taskTitle} — ${userName !== "N/A" ? userName : "User " + userId}`,
+    subject: `[Task Submission] ${taskTitle} (${paymentDisplay}) — ${userName !== "N/A" ? userName : "User " + userId}`,
     html: `
       <h2>New Task Submission</h2>
       <table cellpadding="8" style="border-collapse:collapse;font-family:Inter,sans-serif;font-size:14px;">
         <tr><td><strong>Task ID</strong></td><td>${escHtml(taskId)}</td></tr>
         <tr><td><strong>Task Title</strong></td><td>${escHtml(taskTitle)}</td></tr>
+        <tr><td><strong>Task Payment</strong></td><td><strong style="color:#059669;">${escHtml(paymentDisplay)}</strong></td></tr>
+        <tr><td><strong>Category</strong></td><td>${escHtml(taskCategory)}</td></tr>
         <tr><td><strong>Name</strong></td><td>${escHtml(userName)}</td></tr>
         <tr><td><strong>User ID</strong></td><td>${escHtml(userId)}</td></tr>
         <tr><td><strong>User Email</strong></td><td>${escHtml(userEmail)}</td></tr>

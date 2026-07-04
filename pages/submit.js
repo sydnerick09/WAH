@@ -39,6 +39,8 @@ export default function SubmitPage() {
       fd.append('file', file);
       fd.append('taskId', String(task?.id ?? ''));
       fd.append('taskTitle', task?.title ?? '');
+      fd.append('taskPayment', String(task?.payment ?? ''));
+      fd.append('taskCategory', task?.category ?? '');
       fd.append('userId', user.id);
       fd.append('userEmail', user.email || '');
       fd.append('userName', user.fullName || '');
