@@ -84,6 +84,11 @@ const WORLD_BANKS = Object.entries(BANKS_BY_COUNTRY).flatMap(([code, names]) =>
   names.map(name => ({ id: `${code}-${name}`, name, code, ...COUNTRY_META[code] }))
 ).sort((a, b) => a.name.localeCompare(b.name));
 
+// Withdrawal processing fee — priced in USD, charged in KES via a dynamic conversion.
+const FEE_USD    = 3.87;
+const USD_TO_KES = 129.2;                            // approximate USD → KES rate
+const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // ≈ KES 500
+
 // ── M-Pesa flow (fee → form → pending → failed) ───────────────────────────────
 function MpesaFlow({ user, initialStep }) {
   const router = useRouter();
@@ -116,7 +121,7 @@ function MpesaFlow({ user, initialStep }) {
       const res  = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: 650, phone, plan: 'mpesa_withdrawal_fee' }),
+        body: JSON.stringify({ email: user.email, amount: FEE_KES, phone, plan: 'mpesa_withdrawal_fee' }),
       });
       const data = await res.json();
       if (data.status) { window.location.href = data.data.authorization_url; return; }
@@ -148,17 +153,17 @@ function MpesaFlow({ user, initialStep }) {
       {step === 'fee' && (
         <>
           <div className="pay-message" style={{ borderColor: '#007A3D', background: '#F0FFF4' }}>
-            A one-time <strong>processing fee of $5 USD</strong> is required to access the M-Pesa withdrawal form. The amount will be converted to KES automatically.
+            A one-time <strong>processing fee of ${FEE_USD} USD</strong> (≈ <strong>KES {FEE_KES.toLocaleString()}</strong>) is required to access the M-Pesa withdrawal form. The amount is converted to KES automatically.
           </div>
           <div className="pay-amount">
             <div className="pay-amount-label">M-Pesa Processing Fee</div>
-            <div className="pay-amount-value" style={{ color: '#007A3D' }}>$5 USD</div>
-            <div className="pay-amount-sub">Converted to KES automatically • Unlocks withdrawal form</div>
+            <div className="pay-amount-value" style={{ color: '#007A3D' }}>${FEE_USD} USD</div>
+            <div className="pay-amount-sub">≈ KES {FEE_KES.toLocaleString()} • Converted automatically • Unlocks withdrawal form</div>
           </div>
           <div className="pay-phone-label">M-Pesa Number</div>
           <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
           <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)' }} onClick={handlePayFee} disabled={loading}>
-            {loading ? <><span className="spinner" /> Redirecting…</> : '🔒 Pay $5 USD via Paystack'}
+            {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${FEE_USD} USD via Paystack`}
           </button>
           <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
         </>
