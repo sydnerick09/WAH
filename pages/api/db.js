@@ -435,6 +435,47 @@ export default async function handler(req, res) {
         return res.json({ success: true });
       }
 
+      case 'adminDeleteUser': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        if (!p.userId) return res.json({ success: false, error: 'No user id provided.' });
+        const { error: delErr } = await db.from('users').delete().eq('id', p.userId);
+        if (delErr) return res.json({ success: false, error: delErr.message });
+        return res.json({ success: true });
+      }
+
+      case 'adminDeleteUsersByEmail': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        // Normalise the pasted list to a unique, lower-cased set of exact addresses
+        const targets = new Set(
+          (p.emails || []).map(e => String(e).trim().toLowerCase()).filter(Boolean)
+        );
+        if (!targets.size) return res.json({ success: false, error: 'No emails provided.' });
+
+        // Match case-insensitively in JS so we only ever delete EXACT addresses
+        const { data: rows, error: selErr } = await db.from('users').select('id,email');
+        if (selErr) return res.json({ success: false, error: selErr.message });
+
+        const matched  = (rows || []).filter(r => targets.has(String(r.email || '').trim().toLowerCase()));
+        const ids      = matched.map(r => r.id);
+        const foundSet = new Set(matched.map(r => String(r.email || '').trim().toLowerCase()));
+        const notFound = [...targets].filter(t => !foundSet.has(t));
+
+        if (ids.length) {
+          const { error: bulkErr } = await db.from('users').delete().in('id', ids);
+          if (bulkErr) return res.json({ success: false, error: bulkErr.message });
+        }
+        return res.json({
+          success: true,
+          deleted: ids.length,
+          deletedEmails: matched.map(r => r.email),
+          notFound,
+        });
+      }
+
       default:
         return res.status(400).json({ error: `Unknown op: ${op}` });
     }

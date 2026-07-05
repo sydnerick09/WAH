@@ -173,6 +173,19 @@ function UsersTab({ users, secret, onRefresh }) {
     setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[user.id]; return n; }), 3000);
   }
 
+  async function deleteUser(user) {
+    if (!confirm(`Permanently delete ${user.fullName || user.email || 'this account'} from the database?\n\nThis removes the account entirely and cannot be undone.`)) return;
+    setSaving(prev => ({ ...prev, [user.id]: true }));
+    const res = await dbProxy('adminDeleteUser', { adminSecret: secret, userId: user.id });
+    setSaving(prev => ({ ...prev, [user.id]: false }));
+    if (res.success) {
+      await onRefresh();
+    } else {
+      setMsg(prev => ({ ...prev, [user.id]: { type: 'err', text: res.error || 'Delete failed.' } }));
+      setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[user.id]; return n; }), 3000);
+    }
+  }
+
   const filtered = users.filter(u => {
     const q = search.toLowerCase();
     return !q || u.fullName?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.phone?.includes(q);
@@ -329,6 +342,11 @@ function UsersTab({ users, secret, onRefresh }) {
                       disabled={isSaving}
                       onClick={() => { setSuspendReason(''); setSuspendModal({ user, action: isSusp ? 'unsuspend' : 'suspend' }); }}>
                       {isSusp ? '✅ Unsuspend' : '🚫 Suspend'}
+                    </button>
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#7F1D1D' }}
+                      disabled={isSaving}
+                      onClick={() => deleteUser(user)}>
+                      🗑️ Delete
                     </button>
                     {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
                   </td>
@@ -586,6 +604,87 @@ function BroadcastTab({ secret, userCount }) {
   );
 }
 
+// ─── Clean Invalid Emails Tab ─────────────────────────────────────────────────
+function CleanupTab({ secret, onRefresh }) {
+  const [text,   setText]   = useState('');
+  const [busy,   setBusy]   = useState(false);
+  const [result, setResult] = useState(null);
+
+  // Parse whatever is pasted (commas, spaces, or newlines) into unique valid emails
+  const emails = Array.from(new Set(
+    text.split(/[\s,;]+/).map(s => s.trim().toLowerCase())
+      .filter(s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))
+  ));
+
+  async function run() {
+    if (!emails.length) { setResult({ ok: false, text: 'No valid email addresses found in the box.' }); return; }
+    if (!confirm(`Permanently delete ${emails.length} email account(s) from the database?\n\nThis cannot be undone.`)) return;
+    setBusy(true);
+    setResult(null);
+    const r = await dbProxy('adminDeleteUsersByEmail', { adminSecret: secret, emails });
+    setBusy(false);
+    if (r.success) {
+      setResult({ ok: true, deleted: r.deleted, notFound: r.notFound || [], deletedEmails: r.deletedEmails || [] });
+      if (r.deleted > 0) { setText(''); await onRefresh?.(); }
+    } else {
+      setResult({ ok: false, text: r.error || 'Delete failed.' });
+    }
+  }
+
+  return (
+    <div style={{ padding: '20px 32px', maxWidth: 720 }}>
+      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24 }}>
+        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#991B1B', marginBottom: 4 }}>
+          🧹 Remove Invalid / Bounced Emails
+        </div>
+        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>
+          Paste the addresses that bounced (the ones your “Mail Delivery Subsystem” failure notices list). One per line, or separated by commas — mixed text is fine, only valid email addresses are picked up.
+        </p>
+        <p style={{ fontSize: 12.5, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
+          ⚠️ This <strong>permanently deletes</strong> the matching accounts. It only removes <strong>exact</strong> address matches, so double-check before deleting.
+        </p>
+
+        <textarea
+          style={{ ...styles.input, minHeight: 220, resize: 'vertical', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.5 }}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder={'ghost123@example.com\nnotreal@fake.com\n...'}
+        />
+        <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 12 }}>
+          <strong>{emails.length}</strong> valid address{emails.length === 1 ? '' : 'es'} detected.
+        </div>
+
+        <button
+          style={{ ...styles.btn, background: '#991B1B' }}
+          disabled={busy || emails.length === 0}
+          onClick={run}
+        >
+          {busy ? 'Deleting…' : `🗑️ Delete ${emails.length} account${emails.length === 1 ? '' : 's'} from database`}
+        </button>
+
+        {result && (
+          <div style={{ marginTop: 16, fontSize: 14 }}>
+            {result.ok ? (
+              <>
+                <p style={{ fontWeight: 700, color: '#065F46' }}>
+                  ✅ Deleted {result.deleted} account{result.deleted === 1 ? '' : 's'}.
+                </p>
+                {result.notFound.length > 0 && (
+                  <p style={{ color: '#92400E', marginTop: 6 }}>
+                    {result.notFound.length} address{result.notFound.length === 1 ? ' was' : 'es were'} not in the database (nothing to delete): {result.notFound.join(', ')}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p style={{ fontWeight: 600, color: '#991B1B' }}>{result.text}</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 export default function AdminPanel() {
   const [secret,      setSecret]      = useState('');
@@ -657,6 +756,7 @@ export default function AdminPanel() {
           { key: 'users',       label: `👤 Users (${users.length})` },
           { key: 'withdrawals', label: `💸 Withdrawals (${withdrawals.length})` },
           { key: 'broadcast',   label: '📣 Broadcast' },
+          { key: 'cleanup',     label: '🧹 Clean Emails' },
         ].map(t => (
           <button key={t.key} style={{ ...styles.tabBtn, ...(tab === t.key ? styles.tabBtnActive : {}) }}
             onClick={() => setTab(t.key)}>
@@ -668,6 +768,7 @@ export default function AdminPanel() {
       {tab === 'users'       && <UsersTab       users={users}             secret={secret} onRefresh={refresh} />}
       {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} secret={secret} onRefresh={refresh} />}
       {tab === 'broadcast'   && <BroadcastTab   secret={secret} userCount={users.length} />}
+      {tab === 'cleanup'     && <CleanupTab     secret={secret} onRefresh={refresh} />}
     </div>
   );
 }
