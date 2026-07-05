@@ -72,6 +72,7 @@ function normWd(row) {
     idNumber:    row.id_number,
     amount:      Number(row.amount || 0),
     status:      row.status      ?? 'pending',
+    rejectReason: row.reject_reason ?? '',
     deadline:    row.deadline,
     requestedAt: row.requested_at,
     updatedAt:   row.updated_at  ?? null,
@@ -460,8 +461,16 @@ export default async function handler(req, res) {
         if (p.phone    !== undefined) wUpdates.phone     = p.phone;
         if (p.idNumber !== undefined) wUpdates.id_number = p.idNumber;
         if (p.fullName !== undefined) wUpdates.full_name = p.fullName;
-        const { data: wUp, error: wUpErr } = await db.from('withdrawal_requests')
+        if (p.rejectReason !== undefined) wUpdates.reject_reason = p.rejectReason;
+        let { data: wUp, error: wUpErr } = await db.from('withdrawal_requests')
           .update(wUpdates).eq('id', p.requestId).select().single();
+        // If the reject_reason column hasn't been added yet, retry without it so
+        // approve/reject/save still work (the reason just won't be stored).
+        if (wUpErr && /reject_reason/.test(wUpErr.message || '')) {
+          delete wUpdates.reject_reason;
+          ({ data: wUp, error: wUpErr } = await db.from('withdrawal_requests')
+            .update(wUpdates).eq('id', p.requestId).select().single());
+        }
         if (wUpErr) return res.json({ success: false, error: wUpErr.message });
         return res.json({ success: true, data: normWd(wUp) });
       }

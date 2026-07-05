@@ -38,3 +38,6 @@ create table if not exists submissions (
 
 create index if not exists submissions_status_idx on submissions (status);
 create index if not exists tasks_active_idx        on tasks (active);
+
+-- Rejection reason for withdrawals (added to the existing withdrawal_requests table)
+alter table withdrawal_requests add column if not exists reject_reason text;

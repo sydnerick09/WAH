@@ -385,11 +385,12 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
     const res = await dbProxy('adminUpdateWithdrawal', {
       adminSecret: secret,
       requestId:   wd.id,
-      status:      getEdit(wd.id, 'status',   wd.status),
-      amount:      getEdit(wd.id, 'amount',   wd.amount),
-      phone:       getEdit(wd.id, 'phone',    wd.phone),
-      idNumber:    getEdit(wd.id, 'idNumber', wd.idNumber),
-      fullName:    getEdit(wd.id, 'fullName', wd.fullName),
+      status:       getEdit(wd.id, 'status',   wd.status),
+      amount:       getEdit(wd.id, 'amount',   wd.amount),
+      phone:        getEdit(wd.id, 'phone',    wd.phone),
+      idNumber:     getEdit(wd.id, 'idNumber', wd.idNumber),
+      fullName:     getEdit(wd.id, 'fullName', wd.fullName),
+      rejectReason: getEdit(wd.id, 'rejectReason', wd.rejectReason || ''),
     });
     setSaving(prev => ({ ...prev, [wd.id]: false }));
     if (res.success) {
@@ -411,8 +412,16 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
   }
 
   async function setStatus(wd, status) {
+    const params = { adminSecret: secret, requestId: wd.id, status };
+    if (status === 'declined') {
+      const reason = prompt(`Reason for rejecting ${wd.fullName || 'this'} withdrawal? (optional)`, wd.rejectReason || '');
+      if (reason === null) return;            // cancelled
+      params.rejectReason = reason;
+    } else if (status === 'approved') {
+      params.rejectReason = '';               // clear any old reason on approval
+    }
     setSaving(prev => ({ ...prev, [wd.id]: true }));
-    const res = await dbProxy('adminUpdateWithdrawal', { adminSecret: secret, requestId: wd.id, status });
+    const res = await dbProxy('adminUpdateWithdrawal', params);
     setSaving(prev => ({ ...prev, [wd.id]: false }));
     if (res.success) {
       setMsg(prev => ({ ...prev, [wd.id]: { type: 'ok', text: status === 'approved' ? 'Approved!' : 'Rejected!' } }));
@@ -496,6 +505,12 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
                       <option value="approved">Approved</option>
                       <option value="declined">Declined</option>
                     </select>
+                    <textarea
+                      style={{ ...styles.numInput, width: 130, marginTop: 6, minHeight: 42, resize: 'vertical', fontSize: 12 }}
+                      value={getEdit(wd.id, 'rejectReason', wd.rejectReason || '')}
+                      onChange={e => setEdit(wd.id, 'rejectReason', e.target.value)}
+                      placeholder="Reason for rejection"
+                    />
                   </td>
 
                   {/* Dates */}
