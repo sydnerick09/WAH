@@ -784,9 +784,11 @@ export default function Dashboard() {
     router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }
 
-  // Admin-created tasks first, then the built-in ones. Hide tasks that have hit
-  // their limit (slots > 0 and all slots claimed).
-  const allTasks = [...dbTasks, ...(TASKS || [])].filter(
+  // Use the database tasks as the source of truth once any exist (built-ins are
+  // migrated in), falling back to the built-in list if the DB is empty/unreachable.
+  // Hide tasks that have hit their limit (slots > 0 and all slots claimed).
+  const source = dbTasks.length ? dbTasks : (TASKS || []);
+  const allTasks = source.filter(
     t => !(Number(t.slots) > 0 && Number(t.claimed) >= Number(t.slots))
   );
 

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { TASKS } from '../../lib/tasks';
 
 function getAdmin() {
   return createClient(
@@ -574,6 +575,31 @@ export default async function handler(req, res) {
         const { error } = await db.from('tasks').delete().eq('id', p.taskId);
         if (error) return res.json({ success: false, error: error.message });
         return res.json({ success: true });
+      }
+
+      case 'adminSeedTasks': {
+        // One-time migration: copy the built-in starter tasks into the DB so
+        // they become editable/deletable. Skips titles that are already present.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: existing, error: exErr } = await db.from('tasks').select('title');
+        if (exErr) return res.json({ success: false, error: exErr.message });
+        const have = new Set((existing || []).map(r => r.title));
+        const rows = TASKS.filter(t => !have.has(t.title)).map(t => ({
+          id:          'task_seed_' + t.id,
+          title:       t.title,
+          description: t.description ?? '',
+          category:    t.category ?? 'General',
+          poster:      t.poster   ?? 'Business Hub',
+          location:    t.location ?? 'Remote',
+          questions:   Array.isArray(t.questions) ? t.questions : [],
+          payment:     Number(t.payment ?? 0),
+          slots:       0,
+          active:      true,
+        }));
+        if (!rows.length) return res.json({ success: true, inserted: 0, message: 'Already migrated.' });
+        const { error: insErr } = await db.from('tasks').insert(rows);
+        if (insErr) return res.json({ success: false, error: insErr.message });
+        return res.json({ success: true, inserted: rows.length });
       }
 
       // ─── Submitted-task review ────────────────────────────────────────────
