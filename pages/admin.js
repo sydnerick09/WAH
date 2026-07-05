@@ -410,6 +410,19 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
     await onRefresh();
   }
 
+  async function setStatus(wd, status) {
+    setSaving(prev => ({ ...prev, [wd.id]: true }));
+    const res = await dbProxy('adminUpdateWithdrawal', { adminSecret: secret, requestId: wd.id, status });
+    setSaving(prev => ({ ...prev, [wd.id]: false }));
+    if (res.success) {
+      setMsg(prev => ({ ...prev, [wd.id]: { type: 'ok', text: status === 'approved' ? 'Approved!' : 'Rejected!' } }));
+      await onRefresh();
+    } else {
+      setMsg(prev => ({ ...prev, [wd.id]: { type: 'err', text: res.error || 'Failed.' } }));
+    }
+    setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[wd.id]; return n; }), 3000);
+  }
+
   const filtered = withdrawals.filter(w => {
     const q = search.toLowerCase();
     return !q || w.fullName?.toLowerCase().includes(q) || w.phone?.includes(q) || w.status?.includes(q);
@@ -494,9 +507,19 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
 
                   {/* Actions */}
                   <td style={styles.td}>
-                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%' }}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#059669' }}
+                        disabled={isSaving || isDel} onClick={() => setStatus(wd, 'approved')}>
+                        ✅ Approve
+                      </button>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#DC2626' }}
+                        disabled={isSaving || isDel} onClick={() => setStatus(wd, 'declined')}>
+                        ❌ Reject
+                      </button>
+                    </div>
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6 }}
                       disabled={isSaving || isDel} onClick={() => saveWithdrawal(wd)}>
-                      {isSaving ? 'Saving…' : 'Save'}
+                      {isSaving ? 'Saving…' : 'Save edits'}
                     </button>
                     <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#EF4444' }}
                       disabled={isSaving || isDel} onClick={() => deleteWithdrawal(wd)}>
@@ -599,6 +622,232 @@ function BroadcastTab({ secret, userCount }) {
             {result.text}
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Task Management Tab ──────────────────────────────────────────────────────
+const TASK_CATEGORIES = ['Writing','Research','Data Entry','Design','Marketing','Transcription','Translation','Survey','Testing','Audio','Education','Admin','General'];
+
+function TasksTab({ secret }) {
+  const [tasks,   setTasks]   = useState([]);
+  const [loaded,  setLoaded]  = useState(false);
+  const [err,     setErr]     = useState('');
+  const [edits,   setEdits]   = useState({});
+  const [saving,  setSaving]  = useState({});
+  const [msg,     setMsg]     = useState({});
+  const [creating, setCreating] = useState(false);
+  const [nt, setNt] = useState({ title: '', category: 'Writing', payment: '', slots: '', description: '' });
+
+  async function load() {
+    const res = await dbProxy('adminListTasks', { adminSecret: secret });
+    setLoaded(true);
+    if (res.error) { setErr(res.error); setTasks([]); return; }
+    setErr(''); setTasks(res.data || []);
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  function setEdit(id, f, v) { setEdits(p => ({ ...p, [id]: { ...(p[id] || {}), [f]: v } })); }
+  function getEdit(id, f, fb) { const e = edits[id]; return e && f in e ? e[f] : fb; }
+  function flash(id, m) { setMsg(p => ({ ...p, [id]: m })); setTimeout(() => setMsg(p => { const n = { ...p }; delete n[id]; return n; }), 3000); }
+
+  async function createTask() {
+    if (!nt.title.trim()) { flash('_new', { type: 'err', text: 'Title is required.' }); return; }
+    setCreating(true);
+    const res = await dbProxy('adminCreateTask', {
+      adminSecret: secret, title: nt.title, category: nt.category,
+      payment: Number(nt.payment) || 0, slots: Number(nt.slots) || 0, description: nt.description,
+    });
+    setCreating(false);
+    if (res.success) { setNt({ title: '', category: 'Writing', payment: '', slots: '', description: '' }); await load(); flash('_new', { type: 'ok', text: 'Task created!' }); }
+    else flash('_new', { type: 'err', text: res.error || 'Failed.' });
+  }
+
+  async function saveTask(t) {
+    setSaving(p => ({ ...p, [t.id]: true }));
+    const res = await dbProxy('adminUpdateTask', {
+      adminSecret: secret, taskId: t.id,
+      title:       getEdit(t.id, 'title', t.title),
+      category:    getEdit(t.id, 'category', t.category),
+      description: getEdit(t.id, 'description', t.description),
+      payment:     Number(getEdit(t.id, 'payment', t.payment)),
+      slots:       Number(getEdit(t.id, 'slots', t.slots)),
+      active:      getEdit(t.id, 'active', t.active),
+    });
+    setSaving(p => ({ ...p, [t.id]: false }));
+    if (res.success) { setEdits(p => { const n = { ...p }; delete n[t.id]; return n; }); await load(); flash(t.id, { type: 'ok', text: 'Saved!' }); }
+    else flash(t.id, { type: 'err', text: res.error || 'Failed.' });
+  }
+
+  async function deleteTask(t) {
+    if (!confirm(`Delete task "${t.title}"? This removes it from the dashboard.`)) return;
+    setSaving(p => ({ ...p, [t.id]: true }));
+    await dbProxy('adminDeleteTask', { adminSecret: secret, taskId: t.id });
+    setSaving(p => ({ ...p, [t.id]: false }));
+    await load();
+  }
+
+  const nm = msg._new;
+
+  return (
+    <div style={{ padding: '20px 32px' }}>
+      {/* Create form */}
+      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24, marginBottom: 20, maxWidth: 820 }}>
+        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#0F766E', marginBottom: 14 }}>➕ Create Task</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={styles.fieldLabel}>Title</label>
+            <input style={{ ...styles.input, margin: 0 }} value={nt.title} onChange={e => setNt({ ...nt, title: e.target.value })} placeholder="e.g. Write 5 product descriptions" />
+          </div>
+          <div>
+            <label style={styles.fieldLabel}>Category</label>
+            <select style={{ ...styles.input, margin: 0 }} value={nt.category} onChange={e => setNt({ ...nt, category: e.target.value })}>
+              {TASK_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={styles.fieldLabel}>Reward (KES)</label>
+              <input type="number" min="0" style={{ ...styles.input, margin: 0 }} value={nt.payment} onChange={e => setNt({ ...nt, payment: e.target.value })} placeholder="1500" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styles.fieldLabel}>Limit (0 = ∞)</label>
+              <input type="number" min="0" style={{ ...styles.input, margin: 0 }} value={nt.slots} onChange={e => setNt({ ...nt, slots: e.target.value })} placeholder="0" />
+            </div>
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={styles.fieldLabel}>Description</label>
+            <textarea style={{ ...styles.input, margin: 0, minHeight: 90, resize: 'vertical' }} value={nt.description} onChange={e => setNt({ ...nt, description: e.target.value })} placeholder="What should the worker do?" />
+          </div>
+        </div>
+        <button style={{ ...styles.btn, marginTop: 14, maxWidth: 220 }} disabled={creating} onClick={createTask}>
+          {creating ? 'Creating…' : '➕ Create Task'}
+        </button>
+        {nm && <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 600, color: nm.type === 'ok' ? '#065F46' : '#991B1B' }}>{nm.text}</span>}
+      </div>
+
+      {err && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991B1B', fontSize: 13, maxWidth: 820 }}>
+          ⚠️ Could not load tasks: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
+        </div>
+      )}
+
+      <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
+        {loaded ? `${tasks.length} custom task${tasks.length === 1 ? '' : 's'}` : 'Loading…'} · the built-in starter tasks live in code and aren&apos;t listed here.
+      </div>
+
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead><tr>{['Title / Description', 'Category', 'Reward (KES)', 'Limit / Claimed', 'Live?', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {tasks.map(t => {
+              const m = msg[t.id]; const busy = saving[t.id];
+              return (
+                <tr key={t.id} style={styles.tr}>
+                  <td style={{ ...styles.td, minWidth: 240 }}>
+                    <input style={{ ...styles.numInput, width: '100%', marginBottom: 6 }} value={getEdit(t.id, 'title', t.title)} onChange={e => setEdit(t.id, 'title', e.target.value)} />
+                    <textarea style={{ ...styles.numInput, width: '100%', minHeight: 54, resize: 'vertical' }} value={getEdit(t.id, 'description', t.description)} onChange={e => setEdit(t.id, 'description', e.target.value)} />
+                  </td>
+                  <td style={styles.td}>
+                    <select style={{ ...styles.numInput, width: 120 }} value={getEdit(t.id, 'category', t.category)} onChange={e => setEdit(t.id, 'category', e.target.value)}>
+                      {TASK_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </td>
+                  <td style={styles.td}>
+                    <input type="number" min="0" style={{ ...styles.numInput, width: 90 }} value={getEdit(t.id, 'payment', t.payment)} onChange={e => setEdit(t.id, 'payment', e.target.value)} />
+                  </td>
+                  <td style={styles.td}>
+                    <input type="number" min="0" style={{ ...styles.numInput, width: 70 }} value={getEdit(t.id, 'slots', t.slots)} onChange={e => setEdit(t.id, 'slots', e.target.value)} title="0 = unlimited" />
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{t.claimed || 0} claimed</div>
+                  </td>
+                  <td style={styles.td}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={getEdit(t.id, 'active', t.active)} onChange={e => setEdit(t.id, 'active', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#0F766E' }} />
+                      <span style={{ fontSize: 12 }}>{getEdit(t.id, 'active', t.active) ? 'On' : 'Off'}</span>
+                    </label>
+                  </td>
+                  <td style={styles.td}>
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%' }} disabled={busy} onClick={() => saveTask(t)}>{busy ? 'Saving…' : 'Save'}</button>
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#7F1D1D' }} disabled={busy} onClick={() => deleteTask(t)}>🗑️ Delete</button>
+                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
+                  </td>
+                </tr>
+              );
+            })}
+            {loaded && tasks.length === 0 && !err && (
+              <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No custom tasks yet — create one above.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Submitted-Task Review Tab ────────────────────────────────────────────────
+const SUB_COLORS = { pending: { bg: '#FEF3C7', color: '#92400E' }, approved: { bg: '#D1FAE5', color: '#065F46' }, rejected: { bg: '#FEE2E2', color: '#991B1B' } };
+
+function SubmissionsTab({ secret }) {
+  const [subs,   setSubs]   = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [err,    setErr]    = useState('');
+  const [busy,   setBusy]   = useState({});
+
+  async function load() {
+    const res = await dbProxy('adminListSubmissions', { adminSecret: secret });
+    setLoaded(true);
+    if (res.error) { setErr(res.error); setSubs([]); return; }
+    setErr(''); setSubs(res.data || []);
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  async function act(s, status) {
+    if (status === 'approved' && !confirm(`Approve this submission and credit KES ${Number(s.reward).toLocaleString()} to ${s.name || s.email || 'the user'}?`)) return;
+    setBusy(p => ({ ...p, [s.id]: true }));
+    await dbProxy('adminUpdateSubmission', { adminSecret: secret, submissionId: s.id, status });
+    setBusy(p => ({ ...p, [s.id]: false }));
+    await load();
+  }
+
+  return (
+    <div style={{ padding: '20px 32px' }}>
+      {err && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991B1B', fontSize: 13, maxWidth: 820 }}>
+          ⚠️ Could not load submissions: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
+        {loaded ? `${subs.length} submission${subs.length === 1 ? '' : 's'}` : 'Loading…'} · approving a task credits its reward to the user&apos;s balance.
+      </div>
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead><tr>{['Worker', 'Task', 'Reward (KES)', 'Note', 'Submitted', 'Status', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {subs.map(s => {
+              const sc = SUB_COLORS[s.status] || SUB_COLORS.pending; const b = busy[s.id];
+              return (
+                <tr key={s.id} style={styles.tr}>
+                  <td style={styles.td}><div style={{ fontWeight: 700, fontSize: 13 }}>{s.name || '—'}</div><div style={{ fontSize: 11, color: '#64748B' }}>{s.email || '—'}</div></td>
+                  <td style={{ ...styles.td, maxWidth: 220 }}>{s.taskTitle || '—'}</td>
+                  <td style={styles.td}><strong style={{ color: '#059669' }}>{Number(s.reward).toLocaleString()}</strong></td>
+                  <td style={{ ...styles.td, maxWidth: 200, fontSize: 12, color: '#475569' }}>{s.note || '—'}</td>
+                  <td style={styles.td}>{fmtDate(s.createdAt ? new Date(s.createdAt).getTime() : null)}</td>
+                  <td style={styles.td}><span style={{ ...styles.badge, background: sc.bg, color: sc.color }}>{s.status}</span></td>
+                  <td style={styles.td}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#059669' }} disabled={b || s.status === 'approved'} onClick={() => act(s, 'approved')}>✅ Approve</button>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#DC2626' }} disabled={b || s.status === 'rejected'} onClick={() => act(s, 'rejected')}>❌ Reject</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {loaded && subs.length === 0 && !err && (
+              <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No submissions yet.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -755,6 +1004,8 @@ export default function AdminPanel() {
         {[
           { key: 'users',       label: `👤 Users (${users.length})` },
           { key: 'withdrawals', label: `💸 Withdrawals (${withdrawals.length})` },
+          { key: 'tasks',       label: '📋 Tasks' },
+          { key: 'submissions', label: '📥 Submissions' },
           { key: 'broadcast',   label: '📣 Broadcast' },
           { key: 'cleanup',     label: '🧹 Clean Emails' },
         ].map(t => (
@@ -767,6 +1018,8 @@ export default function AdminPanel() {
 
       {tab === 'users'       && <UsersTab       users={users}             secret={secret} onRefresh={refresh} />}
       {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} secret={secret} onRefresh={refresh} />}
+      {tab === 'tasks'       && <TasksTab       secret={secret} />}
+      {tab === 'submissions' && <SubmissionsTab secret={secret} />}
       {tab === 'broadcast'   && <BroadcastTab   secret={secret} userCount={users.length} />}
       {tab === 'cleanup'     && <CleanupTab     secret={secret} onRefresh={refresh} />}
     </div>
@@ -788,6 +1041,7 @@ const styles = {
     padding: '7px 10px', border: '1.5px solid #E2E8F0', borderRadius: 8,
     fontSize: 13, fontFamily: 'Manrope, sans-serif', background: '#F8FAFC', color: '#111827',
   },
+  fieldLabel: { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 5 },
   err: { color: '#991B1B', fontSize: 13, marginBottom: 10 },
   btn: {
     display: 'block', width: '100%', padding: '12px',

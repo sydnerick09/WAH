@@ -77,6 +77,46 @@ function normWd(row) {
   };
 }
 
+// Admin-managed task (stored in the `tasks` table). Shape matches lib/tasks.js
+// so it can be shown on the dashboard alongside the built-in tasks.
+function normTask(row) {
+  if (!row) return null;
+  return {
+    id:          row.id,
+    title:       row.title       ?? '',
+    description: row.description ?? '',
+    category:    row.category    ?? 'General',
+    poster:      row.poster      ?? 'Business Hub',
+    location:    row.location    ?? 'Remote',
+    questions:   Array.isArray(row.questions) ? row.questions : [],
+    payment:     Number(row.payment ?? 0),   // reward
+    slots:       Number(row.slots   ?? 0),    // limit (0 = unlimited)
+    claimed:     Number(row.claimed ?? 0),
+    active:      row.active ?? true,
+    datePosted:  row.created_at
+      ? new Date(row.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })
+      : '',
+    createdAt:   row.created_at,
+  };
+}
+
+function normSub(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    userId:    row.user_id,
+    email:     row.user_email,
+    name:      row.user_name,
+    taskId:    row.task_id,
+    taskTitle: row.task_title,
+    reward:    Number(row.reward || 0),
+    note:      row.note   ?? '',
+    status:    row.status ?? 'pending',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -474,6 +514,109 @@ export default async function handler(req, res) {
           deletedEmails: matched.map(r => r.email),
           notFound,
         });
+      }
+
+      // ─── Task management ──────────────────────────────────────────────────
+      case 'listTasks': {
+        // Public: active admin-created tasks for the dashboard/submit page
+        const { data, error } = await db.from('tasks')
+          .select('*').eq('active', true).order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normTask) });
+      }
+
+      case 'adminListTasks': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('tasks')
+          .select('*').order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normTask) });
+      }
+
+      case 'adminCreateTask': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        if (!p.title || !String(p.title).trim()) return res.json({ success: false, error: 'Title is required.' });
+        const id = 'task_' + Date.now();
+        const { data, error } = await db.from('tasks').insert({
+          id,
+          title:       String(p.title).trim(),
+          description: p.description ?? '',
+          category:    p.category ?? 'General',
+          poster:      p.poster   ?? 'Business Hub',
+          location:    p.location ?? 'Remote',
+          questions:   Array.isArray(p.questions) ? p.questions : [],
+          payment:     Number(p.payment ?? 0),
+          slots:       Number(p.slots ?? 0),
+          active:      p.active !== undefined ? Boolean(p.active) : true,
+        }).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, task: normTask(data) });
+      }
+
+      case 'adminUpdateTask': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const updates = {};
+        ['title', 'description', 'category', 'poster', 'location'].forEach(k => {
+          if (p[k] !== undefined) updates[k] = p[k];
+        });
+        if (p.payment   !== undefined) updates.payment = Number(p.payment);
+        if (p.slots     !== undefined) updates.slots   = Number(p.slots);
+        if (p.active    !== undefined) updates.active  = Boolean(p.active);
+        if (p.questions !== undefined) updates.questions = Array.isArray(p.questions) ? p.questions : [];
+        const { data, error } = await db.from('tasks')
+          .update(updates).eq('id', p.taskId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, task: normTask(data) });
+      }
+
+      case 'adminDeleteTask': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { error } = await db.from('tasks').delete().eq('id', p.taskId);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true });
+      }
+
+      // ─── Submitted-task review ────────────────────────────────────────────
+      case 'adminListSubmissions': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('submissions')
+          .select('*').order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normSub) });
+      }
+
+      case 'adminUpdateSubmission': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { submissionId, status } = p;
+        const { data: sub } = await db.from('submissions')
+          .select('*').eq('id', submissionId).maybeSingle();
+        if (!sub) return res.json({ success: false, error: 'Submission not found.' });
+
+        // Approving a not-yet-approved submission credits the reward to the user
+        if (status === 'approved' && sub.status !== 'approved') {
+          const reward = Number(sub.reward || 0);
+          if (sub.user_id && reward > 0) {
+            const { data: u } = await db.from('users')
+              .select('balance,completed_tasks').eq('id', sub.user_id).maybeSingle();
+            if (u) {
+              await db.from('users').update({
+                balance:         Number(u.balance || 0) + reward,
+                completed_tasks: Number(u.completed_tasks || 0) + 1,
+              }).eq('id', sub.user_id);
+            }
+          }
+          if (sub.task_id) {
+            const { data: t } = await db.from('tasks')
+              .select('claimed').eq('id', sub.task_id).maybeSingle();
+            if (t) await db.from('tasks').update({ claimed: Number(t.claimed || 0) + 1 }).eq('id', sub.task_id);
+          }
+        }
+
+        const { data: updated, error } = await db.from('submissions')
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq('id', submissionId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, submission: normSub(updated) });
       }
 
       default:

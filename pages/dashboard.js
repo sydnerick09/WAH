@@ -729,6 +729,7 @@ export default function Dashboard() {
   const [pendingWithdrawals, setPendingWithdrawals] = useState([]);
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const [dbTasks, setDbTasks] = useState([]);   // admin-created tasks from the database
 
   const categories = [
     'All','Writing','Research','Data Entry','Design','Marketing',
@@ -745,6 +746,15 @@ export default function Dashboard() {
       setPendingWithdrawals(getOrGeneratePending());
       // Joining-gift quiz appears once, right after the first successful sign-up / sign-in
       if (!u.quizDone) setShowQuiz(true);
+      // Load any admin-created tasks (best-effort; falls back to built-in tasks)
+      try {
+        const r = await fetch('/api/db', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op: 'listTasks' }),
+        });
+        const { data } = await r.json();
+        if (Array.isArray(data)) setDbTasks(data);
+      } catch (_) {}
     }
     init();
   }, [router]);
@@ -774,7 +784,13 @@ export default function Dashboard() {
     router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }
 
-  const filteredTasks = (TASKS || []).filter(t => {
+  // Admin-created tasks first, then the built-in ones. Hide tasks that have hit
+  // their limit (slots > 0 and all slots claimed).
+  const allTasks = [...dbTasks, ...(TASKS || [])].filter(
+    t => !(Number(t.slots) > 0 && Number(t.claimed) >= Number(t.slots))
+  );
+
+  const filteredTasks = allTasks.filter(t => {
     const matchCat    = filter === 'All' || t.category === filter;
     const matchSearch = !search
       || t.title.toLowerCase().includes(search.toLowerCase())

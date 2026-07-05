@@ -1,7 +1,7 @@
 // pages/submit.js — task submission with a file/document attachment.
 // Uploads the completed work to /api/submit-task, which emails it (as an
 // attachment) to the admin and sends the client an auto-reply confirmation.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import { TASKS } from '../lib/tasks';
@@ -19,8 +19,24 @@ export default function SubmitPage() {
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
   const [done,    setDone]    = useState(false);
+  const [dbTasks, setDbTasks] = useState([]);
+  const [tasksLoaded, setTasksLoaded] = useState(false);
 
-  const task = TASKS.find(t => String(t.id) === String(router.query.task));
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/db', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op: 'listTasks' }),
+        });
+        const { data } = await r.json();
+        if (Array.isArray(data)) setDbTasks(data);
+      } catch (_) {}
+      setTasksLoaded(true);
+    })();
+  }, []);
+
+  const task = [...dbTasks, ...TASKS].find(t => String(t.id) === String(router.query.task));
 
   function onPick(e) {
     const f = e.target.files?.[0];
@@ -59,7 +75,7 @@ export default function SubmitPage() {
     setLoading(false);
   }
 
-  if (!ready || !user) {
+  if (!ready || !user || !tasksLoaded) {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white-off)' }}>
       <div className="spinner" style={{ width: 40, height: 40, borderTopColor: 'var(--green)', borderColor: 'var(--gray-light)', borderWidth: 3 }} />
     </div>;

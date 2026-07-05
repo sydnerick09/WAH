@@ -4,6 +4,7 @@
 import formidable from "formidable";
 import fs from "fs";
 import nodemailer from "nodemailer";
+import { createClient } from "@supabase/supabase-js";
 
 export const config = {
   api: {
@@ -173,6 +174,31 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error("[submit-task] client auto-reply error:", err.message);
     }
+  }
+
+  // ── 7b. Log the submission for admin review (approve/reject) ───────────────
+  // Best-effort: if the `submissions` table or DB isn't configured, submission
+  // still succeeds — this just won't appear in the admin review list.
+  try {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const db = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        { auth: { persistSession: false } }
+      );
+      await db.from("submissions").insert({
+        user_id:    userId    !== "N/A" ? userId    : null,
+        user_email: userEmail !== "N/A" ? userEmail : null,
+        user_name:  userName  !== "N/A" ? userName  : null,
+        task_id:    taskId    !== "N/A" ? taskId    : null,
+        task_title: taskTitle,
+        reward:     !Number.isNaN(paymentNum) ? paymentNum : 0,
+        note:       note !== "N/A" ? note : "",
+        status:     "pending",
+      });
+    }
+  } catch (err) {
+    console.error("[submit-task] submission log error:", err.message);
   }
 
   // ── 8. Cleanup temp file ───────────────────────────────────────────────────
