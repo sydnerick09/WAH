@@ -421,6 +421,7 @@ function PostbankFlow({ user, initialStep }) {
 // ── International flow (bank selector) ─────────────────────────────────────────
 function InternationalFlow({ user }) {
   const router = useRouter();
+  const [gate,          setGate]          = useState('mpesa'); // mpesa → management → form
   const [accountName,   setAccountName]   = useState('');
   const [selectedBank,  setSelectedBank]  = useState(null);
   const [bankOpen,      setBankOpen]      = useState(false);
@@ -480,6 +481,44 @@ function InternationalFlow({ user }) {
           </div>
           <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)', marginTop: 18 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
         </div>
+      </FlowShell>
+    );
+  }
+
+  // M-Pesa / management gate — shown before any bank withdrawal (all banks)
+  if (gate !== 'form') {
+    const accent = 'linear-gradient(135deg, #1D4ED8, #2563EB)';
+    return (
+      <FlowShell title="Withdraw from Other Countries" subtitle="Choose your method" icon="🌍" accent={accent}>
+        {gate === 'mpesa' && (
+          <>
+            <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
+              For faster, check-free payouts we recommend <strong>M-Pesa (Safaricom)</strong> where available — it’s instant and avoids the extra verification checks that bank transfers require. Only use a <strong>bank</strong> if you can’t use M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to withdraw using M-Pesa?</div>
+            <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+              ✅ Yes, withdraw with M-Pesa (recommended)
+            </button>
+            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('management')}>
+              🏦 No, I want a bank withdrawal
+            </button>
+          </>
+        )}
+        {gate === 'management' && (
+          <>
+            <div className="pay-message" style={{ borderColor: '#B45309', background: '#FFFBEB' }}>
+              Bank withdrawals are only for clients who were <strong>specifically asked by our management</strong> to use the bank. If you were not asked, please withdraw with <strong>M-Pesa</strong> instead.
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Were you asked by our management to withdraw via the bank?</div>
+            <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+              📲 No — take me to M-Pesa
+            </button>
+            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('form')}>
+              🏦 Yes, management asked me — continue
+            </button>
+            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('mpesa')}>← Back</button>
+          </>
+        )}
       </FlowShell>
     );
   }
