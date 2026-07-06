@@ -646,10 +646,9 @@ function ActivityFeed({ withdrawals, pending }) {
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onPremiumTest, onLogout }) {
+function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onLogout }) {
   const items = [
     { icon: '🏠', label: 'Dashboard',            action: () => { onClose(); } },
-    { icon: '🧠', label: 'Premium Skills Test', action: () => { onClose(); onPremiumTest(); } },
     { icon: '⭐', label: 'Upgrade to Premium',   action: () => { onClose(); onUpgrade(); } },
     { icon: '✅', label: 'Awarded Tasks',         action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: '📲', label: 'Withdraw with M-Pesa', action: () => { onClose(); onMpesaWithdraw(); } },
@@ -688,22 +687,9 @@ function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithd
         </nav>
         <div className="hamburger-footer">
           <div style={{ fontSize: 11, color: 'var(--gray)', marginBottom: 8 }}>Account Balance</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--green)', marginBottom: 12 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--green)', marginBottom: 14 }}>
             KES {(user?.balance || 0).toLocaleString()}
           </div>
-          <button
-            onClick={() => { onClose(); onPremiumTest(); }}
-            style={{ width: '100%', textAlign: 'left', border: '1px solid #DDD6FE', background: '#F5F3FF', borderRadius: 12, padding: '10px 12px', marginBottom: 14, cursor: 'pointer' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 11, color: '#6D28D9', fontWeight: 700 }}>🧠 Premium Balance</span>
-              <span style={{ fontSize: 11, color: '#6D28D9' }}>Skills Test ›</span>
-            </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: '#6D28D9', marginTop: 2 }}>
-              KES {(user?.premiumBalance || 0).toLocaleString()}
-            </div>
-            <div style={{ fontSize: 10.5, color: '#8B5CF6' }}>Use toward your KES 480 premium fee</div>
-          </button>
           <button className="logout-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={onLogout}>
             ⏏ Sign Out
           </button>
@@ -1023,7 +1009,6 @@ export default function Dashboard() {
           onOtherWithdraw={() => router.push('/withdraw?method=international')}
           onReferral={() => setShowReferral(true)}
           onTraining={() => setShowTraining(true)}
-          onPremiumTest={() => router.push('/skills-test')}
           onLogout={handleLogout}
         />
       )}

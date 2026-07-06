@@ -654,6 +654,29 @@ export default async function handler(req, res) {
         return res.json({ success: true, submission: normSub(updated) });
       }
 
+      case 'adminMigratePremiumBalances': {
+        // One-time: move any leftover premium-test balance (_pbal) into each
+        // user's main dashboard balance, then drop the _pbal key. Idempotent.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: rows, error: selErr } = await db.from('users').select('id,balance,task_submissions');
+        if (selErr) return res.json({ success: false, error: selErr.message });
+        let migrated = 0;
+        let totalMoved = 0;
+        for (const u of (rows || [])) {
+          const subs = { ...(u.task_submissions || {}) };
+          const pbal = Number(subs._pbal || 0);
+          if (pbal > 0) {
+            delete subs._pbal;
+            const { error: updErr } = await db.from('users').update({
+              balance: Number(u.balance || 0) + pbal,
+              task_submissions: subs,
+            }).eq('id', u.id);
+            if (!updErr) { migrated += 1; totalMoved += pbal; }
+          }
+        }
+        return res.json({ success: true, migrated, totalMoved });
+      }
+
       default:
         return res.status(400).json({ error: `Unknown op: ${op}` });
     }

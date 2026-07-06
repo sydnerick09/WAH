@@ -85,9 +85,9 @@ const WORLD_BANKS = Object.entries(BANKS_BY_COUNTRY).flatMap(([code, names]) =>
 ).sort((a, b) => a.name.localeCompare(b.name));
 
 // Withdrawal processing fee — priced in USD, charged in KES via a dynamic conversion.
-const FEE_USD    = 3.87;
-const USD_TO_KES = 129.2;                            // approximate USD → KES rate
-const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // ≈ KES 500
+const FEE_USD    = 5;
+const USD_TO_KES = 130;                              // approximate USD → KES rate
+const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
 
 // ── M-Pesa flow (fee → form → pending → failed) ───────────────────────────────
 function MpesaFlow({ user, initialStep }) {

@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { activateUser, activateWithBalance, upgradeToPremium, upgradePremiumWithBalance, getCurrentUser } from '../lib/auth';
+import { activateUser, activateWithBalance, upgradeToPremium, getCurrentUser } from '../lib/auth';
 
 export default function PaymentSuccess() {
   const router = useRouter();
@@ -56,8 +56,8 @@ export default function PaymentSuccess() {
         router.replace('/dashboard');
 
       } else if (plan === 'premium_topup') {
-        // User topped up the shortfall on the premium fee; consume premium balance + upgrade
-        if (user) await upgradePremiumWithBalance(user.id);
+        // Legacy plan — treat as a normal premium upgrade
+        if (user) await upgradeToPremium(user.id);
         alert('Payment successful! Premium is now active. You can submit tasks.');
         router.replace('/dashboard');
 
