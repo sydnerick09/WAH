@@ -93,8 +93,8 @@ export default function SubmitPage() {
     );
   }
 
-  // Premium is required to submit
-  if (!user.premium) {
+  // Premium is required to submit — except limited-time OFFER tasks (id starts with offer_)
+  if (!user.premium && !String(task?.id || '').startsWith('offer_')) {
     return (
       <FlowShell title="Submit Task" subtitle="Premium required" icon="📤">
         <div className="pay-message" style={{ borderColor: '#125C37', background: '#F0FFF4', marginBottom: 18 }}>

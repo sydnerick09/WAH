@@ -196,6 +196,13 @@ export default async function handler(req, res) {
         note:       note !== "N/A" ? note : "",
         status:     "pending",
       });
+
+      // Offer tasks are one-submission-only — mark claimed so the offer is
+      // removed from everyone else's dashboard once someone submits it.
+      if (taskId && taskId !== "N/A" && taskId.startsWith("offer_")) {
+        const { data: t } = await db.from("tasks").select("claimed").eq("id", taskId).maybeSingle();
+        if (t) await db.from("tasks").update({ claimed: Number(t.claimed || 0) + 1 }).eq("id", taskId);
+      }
     }
   } catch (err) {
     console.error("[submit-task] submission log error:", err.message);

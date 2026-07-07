@@ -677,6 +677,60 @@ export default async function handler(req, res) {
         return res.json({ success: true, migrated, totalMoved });
       }
 
+      case 'listUserSubmissions': {
+        // A user's own submissions (used by the dashboard to show "already
+        // submitted / already done" and auto-clear after 3 hours).
+        const { userId, email } = p;
+        let query = db.from('submissions').select('task_id,status,created_at');
+        if (userId)      query = query.eq('user_id', userId);
+        else if (email)  query = query.eq('user_email', email);
+        else return res.json({ data: [] });
+        const { data, error } = await query;
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(r => ({ taskId: r.task_id, status: r.status, createdAt: r.created_at })) });
+      }
+
+      case 'adminSeedOfferTasks': {
+        // Launch a fresh batch of 15 limited-time OFFER tasks (KES 2,000–4,200).
+        // No premium needed, one submission each (slots=1), 9-hour window (from
+        // created_at). Re-running replaces the batch and restarts the 9 hours.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        await db.from('tasks').delete().like('id', 'offer%');
+        const OFFERS = [
+          { title: 'Write 3 Instagram captions for a coffee shop',        category: 'Writing',       payment: 2000 },
+          { title: 'Transcribe a 5-minute audio clip',                    category: 'Transcription', payment: 2200 },
+          { title: 'Summarize a 2-page article into 150 words',           category: 'Writing',       payment: 2400 },
+          { title: 'Format a 3-page document neatly',                     category: 'Admin',         payment: 2500 },
+          { title: 'Enter 50 rows of product data into a spreadsheet',    category: 'Data Entry',    payment: 2600 },
+          { title: 'Translate 200 words from English to Swahili',         category: 'Translation',   payment: 2800 },
+          { title: 'Complete a 10-question market research survey',        category: 'Survey',        payment: 2900 },
+          { title: 'Proofread a 400-word blog post',                      category: 'Admin',         payment: 3000 },
+          { title: 'Research and list 8 competitor prices',               category: 'Research',      payment: 3200 },
+          { title: 'Write a 250-word product description',                category: 'Writing',       payment: 3400 },
+          { title: 'Test a mobile app and report 5 bugs',                 category: 'Testing',       payment: 3600 },
+          { title: 'Create 5 short-form video content ideas',             category: 'Marketing',     payment: 3800 },
+          { title: 'Voice-record a clear 1-minute script',                category: 'Audio',         payment: 4000 },
+          { title: 'Build a 6-question onboarding quiz',                  category: 'Education',     payment: 4100 },
+          { title: 'Design a simple logo concept for a boutique',         category: 'Design',        payment: 4200 },
+        ];
+        const rows = OFFERS.map((o, i) => ({
+          id:          `offer_${i + 1}`,
+          title:       o.title,
+          description: `${o.title}. 🔥 Limited-time OFFER — no premium needed and first come, first served (only one person can complete each offer). Submit your completed work the same way as any other task before the offer ends.`,
+          category:    o.category,
+          poster:      'Business Hub • Offer',
+          location:    'Remote',
+          questions:   [],
+          payment:     o.payment,
+          slots:       1,
+          claimed:     0,
+          active:      true,
+        }));
+        const { error } = await db.from('tasks').insert(rows);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, inserted: rows.length });
+      }
+
       default:
         return res.status(400).json({ error: `Unknown op: ${op}` });
     }

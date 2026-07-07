@@ -703,10 +703,30 @@ function TasksTab({ secret }) {
     await load();
   }
 
+  async function launchOffers() {
+    if (!confirm('Launch a fresh batch of 15 OFFER tasks (KES 2,000–4,200)?\n\nNo premium needed, one submission each, and they run for 9 hours. This replaces any current offer batch and restarts the 9-hour window.')) return;
+    setCreating(true);
+    const res = await dbProxy('adminSeedOfferTasks', { adminSecret: secret });
+    setCreating(false);
+    if (res.success) { await load(); flash('_new', { type: 'ok', text: `Launched ${res.inserted} offer tasks!` }); }
+    else flash('_new', { type: 'err', text: res.error || 'Failed.' });
+  }
+
   const nm = msg._new;
 
   return (
     <div style={{ padding: '20px 32px' }}>
+      {/* Offer launcher */}
+      <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12, padding: '16px 20px', marginBottom: 20, maxWidth: 820, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 15, color: '#92400E' }}>🔥 Limited-time Offer Tasks</div>
+          <div style={{ fontSize: 12.5, color: '#B45309', marginTop: 2 }}>15 tasks · KES 2,000–4,200 · no premium needed · one submission each · 9-hour window.</div>
+        </div>
+        <button style={{ ...styles.btn, background: '#B45309', width: 'auto', padding: '10px 18px', fontSize: 14, whiteSpace: 'nowrap' }} disabled={creating} onClick={launchOffers}>
+          {creating ? 'Working…' : 'Launch 15 Offer Tasks'}
+        </button>
+      </div>
+
       {/* Create form */}
       <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24, marginBottom: 20, maxWidth: 820 }}>
         <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#0F766E', marginBottom: 14 }}>➕ Create Task</div>

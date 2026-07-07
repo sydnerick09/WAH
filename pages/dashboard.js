@@ -17,6 +17,12 @@ import { TASKS } from '../lib/tasks';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Limited-time "offer" tasks (id starts with offer_): no premium needed,
+// one submission each, 9-hour window.
+const isOffer = t => String(t?.id || '').startsWith('offer_');
+const THREE_HOURS = 3 * 60 * 60 * 1000;
+const NINE_HOURS  = 9 * 60 * 60 * 1000;
+
 function getOrGenerateWithdrawals() {
   const LS_KEY = 'bh_live_withdrawals_v6';
   try {
@@ -119,9 +125,10 @@ function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick, onSubmit }
   if (!task) return null;
   const isActivated = user?.activated;
   const isPremium   = user?.premium;
+  const offer       = isOffer(task);
 
   function handleSubmit() {
-    if (!isPremium) { onClose(); onUpgradeClick(); return; }
+    if (!offer && !isPremium) { onClose(); onUpgradeClick(); return; }
     onClose();
     onSubmit(task);   // → file-upload submission page
   }
@@ -166,11 +173,11 @@ function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick, onSubmit }
           {!isActivated && (
             <button className="bid-btn" onClick={() => onBidClick(task)}>💼 Bid on This Task</button>
           )}
-          {isActivated && !isPremium && (
+          {isActivated && !isPremium && !offer && (
             <button className="submit-btn" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>⭐ Upgrade to Premium to Submit</button>
           )}
-          {isActivated && isPremium && (
-            <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task</button>
+          {isActivated && (isPremium || offer) && (
+            <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task{offer ? ' (Offer — No Premium)' : ''}</button>
           )}
         </div>
       </div>
@@ -716,11 +723,31 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [dbTasks, setDbTasks] = useState([]);   // admin-created tasks from the database
+  const [userSubs, setUserSubs] = useState({}); // taskId → { status, createdAt } for this user
 
   const categories = [
-    'All','Writing','Research','Data Entry','Design','Marketing',
+    'All','🔥 Offers','Writing','Research','Data Entry','Design','Marketing',
     'Transcription','Translation','Survey','Testing','Audio','Education','Admin',
   ];
+
+  async function loadUserSubs(uid) {
+    if (!uid) return;
+    try {
+      const r = await fetch('/api/db', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'listUserSubmissions', userId: uid }),
+      });
+      const { data } = await r.json();
+      if (Array.isArray(data)) {
+        const map = {};
+        data.forEach(s => {
+          const k = String(s.taskId);
+          if (!map[k] || new Date(s.createdAt) > new Date(map[k].createdAt)) map[k] = s;
+        });
+        setUserSubs(map);
+      }
+    } catch (_) {}
+  }
 
   useEffect(() => {
     async function init() {
@@ -732,6 +759,7 @@ export default function Dashboard() {
       setPendingWithdrawals(getOrGeneratePending());
       // Joining-gift quiz appears once, right after the first successful sign-up / sign-in
       if (!u.quizDone) setShowQuiz(true);
+      loadUserSubs(u.id);
       // Load any admin-created tasks (best-effort; falls back to built-in tasks)
       try {
         const r = await fetch('/api/db', {
@@ -751,7 +779,7 @@ export default function Dashboard() {
     const refresh = async () => {
       if (document.visibilityState === 'visible') {
         const u = await getCurrentUser().catch(() => null);
-        if (u) setUser(u);
+        if (u) { setUser(u); loadUserSubs(u.id); }
       }
     };
     document.addEventListener('visibilitychange', refresh);
@@ -765,21 +793,31 @@ export default function Dashboard() {
   const handleBidClick     = useCallback(() => { setSelectedTask(null); router.push('/activate'); }, [router]);
 
   function handleSubmitTask(task) {
-    if (!user?.activated) { router.push('/activate'); return; }   // active account required first
-    if (!user.premium) { router.push('/premium'); return; }
+    if (!user?.activated) { router.push('/activate'); return; }        // active account required first
+    if (!isOffer(task) && !user.premium) { router.push('/premium'); return; }  // offers skip premium
     router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }
 
   // Use the database tasks as the source of truth once any exist (built-ins are
   // migrated in), falling back to the built-in list if the DB is empty/unreachable.
-  // Hide tasks that have hit their limit (slots > 0 and all slots claimed).
   const source = dbTasks.length ? dbTasks : (TASKS || []);
-  const allTasks = source.filter(
-    t => !(Number(t.slots) > 0 && Number(t.claimed) >= Number(t.slots))
-  );
+  const now = Date.now();
+  const allTasks = source.filter(t => {
+    const sub = userSubs[String(t.id)];
+    if (sub) {
+      // The user submitted this task — keep it visible ("already submitted /
+      // done") until 3 hours pass, then clear it from their dashboard.
+      return !(sub.createdAt && now - new Date(sub.createdAt).getTime() > THREE_HOURS);
+    }
+    // Not submitted by this user: hide if the limit is reached (e.g. an offer
+    // someone else already took) or if an offer's 9-hour window has ended.
+    if (Number(t.slots) > 0 && Number(t.claimed) >= Number(t.slots)) return false;
+    if (isOffer(t) && t.createdAt && now - new Date(t.createdAt).getTime() > NINE_HOURS) return false;
+    return true;
+  });
 
   const filteredTasks = allTasks.filter(t => {
-    const matchCat    = filter === 'All' || t.category === filter;
+    const matchCat    = filter === 'All' ? true : filter === '🔥 Offers' ? isOffer(t) : t.category === filter;
     const matchSearch = !search
       || t.title.toLowerCase().includes(search.toLowerCase())
       || t.description.toLowerCase().includes(search.toLowerCase());
@@ -961,27 +999,46 @@ export default function Dashboard() {
           </div>
 
           <div className="tasks-grid">
-            {filteredTasks.map(task => (
-              <div key={task.id} className="task-card">
-                <div className="task-card-header">
-                  <div className="task-poster">
-                    <div className="task-poster-avatar">{task.poster.charAt(0).toUpperCase()}</div>
-                    <div>
-                      <div className="task-poster-name">{task.poster}</div>
-                      <div className="task-poster-date">{task.datePosted}</div>
+            {filteredTasks.map(task => {
+              const sub   = userSubs[String(task.id)];
+              const offer = isOffer(task);
+              return (
+                <div key={task.id} className="task-card" style={offer ? { border: '1.5px solid #F59E0B' } : undefined}>
+                  <div className="task-card-header">
+                    <div className="task-poster">
+                      <div className="task-poster-avatar">{task.poster.charAt(0).toUpperCase()}</div>
+                      <div>
+                        <div className="task-poster-name">{task.poster}</div>
+                        <div className="task-poster-date">{task.datePosted}</div>
+                      </div>
                     </div>
+                    <div className="task-payment">KES {task.payment.toLocaleString()}</div>
                   </div>
-                  <div className="task-payment">KES {task.payment.toLocaleString()}</div>
+                  {offer && (
+                    <div style={{ display: 'inline-block', background: '#FEF3C7', color: '#92400E', fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 999, marginBottom: 6 }}>
+                      🔥 OFFER · No premium needed · 9-hour deal
+                    </div>
+                  )}
+                  <div className="task-category">{task.category}</div>
+                  <div className="task-title">{task.title}</div>
+                  <div className="task-desc">{task.description}</div>
+                  <div className="task-actions">
+                    {sub ? (
+                      <div style={{ flex: 1, textAlign: 'center', padding: '10px 12px', borderRadius: 8, fontWeight: 700, fontSize: 14,
+                        background: sub.status === 'approved' ? '#D1FAE5' : '#DBEAFE',
+                        color:      sub.status === 'approved' ? '#065F46' : '#1E40AF' }}>
+                        {sub.status === 'approved' ? '✅ Already done' : '✅ Already submitted'}
+                      </div>
+                    ) : (
+                      <>
+                        <button className="task-view-btn" onClick={() => handleViewTask(task)}>👁️ View / Bid</button>
+                        <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Attach your work & submit">📤 Submit</button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="task-category">{task.category}</div>
-                <div className="task-title">{task.title}</div>
-                <div className="task-desc">{task.description}</div>
-                <div className="task-actions">
-                  <button className="task-view-btn" onClick={() => handleViewTask(task)}>👁️ View / Bid</button>
-                  <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Attach your work & submit">📤 Submit</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </main>
