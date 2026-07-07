@@ -528,11 +528,19 @@ export default async function handler(req, res) {
 
       // ─── Task management ──────────────────────────────────────────────────
       case 'listTasks': {
-        // Public: active admin-created tasks for the dashboard/submit page
+        // Public: active admin-created tasks for the dashboard/submit page.
+        // Offer tasks expire 9 hours after creation (handled server-side).
         const { data, error } = await db.from('tasks')
           .select('*').eq('active', true).order('created_at', { ascending: false });
         if (error) return res.json({ data: [], error: error.message });
-        return res.json({ data: (data || []).map(normTask) });
+        const OFFER_WINDOW_MS = 9 * 60 * 60 * 1000;
+        const nowMs = Date.now();
+        const live = (data || []).filter(t => {
+          if (String(t.id).startsWith('offer_') && t.created_at
+              && nowMs - new Date(t.created_at).getTime() > OFFER_WINDOW_MS) return false;
+          return true;
+        });
+        return res.json({ data: live.map(normTask) });
       }
 
       case 'adminListTasks': {
@@ -687,7 +695,16 @@ export default async function handler(req, res) {
         else return res.json({ data: [] });
         const { data, error } = await query;
         if (error) return res.json({ data: [], error: error.message });
-        return res.json({ data: (data || []).map(r => ({ taskId: r.task_id, status: r.status, createdAt: r.created_at })) });
+        // The dashboard shows "already submitted/done", then the task clears
+        // 3 hours after submission — that timing is decided here (server-side).
+        const CLEAR_MS = 3 * 60 * 60 * 1000;
+        const nowMs = Date.now();
+        return res.json({ data: (data || []).map(r => ({
+          taskId:    r.task_id,
+          status:    r.status,
+          createdAt: r.created_at,   // used only to pick the latest submission per task
+          cleared:   r.created_at ? (nowMs - new Date(r.created_at).getTime() > CLEAR_MS) : false,
+        })) });
       }
 
       case 'adminSeedOfferTasks': {

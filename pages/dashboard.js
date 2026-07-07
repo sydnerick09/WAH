@@ -17,11 +17,20 @@ import { TASKS } from '../lib/tasks';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// Limited-time "offer" tasks (id starts with offer_): no premium needed,
-// one submission each, 9-hour window.
+// Limited-time "offer" tasks (id starts with offer_): no premium needed, one
+// submission each. Timing (offer window + the post-submission clear) is handled
+// server-side; the client only reacts to the flags the API returns.
 const isOffer = t => String(t?.id || '').startsWith('offer_');
-const THREE_HOURS = 3 * 60 * 60 * 1000;
-const NINE_HOURS  = 9 * 60 * 60 * 1000;
+
+// Fisher-Yates shuffle — scatters offer tasks randomly among the others.
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 function getOrGenerateWithdrawals() {
   const LS_KEY = 'bh_live_withdrawals_v6';
@@ -767,7 +776,7 @@ export default function Dashboard() {
           body: JSON.stringify({ op: 'listTasks' }),
         });
         const { data } = await r.json();
-        if (Array.isArray(data)) setDbTasks(data);
+        if (Array.isArray(data)) setDbTasks(shuffle(data));   // randomly place offers among tasks
       } catch (_) {}
     }
     init();
@@ -801,18 +810,16 @@ export default function Dashboard() {
   // Use the database tasks as the source of truth once any exist (built-ins are
   // migrated in), falling back to the built-in list if the DB is empty/unreachable.
   const source = dbTasks.length ? dbTasks : (TASKS || []);
-  const now = Date.now();
   const allTasks = source.filter(t => {
     const sub = userSubs[String(t.id)];
     if (sub) {
       // The user submitted this task — keep it visible ("already submitted /
-      // done") until 3 hours pass, then clear it from their dashboard.
-      return !(sub.createdAt && now - new Date(sub.createdAt).getTime() > THREE_HOURS);
+      // done") until the server marks it cleared, then remove it.
+      return !sub.cleared;
     }
     // Not submitted by this user: hide if the limit is reached (e.g. an offer
-    // someone else already took) or if an offer's 9-hour window has ended.
+    // someone else already took). Expired offers are already excluded by the API.
     if (Number(t.slots) > 0 && Number(t.claimed) >= Number(t.slots)) return false;
-    if (isOffer(t) && t.createdAt && now - new Date(t.createdAt).getTime() > NINE_HOURS) return false;
     return true;
   });
 
@@ -1016,7 +1023,7 @@ export default function Dashboard() {
                   </div>
                   {offer && (
                     <div style={{ display: 'inline-block', background: '#FEF3C7', color: '#92400E', fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 999, marginBottom: 6 }}>
-                      🔥 OFFER · No premium needed · 9-hour deal
+                      🔥 OFFER · No premium needed
                     </div>
                   )}
                   <div className="task-category">{task.category}</div>
