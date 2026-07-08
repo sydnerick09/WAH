@@ -72,6 +72,10 @@ export default function PaymentSuccess() {
         // Fee paid — open the Postbank Kenya withdrawal form
         router.replace('/withdraw?method=postbank&step=form');
 
+      } else if (plan === 'international_withdrawal_fee') {
+        // Fee paid — open the Other Countries bank withdrawal form
+        router.replace('/withdraw?method=international&step=form');
+
       } else {
         // Default: account activation (KES 50)
         const amountKES = Math.round(verifyData.data.amount / 100);
