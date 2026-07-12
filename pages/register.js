@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { registerUser, setCurrentUser } from '../lib/auth';
+import { registerUser, setCurrentUser, getBoundEmail, bindBrowser } from '../lib/auth';
 
 const COUNTRIES = [
   'Kenya', 'Uganda', 'Tanzania', 'Rwanda', 'Ethiopia', 'Nigeria', 'Ghana',
@@ -13,8 +13,6 @@ const COUNTRIES = [
   'France', 'Netherlands', 'UAE', 'India', 'China', 'Japan',
 ];
 
-// One account per device
-const DEVICE_KEY = 'bh_device_registered';
 const CV_MAX_MB  = 5;
 const CV_ACCEPT  = '.pdf,.doc,.docx,.rtf,.txt';
 
@@ -37,9 +35,9 @@ export default function Register() {
   const [cv, setCv] = useState(null);
   const [deviceUsed, setDeviceUsed] = useState(false);
 
-  // One account per device
+  // One account per browser
   useEffect(() => {
-    if (typeof window !== 'undefined' && localStorage.getItem(DEVICE_KEY)) setDeviceUsed(true);
+    if (getBoundEmail()) setDeviceUsed(true);
   }, []);
 
   function onPickCv(e) {
@@ -119,9 +117,9 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
-    // One account per device
-    if (typeof window !== 'undefined' && localStorage.getItem(DEVICE_KEY)) {
-      setError('This device has already been used to create an account. Only one account is allowed per device.');
+    // One account per browser
+    if (getBoundEmail()) {
+      setError('This browser already has an account. Only one account is allowed per browser.');
       setDeviceUsed(true);
       return;
     }
@@ -164,7 +162,7 @@ export default function Register() {
       } catch (_) { /* ignore — CV is optional */ }
     }
 
-    try { localStorage.setItem(DEVICE_KEY, email); } catch (_) {}
+    bindBrowser(email);
     localStorage.removeItem('referrerId');
     setCurrentUser(result.user);
     router.push('/dashboard');
@@ -221,7 +219,7 @@ export default function Register() {
 
         {deviceUsed && (
           <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', padding: '12px 16px', borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 600 }}>
-            This device has already been used to create an account. Only one account is allowed per device.{' '}
+            This browser already has a Business Hub account. Only one account is allowed per browser.{' '}
             <Link href="/login" style={{ color: '#B45309', textDecoration: 'underline' }}>Log in instead →</Link>
           </div>
         )}
