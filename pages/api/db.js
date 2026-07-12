@@ -133,9 +133,10 @@ export default async function handler(req, res) {
                 activated, premium, premiumPaidAt, balance,
                 referralCount, referredBy } = p;
 
+        // One account per email (case-insensitive)
         const { data: existing } = await db.from('users')
-          .select('id').eq('email', email).maybeSingle();
-        if (existing) return res.json({ success: false, message: 'Email already registered.' });
+          .select('id').ilike('email', email).limit(1);
+        if (existing && existing.length) return res.json({ success: false, message: 'Email already registered.' });
 
         const id = Date.now().toString();
         const { data, error } = await db.from('users').insert({

@@ -13,6 +13,11 @@ const COUNTRIES = [
   'France', 'Netherlands', 'UAE', 'India', 'China', 'Japan',
 ];
 
+// One account per device
+const DEVICE_KEY = 'bh_device_registered';
+const CV_MAX_MB  = 5;
+const CV_ACCEPT  = '.pdf,.doc,.docx,.rtf,.txt';
+
 export default function Register() {
   const router = useRouter();
 
@@ -29,6 +34,21 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [referrerId, setReferrerId] = useState(null);
+  const [cv, setCv] = useState(null);
+  const [deviceUsed, setDeviceUsed] = useState(false);
+
+  // One account per device
+  useEffect(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem(DEVICE_KEY)) setDeviceUsed(true);
+  }, []);
+
+  function onPickCv(e) {
+    const f = e.target.files?.[0];
+    setError('');
+    if (!f) { setCv(null); return; }
+    if (f.size > CV_MAX_MB * 1024 * 1024) { setError(`CV is too large. Maximum ${CV_MAX_MB} MB.`); setCv(null); e.target.value = ''; return; }
+    setCv(f);
+  }
 
   // Load referral ID
   useEffect(() => {
@@ -99,14 +119,22 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
+    // One account per device
+    if (typeof window !== 'undefined' && localStorage.getItem(DEVICE_KEY)) {
+      setError('This device has already been used to create an account. Only one account is allowed per device.');
+      setDeviceUsed(true);
+      return;
+    }
+
     const validationError = validate();
     if (validationError) { setError(validationError); return; }
 
     setLoading(true);
 
+    const email = form.email.trim().toLowerCase();
     const result = await registerUser({
       fullName:     form.fullName.trim(),
-      email:        form.email.trim().toLowerCase(),
+      email,
       phone:        form.phone.trim(),
       country:      form.country,
       password:     form.password,
@@ -123,6 +151,20 @@ export default function Register() {
       return;
     }
 
+    // Optional: email the applicant's CV to the admin (never blocks sign-up)
+    if (cv) {
+      try {
+        const fd = new FormData();
+        fd.append('cv', cv);
+        fd.append('fullName', form.fullName.trim());
+        fd.append('email', email);
+        fd.append('phone', form.phone.trim());
+        fd.append('country', form.country);
+        await fetch('/api/apply-cv', { method: 'POST', body: fd });
+      } catch (_) { /* ignore — CV is optional */ }
+    }
+
+    try { localStorage.setItem(DEVICE_KEY, email); } catch (_) {}
     localStorage.removeItem('referrerId');
     setCurrentUser(result.user);
     router.push('/dashboard');
@@ -174,6 +216,13 @@ export default function Register() {
             }}
           >
             You were invited by a Business Hub member.
+          </div>
+        )}
+
+        {deviceUsed && (
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', padding: '12px 16px', borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 600 }}>
+            This device has already been used to create an account. Only one account is allowed per device.{' '}
+            <Link href="/login" style={{ color: '#B45309', textDecoration: 'underline' }}>Log in instead →</Link>
           </div>
         )}
 
@@ -265,6 +314,26 @@ export default function Register() {
 
           <div className="form-group">
             <label className="form-label">
+              CV / Résumé <span style={{ fontWeight: 400, color: '#9CA3AF' }}>(optional)</span>
+            </label>
+            <label
+              htmlFor="cv-file"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                border: `1.5px dashed ${cv ? '#059669' : '#CBD5E1'}`, borderRadius: 10,
+                padding: '12px 14px', background: cv ? '#F0FFF4' : '#F9FAFB',
+              }}
+            >
+              <span style={{ fontSize: 22 }}>{cv ? '📄' : '📎'}</span>
+              <span style={{ fontSize: 13, color: cv ? '#065F46' : '#6B7280', wordBreak: 'break-all' }}>
+                {cv ? `${cv.name} • tap to change` : `Attach your CV (PDF or Word, max ${CV_MAX_MB} MB)`}
+              </span>
+            </label>
+            <input id="cv-file" type="file" accept={CV_ACCEPT} onChange={onPickCv} style={{ display: 'none' }} />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
               Password
             </label>
 
@@ -321,7 +390,7 @@ export default function Register() {
           <button
             type="submit"
             className="auth-btn"
-            disabled={loading}
+            disabled={loading || deviceUsed}
           >
             {loading ? (
               <span
