@@ -34,6 +34,7 @@ const COUNTRY_META = {
   EG: { country: 'Egypt',          flag: '🇪🇬', ph: 'EG38 0019 0005 0000 0000 2631 8000 2', re: /^EG[0-9A-Z]{6,30}$/i },
   PK: { country: 'Pakistan',       flag: '🇵🇰', ph: 'PK36 SCBL 0000 0011 2345 6702', re: /^PK[0-9A-Z]{6,30}$/i },
   KE: { country: 'Kenya',          flag: '🇰🇪', ph: 'KE12 3456 7890 1234 5678 90',   re: /^KE[0-9A-Z]{6,30}$/i },
+  MB: { country: 'Mobile Banking', flag: '📱', ph: '+254 7XX XXX XXX',              re: /^\+?\d{7,15}$/ },
   US: { country: 'United States',  flag: '🇺🇸', ph: '0123 4567 8901',         re: /^\d{8,17}$/ },
   CA: { country: 'Canada',         flag: '🇨🇦', ph: '0123 4567 89',           re: /^\d{7,12}$/ },
   NG: { country: 'Nigeria',        flag: '🇳🇬', ph: '0123456789',             re: /^\d{10}$/ },
@@ -67,6 +68,7 @@ const BANKS_BY_COUNTRY = {
   EG: ['National Bank of Egypt'],
   PK: ['HBL (Habib Bank)', 'United Bank (UBL)'],
   KE: ['Postbank Kenya', 'Equity Bank', 'KCB Bank', 'Co-operative Bank', 'Absa Bank Kenya'],
+  MB: ['Mobile Banking'],
   US: ['Bank of America', 'JPMorgan Chase', 'Wells Fargo', 'Citibank'],
   CA: ['RBC Royal Bank', 'TD Canada Trust', 'Scotiabank'],
   NG: ['Guaranty Trust Bank (GTBank)', 'Access Bank', 'First Bank of Nigeria', 'Zenith Bank'],
@@ -86,6 +88,9 @@ const WORLD_BANKS = Object.entries(BANKS_BY_COUNTRY).flatMap(([code, names]) =>
 
 // Registration uses full country names; a few differ from the bank directory.
 const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
+
+// Mobile Banking is offered to every user regardless of country.
+const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
 // Withdrawal processing fee — priced in USD, charged in KES via a dynamic conversion.
 const FEE_USD    = 5;
@@ -467,9 +472,11 @@ function InternationalFlow({ user, initialStep }) {
   const homeCountry = REG_COUNTRY_ALIAS[user?.country] || user?.country || '';
   const homeBanks   = WORLD_BANKS.filter(b => b.country === homeCountry);
   const q = bankQuery.trim().toLowerCase();
+  // Default list always offers Mobile Banking first, then the user's country banks.
+  const homeDefault = homeBanks.length ? [MOBILE_BANK, ...homeBanks].filter(Boolean) : WORLD_BANKS;
   const filteredBanks = q
     ? WORLD_BANKS.filter(b => b.name.toLowerCase().includes(q) || b.country.toLowerCase().includes(q))
-    : (homeBanks.length ? homeBanks : WORLD_BANKS);
+    : homeDefault;
 
   const cleanedAcct = accountNumber.replace(/[\s-]/g, '');
   const acctValid   = !!selectedBank && selectedBank.re.test(cleanedAcct);
