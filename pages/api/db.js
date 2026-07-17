@@ -663,6 +663,15 @@ export default async function handler(req, res) {
         return res.json({ success: true, submission: normSub(updated) });
       }
 
+      case 'adminClearTasks': {
+        // Delete ALL tasks so a fresh set can be created with current dates.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: before } = await db.from('tasks').select('id');
+        const { error } = await db.from('tasks').delete().not('id', 'is', null);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, deleted: (before || []).length });
+      }
+
       case 'adminMigratePremiumBalances': {
         // One-time: move any leftover premium-test balance (_pbal) into each
         // user's main dashboard balance, then drop the _pbal key. Idempotent.

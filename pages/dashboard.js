@@ -732,6 +732,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [dbTasks, setDbTasks] = useState([]);   // admin-created tasks from the database
+  const [tasksReady, setTasksReady] = useState(false);   // true once the DB task list has loaded
   const [userSubs, setUserSubs] = useState({}); // taskId → { status, createdAt } for this user
 
   const categories = [
@@ -776,7 +777,7 @@ export default function Dashboard() {
           body: JSON.stringify({ op: 'listTasks' }),
         });
         const { data } = await r.json();
-        if (Array.isArray(data)) setDbTasks(shuffle(data));   // randomly place offers among tasks
+        if (Array.isArray(data)) { setDbTasks(shuffle(data)); setTasksReady(true); }   // DB is now the source of truth
       } catch (_) {}
     }
     init();
@@ -809,7 +810,9 @@ export default function Dashboard() {
 
   // Use the database tasks as the source of truth once any exist (built-ins are
   // migrated in), falling back to the built-in list if the DB is empty/unreachable.
-  const source = dbTasks.length ? dbTasks : (TASKS || []);
+  // Once the DB task list has loaded it's the source of truth (even if empty, so
+  // cleared tasks stay gone). The built-in list is only a pre-load / offline fallback.
+  const source = tasksReady ? dbTasks : (TASKS || []);
   const allTasks = source.filter(t => {
     const sub = userSubs[String(t.id)];
     if (sub) {
