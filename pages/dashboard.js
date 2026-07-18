@@ -808,11 +808,10 @@ export default function Dashboard() {
     router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }
 
-  // Use the database tasks as the source of truth once any exist (built-ins are
-  // migrated in), falling back to the built-in list if the DB is empty/unreachable.
-  // Once the DB task list has loaded it's the source of truth (even if empty, so
-  // cleared tasks stay gone). The built-in list is only a pre-load / offline fallback.
-  const source = tasksReady ? dbTasks : (TASKS || []);
+  // Use the database tasks as the source of truth whenever the DB has any,
+  // otherwise fall back to the built-in list so the dashboard is never empty
+  // (e.g. before load, offline, or after all DB tasks were cleared).
+  const source = (tasksReady && dbTasks.length) ? dbTasks : (TASKS || []);
   const allTasks = source.filter(t => {
     const sub = userSubs[String(t.id)];
     if (sub) {
