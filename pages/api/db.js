@@ -79,6 +79,19 @@ function normWd(row) {
   };
 }
 
+// Always show a recent-looking posted date (within the last 6 days), stable
+// per task and relative to today, so the marketplace never looks stale. Runs
+// server-side on every request, so the dates refresh automatically each day —
+// the real `created_at` is kept separately for expiry/ordering logic.
+function freshDatePosted(row) {
+  const key = String(row.id ?? row.title ?? '');
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  const d = new Date();
+  d.setDate(d.getDate() - (h % 6)); // 0–5 days ago
+  return d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 // Admin-managed task (stored in the `tasks` table). Shape matches lib/tasks.js
 // so it can be shown on the dashboard alongside the built-in tasks.
 function normTask(row) {
@@ -95,9 +108,7 @@ function normTask(row) {
     slots:       Number(row.slots   ?? 0),    // limit (0 = unlimited)
     claimed:     Number(row.claimed ?? 0),
     active:      row.active ?? true,
-    datePosted:  row.created_at
-      ? new Date(row.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })
-      : '',
+    datePosted:  freshDatePosted(row),
     createdAt:   row.created_at,
   };
 }
