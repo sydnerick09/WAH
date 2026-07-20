@@ -92,6 +92,17 @@ function freshDatePosted(row) {
   return d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+// A rolling future deadline (7–14 days out), stable per task and relative to
+// today, so admin-created tasks always show a due date that stays in the future.
+function freshDueDate(row) {
+  const key = String(row.id ?? row.title ?? '');
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  const d = new Date();
+  d.setDate(d.getDate() + 7 + (h % 8)); // 7–14 days ahead
+  return d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 // Admin-managed task (stored in the `tasks` table). Shape matches lib/tasks.js
 // so it can be shown on the dashboard alongside the built-in tasks.
 function normTask(row) {
@@ -109,6 +120,7 @@ function normTask(row) {
     claimed:     Number(row.claimed ?? 0),
     active:      row.active ?? true,
     datePosted:  freshDatePosted(row),
+    dueDate:     freshDueDate(row),
     createdAt:   row.created_at,
   };
 }

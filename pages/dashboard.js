@@ -156,6 +156,7 @@ function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick, onSubmit }
               ['Location',    `📍 ${task.location}`],
               ['Date Posted', `📅 ${task.datePosted}`],
               ['Category',    `🏷️ ${task.category}`],
+              ...(task.dueDate ? [['Due Date', `⏰ ${task.dueDate}`]] : []),
             ].map(([label, value]) => (
               <div key={label} className="modal-meta-item">
                 <div className="modal-meta-label">{label}</div>
@@ -1030,6 +1031,11 @@ export default function Dashboard() {
                   )}
                   <div className="task-category">{task.category}</div>
                   <div className="task-title">{task.title}</div>
+                  {task.dueDate && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#B45309', margin: '2px 0 6px' }}>
+                      ⏰ Due {task.dueDate}
+                    </div>
+                  )}
                   <div className="task-desc">{task.description}</div>
                   <div className="task-actions">
                     {sub ? (
