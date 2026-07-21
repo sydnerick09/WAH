@@ -859,9 +859,24 @@ function SubmissionsTab({ secret }) {
   async function act(s, status) {
     if (status === 'approved' && !confirm(`Approve this submission and credit KES ${Number(s.reward).toLocaleString()} to ${s.name || s.email || 'the user'}?`)) return;
     setBusy(p => ({ ...p, [s.id]: true }));
-    await dbProxy('adminUpdateSubmission', { adminSecret: secret, submissionId: s.id, status });
+    const res = await dbProxy('adminUpdateSubmission', { adminSecret: secret, submissionId: s.id, status });
     setBusy(p => ({ ...p, [s.id]: false }));
     await load();
+    // On approval, surface the auto-sent confirmation email's delivery status.
+    if (status === 'approved' && res?.email) {
+      if (res.email.sent) flash(s.id, { type: 'ok', text: '✅ Approved — confirmation email sent.' });
+      else flash(s.id, { type: 'err', text: `Approved & credited, but email ${String(res.email.status || 'failed').toLowerCase()}. Use “Resend”.` });
+    } else if (status === 'approved') {
+      flash(s.id, { type: 'ok', text: '✅ Approved & credited.' });
+    }
+  }
+
+  async function resendApproval(s) {
+    setBusy(p => ({ ...p, [s.id]: true }));
+    const res = await dbProxy('adminResendApprovalEmail', { adminSecret: secret, submissionId: s.id });
+    setBusy(p => ({ ...p, [s.id]: false }));
+    if (res.success) flash(s.id, { type: 'ok', text: '✉️ Approval email resent.' });
+    else flash(s.id, { type: 'err', text: res.error || res.message || 'Resend failed.' });
   }
 
   function openCorrection(s) { setCorrecting(s.id); setReason(s.reason || ''); setMsg(p => { const n = { ...p }; delete n[s.id]; return n; }); }
@@ -906,6 +921,9 @@ function SubmissionsTab({ secret }) {
                       <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#059669' }} disabled={b || s.status === 'approved'} onClick={() => act(s, 'approved')}>✅ Approve</button>
                       <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#DC2626' }} disabled={b || s.status === 'rejected'} onClick={() => act(s, 'rejected')}>❌ Reject</button>
                       <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => openCorrection(s)}>✉️ Corrections</button>
+                      {s.status === 'approved' && (
+                        <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#0F766E' }} disabled={b} onClick={() => resendApproval(s)} title="Resend the approval & earnings-credited email">✉️ Resend approval</button>
+                      )}
                     </div>
                     {correcting === s.id && (
                       <div style={{ marginTop: 8, background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: 10 }}>

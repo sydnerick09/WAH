@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { TASKS } from '../../lib/tasks';
 import { verifyUnsubToken } from '../../lib/unsubToken';
+import { sendApprovalEmail } from '../../lib/approvalEmail';
 
 function getAdmin() {
   return createClient(
@@ -797,17 +798,25 @@ export default async function handler(req, res) {
           .select('*').eq('id', submissionId).maybeSingle();
         if (!sub) return res.json({ success: false, error: 'Submission not found.' });
 
-        // Approving a not-yet-approved submission credits the reward to the user
-        if (status === 'approved' && sub.status !== 'approved') {
-          const reward = Number(sub.reward || 0);
+        // Approving a not-yet-approved submission credits the reward to the user.
+        // Capture the details needed for the confirmation email, and whether the
+        // balance credit actually succeeded (the email must only go out if it did).
+        const isNewApproval = status === 'approved' && sub.status !== 'approved';
+        const reward = Number(sub.reward || 0);
+        let creditUser = null;   // { email, name, newBalance, unsubscribed } when credited
+        if (isNewApproval) {
           if (sub.user_id && reward > 0) {
             const { data: u } = await db.from('users')
-              .select('balance,completed_tasks').eq('id', sub.user_id).maybeSingle();
+              .select('balance,completed_tasks,email,full_name,unsubscribed').eq('id', sub.user_id).maybeSingle();
             if (u) {
-              await db.from('users').update({
-                balance:         Number(u.balance || 0) + reward,
+              const newBalance = Number(u.balance || 0) + reward;
+              const { error: balErr } = await db.from('users').update({
+                balance:         newBalance,
                 completed_tasks: Number(u.completed_tasks || 0) + 1,
               }).eq('id', sub.user_id);
+              if (!balErr) {
+                creditUser = { email: u.email, name: u.full_name, newBalance, unsubscribed: !!u.unsubscribed };
+              }
             }
           }
           if (sub.task_id) {
@@ -817,6 +826,7 @@ export default async function handler(req, res) {
           }
         }
 
+        // Commit the status change (this is the "approval committed" step).
         const updates = { status, updated_at: new Date().toISOString() };
         if (reason !== undefined) updates.reason = String(reason || '');
         const { data: updated, error } = await db.from('submissions')
@@ -826,7 +836,64 @@ export default async function handler(req, res) {
           action: `submission_${status}`, entity: 'submission', entityId: submissionId,
           detail: `${sub.task_title || ''} — ${sub.user_email || ''}${reason ? ` — ${reason}` : ''}`,
         });
-        return res.json({ success: true, submission: normSub(updated) });
+
+        // Auto-send the "Task Approved & Earnings Credited" email — only after a
+        // successful new approval whose balance credit committed. Email failure
+        // never rolls back the approval; it's logged so the admin can resend.
+        let email = null;
+        if (isNewApproval && creditUser && creditUser.email) {
+          const amtStr = `KES ${reward.toLocaleString('en-KE')}`;
+          try {
+            if (creditUser.unsubscribed) {
+              email = { attempted: false, sent: false, status: 'Skipped (unsubscribed)' };
+            } else {
+              const mail = await sendApprovalEmail({
+                userEmail: creditUser.email, userName: creditUser.name,
+                taskName: sub.task_title, amount: reward, updatedBalance: creditUser.newBalance,
+              });
+              email = { attempted: true, sent: !!mail.success, status: mail.success ? 'Sent' : 'Failed', message: mail.message || '' };
+            }
+          } catch (e) {
+            email = { attempted: true, sent: false, status: 'Failed', message: e?.message || 'Send error' };
+          }
+          await logAction(db, {
+            action: 'approval_email', entity: 'submission', entityId: submissionId,
+            detail: `user:${sub.user_id} task:${sub.task_id} amount:${amtStr} status:${email.status}${email.message ? ` (${email.message})` : ''}`,
+          });
+        }
+
+        return res.json({ success: true, submission: normSub(updated), email });
+      }
+
+      case 'adminResendApprovalEmail': {
+        // Manually re-send the approval/payment-confirmation email for an
+        // already-approved submission (e.g. after an earlier delivery failure).
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { submissionId } = p;
+        const { data: sub } = await db.from('submissions')
+          .select('*').eq('id', submissionId).maybeSingle();
+        if (!sub) return res.json({ success: false, error: 'Submission not found.' });
+        if (sub.status !== 'approved') return res.json({ success: false, error: 'Only approved submissions can have an approval email sent.' });
+
+        const { data: u } = await db.from('users')
+          .select('balance,email,full_name,unsubscribed').eq('id', sub.user_id).maybeSingle();
+        if (!u || !u.email) return res.json({ success: false, error: 'User email not found.' });
+
+        const reward = Number(sub.reward || 0);
+        const amtStr = `KES ${reward.toLocaleString('en-KE')}`;
+        if (u.unsubscribed) {
+          await logAction(db, { action: 'approval_email_resend', entity: 'submission', entityId: submissionId,
+            detail: `user:${sub.user_id} task:${sub.task_id} amount:${amtStr} status:Skipped (unsubscribed)` });
+          return res.json({ success: false, unsubscribed: true, error: 'This user has unsubscribed from emails.' });
+        }
+
+        const mail = await sendApprovalEmail({
+          userEmail: u.email, userName: u.full_name,
+          taskName: sub.task_title, amount: reward, updatedBalance: Number(u.balance || 0),
+        });
+        await logAction(db, { action: 'approval_email_resend', entity: 'submission', entityId: submissionId,
+          detail: `user:${sub.user_id} task:${sub.task_id} amount:${amtStr} status:${mail.success ? 'Sent' : 'Failed'}${mail.message ? ` (${mail.message})` : ''}` });
+        return res.json({ success: !!mail.success, message: mail.message });
       }
 
       case 'adminClearTasks': {
