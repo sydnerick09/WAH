@@ -21,6 +21,7 @@ export default function SubmitPage() {
   const [done,    setDone]    = useState(false);
   const [dbTasks, setDbTasks] = useState([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
+  const [appStatus, setAppStatus] = useState(undefined); // undefined=loading, null=none, or status string
 
   useEffect(() => {
     (async () => {
@@ -37,6 +38,24 @@ export default function SubmitPage() {
   }, []);
 
   const task = [...dbTasks, ...TASKS].find(t => String(t.id) === String(router.query.task));
+  const isOfferTask = String(task?.id || '').startsWith('offer_');
+
+  // Load this user's application status for the task (proposal gate).
+  useEffect(() => {
+    if (!user?.id || !task || isOfferTask) { setAppStatus(null); return; }
+    setAppStatus(undefined);
+    (async () => {
+      try {
+        const r = await fetch('/api/db', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op: 'listUserApplications', userId: user.id }),
+        });
+        const { data } = await r.json();
+        const mine = (Array.isArray(data) ? data : []).find(a => String(a.taskId) === String(task.id));
+        setAppStatus(mine?.status || null);
+      } catch { setAppStatus(null); }
+    })();
+  }, [user?.id, task?.id, isOfferTask]);
 
   function onPick(e) {
     const f = e.target.files?.[0];
@@ -75,7 +94,7 @@ export default function SubmitPage() {
     setLoading(false);
   }
 
-  if (!ready || !user || !tasksLoaded) {
+  if (!ready || !user || !tasksLoaded || appStatus === undefined) {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white-off)' }}>
       <div className="spinner" style={{ width: 40, height: 40, borderTopColor: 'var(--green)', borderColor: 'var(--gray-light)', borderWidth: 3 }} />
     </div>;
@@ -89,6 +108,25 @@ export default function SubmitPage() {
           You need an <strong>active account</strong> before you can submit tasks. Activate your account to get started.
         </div>
         <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }} onClick={() => router.push('/activate')}>✅ Activate My Account</button>
+      </FlowShell>
+    );
+  }
+
+  // A proposal must be submitted and APPROVED before working on a task
+  // (offer tasks are exempt). Blocks direct navigation to /submit?task=…
+  if (task && !isOfferTask && appStatus !== 'approved') {
+    const pending = appStatus === 'pending';
+    const needsFix = appStatus === 'correction' || appStatus === 'rejected';
+    return (
+      <FlowShell title="Submit Task" subtitle="Proposal approval required" icon="📝">
+        <div className="pay-message" style={{ borderColor: pending ? '#B45309' : '#125C37', background: pending ? '#FFFBEB' : '#F0FFF4', marginBottom: 18 }}>
+          {pending
+            ? <>Your proposal for <strong>{task.title}</strong> is <strong>under review</strong>. You&apos;ll be able to submit your work once it&apos;s approved.</>
+            : needsFix
+              ? <>Your proposal for <strong>{task.title}</strong> {appStatus === 'rejected' ? 'was not approved' : 'needs corrections'}. Please re-apply from your dashboard.</>
+              : <>You need an <strong>approved proposal</strong> before you can submit <strong>{task.title}</strong>. Apply for the task from your dashboard first.</>}
+        </div>
+        <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }} onClick={() => router.push('/dashboard')}>← Back to Dashboard</button>
       </FlowShell>
     );
   }

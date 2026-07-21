@@ -50,6 +50,28 @@ export default async function handler(req, res) {
   const userName  = get("userName");
   const note      = get("note");
 
+  // ── 2b. Proposal gate — regular tasks require an APPROVED application ──────
+  // Offer tasks (offer_…) are exempt. Best-effort: if the DB isn't configured we
+  // can't verify, so we don't block (matches the rest of this endpoint).
+  const isOfferTask = String(taskId || "").startsWith("offer_");
+  if (!isOfferTask && taskId && taskId !== "N/A" && userId && userId !== "N/A"
+      && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const gate = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        { auth: { persistSession: false } }
+      );
+      const { data: appRow, error: appErr } = await gate.from("applications")
+        .select("status").eq("user_id", userId).eq("task_id", String(taskId))
+        .eq("status", "approved").limit(1).maybeSingle();
+      // Only block when we can positively confirm there is no approved proposal.
+      if (!appErr && !appRow) {
+        return res.status(403).json({ success: false, message: "An approved proposal is required before you can submit this task." });
+      }
+    } catch (_) { /* verification unavailable — fall through */ }
+  }
+
   // Format the task's payment for the email (so admin sees what the task costs)
   const paymentNum = Number(taskPayment);
   const paymentDisplay =

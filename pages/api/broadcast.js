@@ -80,12 +80,18 @@ export default async function handler(req, res) {
   }
 
   const db = createClient(url, key, { auth: { persistSession: false } });
-  const { data: rows, error } = await db.from('users').select('email, full_name');
+  // Prefer excluding opted-out users; fall back gracefully if the `unsubscribed`
+  // column hasn't been added yet (db/admin-tables.sql not run).
+  let { data: rows, error } = await db.from('users').select('email, full_name, unsubscribed');
+  if (error) {
+    ({ data: rows, error } = await db.from('users').select('email, full_name'));
+  }
   if (error) return res.status(500).json({ success: false, message: error.message });
 
-  // Unique, valid, lower-cased recipient list
+  // Unique, valid, lower-cased recipient list — excluding opted-out users
   const seen = new Set();
   let recipients = (rows || [])
+    .filter(r => !r.unsubscribed)
     .map(r => ({ email: String(r.email || '').trim().toLowerCase(), name: r.full_name || '' }))
     .filter(r => {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email) || seen.has(r.email)) return false;

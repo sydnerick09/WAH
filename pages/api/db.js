@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { TASKS } from '../../lib/tasks';
+import { verifyUnsubToken } from '../../lib/unsubToken';
 
 function getAdmin() {
   return createClient(
@@ -137,9 +138,52 @@ function normSub(row) {
     reward:    Number(row.reward || 0),
     note:      row.note   ?? '',
     status:    row.status ?? 'pending',
+    reason:    row.reason ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,
   };
+}
+
+// Task application / proposal (stored in the `applications` table).
+function normApp(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    userId:    row.user_id,
+    email:     row.user_email,
+    name:      row.user_name,
+    taskId:    row.task_id,
+    taskTitle: row.task_title,
+    message:   row.message ?? '',
+    extra:     row.extra   ?? '',
+    status:    row.status  ?? 'pending',
+    reason:    row.reason  ?? '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
+function normAction(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    action:    row.action ?? '',
+    entity:    row.entity ?? '',
+    entityId:  row.entity_id ?? '',
+    detail:    row.detail ?? '',
+    actor:     row.actor  ?? 'admin',
+    createdAt: row.created_at,
+  };
+}
+
+// Best-effort audit-trail write. Never throws (a missing table must not break
+// the action it is logging).
+async function logAction(db, { action, entity, entityId, detail }) {
+  try {
+    await db.from('admin_actions').insert({
+      action, entity, entity_id: entityId != null ? String(entityId) : null, detail: detail || '',
+    });
+  } catch (_) { /* audit is best-effort */ }
 }
 
 export default async function handler(req, res) {
@@ -643,6 +687,98 @@ export default async function handler(req, res) {
         return res.json({ success: true, inserted: rows.length });
       }
 
+      // ─── Task applications (proposals) ────────────────────────────────────
+      case 'createApplication': {
+        // Public: a user submits a proposal to work on a task. One active
+        // (pending/approved) application per user per task.
+        const { userId, userEmail, userName, taskId, taskTitle, message, extra } = p;
+        if (!userId || !taskId) return res.json({ success: false, error: 'Missing user or task.' });
+        if (!message || !String(message).trim()) return res.json({ success: false, error: 'A proposal message is required.' });
+
+        const { data: prior } = await db.from('applications')
+          .select('id,status').eq('user_id', userId).eq('task_id', String(taskId))
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (prior && (prior.status === 'pending' || prior.status === 'approved')) {
+          return res.json({
+            success: false,
+            alreadyApplied: true,
+            status: prior.status,
+            message: prior.status === 'approved'
+              ? 'Your application for this task is already approved.'
+              : 'You already have an application awaiting review for this task.',
+          });
+        }
+
+        const { data, error } = await db.from('applications').insert({
+          user_id:    userId,
+          user_email: userEmail ?? '',
+          user_name:  userName ?? '',
+          task_id:    String(taskId),
+          task_title: taskTitle ?? '',
+          message:    String(message).trim(),
+          extra:      extra ? String(extra).trim() : '',
+          status:     'pending',
+        }).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, application: normApp(data) });
+      }
+
+      case 'listUserApplications': {
+        // Public: a user's own applications, so the dashboard knows which tasks
+        // are unlocked / pending / need attention.
+        const { userId, email } = p;
+        let query = db.from('applications').select('*');
+        if (userId)     query = query.eq('user_id', userId);
+        else if (email) query = query.eq('user_email', email);
+        else return res.json({ data: [] });
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normApp) });
+      }
+
+      case 'adminListApplications': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('applications')
+          .select('*').order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normApp) });
+      }
+
+      case 'adminUpdateApplication': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { applicationId, status, reason } = p;
+        const allowed = ['pending', 'approved', 'rejected', 'correction'];
+        if (!allowed.includes(status)) return res.json({ success: false, error: 'Invalid status.' });
+        const updates = { status, updated_at: new Date().toISOString() };
+        if (reason !== undefined) updates.reason = String(reason || '');
+        const { data, error } = await db.from('applications')
+          .update(updates).eq('id', applicationId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, {
+          action: `application_${status}`, entity: 'application', entityId: applicationId,
+          detail: `${data?.task_title || ''} — ${data?.user_email || ''}${reason ? ` — ${reason}` : ''}`,
+        });
+        return res.json({ success: true, application: normApp(data) });
+      }
+
+      case 'adminListActions': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('admin_actions')
+          .select('*').order('created_at', { ascending: false }).limit(300);
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normAction) });
+      }
+
+      case 'unsubscribeUser': {
+        // Public but token-protected: sets the user's email opt-out flag.
+        const { uid, token } = p;
+        if (!verifyUnsubToken(uid, token)) return res.json({ success: false, error: 'Invalid or expired unsubscribe link.' });
+        const { error } = await db.from('users').update({ unsubscribed: true }).eq('id', uid);
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, { action: 'unsubscribe', entity: 'user', entityId: uid, detail: 'User opted out of emails' });
+        return res.json({ success: true });
+      }
+
       // ─── Submitted-task review ────────────────────────────────────────────
       case 'adminListSubmissions': {
         if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
@@ -654,7 +790,9 @@ export default async function handler(req, res) {
 
       case 'adminUpdateSubmission': {
         if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
-        const { submissionId, status } = p;
+        const { submissionId, status, reason } = p;
+        const allowed = ['pending', 'approved', 'rejected', 'correction'];
+        if (!allowed.includes(status)) return res.json({ success: false, error: 'Invalid status.' });
         const { data: sub } = await db.from('submissions')
           .select('*').eq('id', submissionId).maybeSingle();
         if (!sub) return res.json({ success: false, error: 'Submission not found.' });
@@ -679,10 +817,15 @@ export default async function handler(req, res) {
           }
         }
 
+        const updates = { status, updated_at: new Date().toISOString() };
+        if (reason !== undefined) updates.reason = String(reason || '');
         const { data: updated, error } = await db.from('submissions')
-          .update({ status, updated_at: new Date().toISOString() })
-          .eq('id', submissionId).select().single();
+          .update(updates).eq('id', submissionId).select().single();
         if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, {
+          action: `submission_${status}`, entity: 'submission', entityId: submissionId,
+          detail: `${sub.task_title || ''} — ${sub.user_email || ''}${reason ? ` — ${reason}` : ''}`,
+        });
         return res.json({ success: true, submission: normSub(updated) });
       }
 

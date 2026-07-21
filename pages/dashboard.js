@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { getCurrentUser, logout, awardQuizBonus } from '../lib/auth';
+import { applyForTask, listMyApplications, applicationsByTask } from '../lib/applications';
 import { TASKS } from '../lib/tasks';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -130,11 +131,13 @@ const REVIEWS = [
 
 
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
-function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick, onSubmit }) {
+function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUpgradeClick, onSubmit }) {
   if (!task) return null;
   const isActivated = user?.activated;
   const isPremium   = user?.premium;
   const offer       = isOffer(task);
+  const appStatus   = application?.status || null;   // null | pending | approved | rejected | correction
+  const approved    = appStatus === 'approved';
 
   function handleSubmit() {
     if (!offer && !isPremium) { onClose(); onUpgradeClick(); return; }
@@ -180,17 +183,171 @@ function TaskModal({ task, user, onClose, onBidClick, onUpgradeClick, onSubmit }
               ))}
             </div>
           )}
+          {/* Not signed-in / not activated yet */}
           {!isActivated && (
             <button className="bid-btn" onClick={() => onBidClick(task)}>💼 Bid on This Task</button>
           )}
-          {isActivated && !isPremium && !offer && (
-            <button className="submit-btn" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>⭐ Upgrade to Premium to Submit</button>
+
+          {/* Offers skip the proposal step entirely */}
+          {isActivated && offer && (
+            <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task (Offer — No Premium)</button>
           )}
-          {isActivated && (isPremium || offer) && (
-            <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task{offer ? ' (Offer — No Premium)' : ''}</button>
+
+          {/* Regular tasks: proposal required before work can be submitted */}
+          {isActivated && !offer && (
+            <>
+              {(appStatus === 'rejected' || appStatus === 'correction') && (
+                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', margin: '4px 0 12px', fontSize: 13, color: '#991B1B' }}>
+                  <strong>{appStatus === 'rejected' ? 'Application rejected.' : 'Corrections requested.'}</strong>
+                  {application?.reason ? <div style={{ marginTop: 4, color: '#7F1D1D' }}>{application.reason}</div> : null}
+                </div>
+              )}
+
+              {(!appStatus || appStatus === 'rejected' || appStatus === 'correction') && (
+                <button className="submit-btn" onClick={() => onApply(task)}
+                  style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>
+                  {appStatus ? '🔄 Update & Resubmit Proposal' : '📝 Apply — Submit a Proposal'}
+                </button>
+              )}
+
+              {appStatus === 'pending' && (
+                <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#92400E', textAlign: 'center', fontWeight: 600 }}>
+                  ⏳ Your proposal is under review. You&apos;ll be able to start this task once it&apos;s approved.
+                </div>
+              )}
+
+              {approved && !isPremium && (
+                <>
+                  <div style={{ background: '#D1FAE5', border: '1px solid #6EE7B7', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#065F46', fontWeight: 600 }}>
+                    ✅ Proposal approved — this task is unlocked for you.
+                  </div>
+                  <button className="submit-btn" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>⭐ Upgrade to Premium to Submit</button>
+                </>
+              )}
+
+              {approved && isPremium && (
+                <>
+                  <div style={{ background: '#D1FAE5', border: '1px solid #6EE7B7', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#065F46', fontWeight: 600 }}>
+                    ✅ Proposal approved — this task is unlocked for you.
+                  </div>
+                  <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task</button>
+                </>
+              )}
+            </>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Proposal (Bid) Form ──────────────────────────────────────────────────────
+// A user must submit a proposal and have it approved before working on a task.
+function ProposalModal({ task, existing, onClose, onSubmit }) {
+  const [message, setMessage] = useState(existing?.message || '');
+  const [extra,   setExtra]   = useState(existing?.extra || '');
+  const [busy,    setBusy]    = useState(false);
+  const [error,   setError]   = useState('');
+  const [done,    setDone]    = useState(false);
+
+  async function submit() {
+    if (!message.trim()) { setError('Please write a short message describing why you are suitable.'); return; }
+    setError(''); setBusy(true);
+    const res = await onSubmit(message.trim(), extra.trim());
+    setBusy(false);
+    if (res.ok) setDone(true);
+    else setError(res.message || 'Could not submit your proposal.');
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">{done ? 'Proposal Submitted' : 'Apply for This Task'}</div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          {done ? (
+            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+              <div style={{ fontSize: 52, marginBottom: 8 }}>📨</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: '#059669', marginBottom: 6 }}>Proposal sent for review</div>
+              <p style={{ fontSize: 14, color: 'var(--gray)', lineHeight: 1.6 }}>
+                Your proposal for <strong>{task.title}</strong> has been submitted. Our team will review it, and once it&apos;s
+                <strong> approved</strong> the task will unlock on your dashboard so you can start working.
+              </p>
+              <button className="submit-btn" style={{ marginTop: 16 }} onClick={onClose}>Got it</button>
+            </div>
+          ) : (
+            <>
+              <p style={{ fontSize: 14, color: 'var(--gray)', marginBottom: 4 }}>
+                You&apos;re applying for <strong>{task.title}</strong>. Tell us why you&apos;re a good fit — this proposal
+                is reviewed before you can begin the task.
+              </p>
+              <div className="pay-phone-label" style={{ marginTop: 14 }}>Your proposal / cover letter <span style={{ color: '#DC2626' }}>*</span></div>
+              <textarea
+                className="pay-phone-input"
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="Briefly explain why you're suitable for this task, your relevant experience, and how you'll approach it…"
+                rows={5}
+                style={{ resize: 'vertical', minHeight: 110, fontFamily: 'inherit' }}
+              />
+              <div className="pay-phone-label" style={{ marginTop: 14 }}>Additional information (optional)</div>
+              <textarea
+                className="pay-phone-input"
+                value={extra}
+                onChange={e => setExtra(e.target.value)}
+                placeholder="Portfolio link, availability, questions for the poster… (optional)"
+                rows={3}
+                style={{ resize: 'vertical', minHeight: 70, fontFamily: 'inherit' }}
+              />
+              {error && <div style={{ color: '#ef4444', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+              <button className="submit-btn" style={{ marginTop: 16, opacity: busy ? 0.7 : 1 }} onClick={submit} disabled={busy}>
+                {busy ? <><span className="spinner" /> Submitting…</> : '📤 Submit Proposal'}
+              </button>
+              <div className="pay-secure" style={{ marginTop: 10 }}>🔒 Reviewed by our team before the task unlocks</div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Application status notices (approved / pending / needs attention) ─────────
+function ApplicationNotices({ apps, subs, onStart }) {
+  const list = Object.values(apps || {});
+  if (!list.length) return null;
+
+  // Approved and not yet submitted → actionable "start" notice.
+  const approved = list.filter(a => a.status === 'approved' && !subs[String(a.taskId)]);
+  const pending  = list.filter(a => a.status === 'pending');
+  const attention = list.filter(a => a.status === 'rejected' || a.status === 'correction');
+
+  if (!approved.length && !pending.length && !attention.length) return null;
+
+  return (
+    <div style={{ margin: '0 0 18px' }}>
+      {approved.map(a => (
+        <div key={`ap-${a.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+          background: '#ECFDF5', border: '1px solid #6EE7B7', borderRadius: 12, padding: '12px 16px', marginBottom: 8 }}>
+          <div style={{ fontSize: 13.5, color: '#065F46' }}>
+            ✅ <strong>Approved!</strong> Your proposal for <strong>{a.taskTitle}</strong> was accepted — you can start it now.
+          </div>
+          <button className="task-view-btn" style={{ padding: '8px 14px', whiteSpace: 'nowrap' }} onClick={() => onStart(a.taskId)}>Start task →</button>
+        </div>
+      ))}
+      {attention.map(a => (
+        <div key={`at-${a.id}`} style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 12, padding: '12px 16px', marginBottom: 8, fontSize: 13.5, color: '#92400E' }}>
+          {a.status === 'rejected' ? '❌' : '✏️'} Your proposal for <strong>{a.taskTitle}</strong> {a.status === 'rejected' ? 'was not approved' : 'needs corrections'}.
+          {a.reason ? <span> — {a.reason}</span> : null} <button onClick={() => onStart(a.taskId)} style={{ background: 'none', border: 'none', color: '#92400E', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13.5 }}>Open</button>
+        </div>
+      ))}
+      {pending.length > 0 && (
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '10px 16px', fontSize: 13, color: '#475569' }}>
+          ⏳ {pending.length} proposal{pending.length === 1 ? '' : 's'} awaiting review.
+        </div>
+      )}
     </div>
   );
 }
@@ -735,6 +892,8 @@ export default function Dashboard() {
   const [dbTasks, setDbTasks] = useState([]);   // admin-created tasks from the database
   const [tasksReady, setTasksReady] = useState(false);   // true once the DB task list has loaded
   const [userSubs, setUserSubs] = useState({}); // taskId → { status, createdAt } for this user
+  const [userApps, setUserApps] = useState({}); // taskId → application (proposal) for this user
+  const [applyTask, setApplyTask] = useState(null); // task the proposal form is open for
 
   const categories = [
     'All','🔥 Offers','Writing','Research','Data Entry','Design','Marketing',
@@ -760,6 +919,14 @@ export default function Dashboard() {
     } catch (_) {}
   }
 
+  async function loadUserApps(u) {
+    if (!u?.id) return;
+    try {
+      const apps = await listMyApplications({ userId: u.id, email: u.email });
+      setUserApps(applicationsByTask(apps));
+    } catch (_) {}
+  }
+
   useEffect(() => {
     async function init() {
       setMounted(true);
@@ -771,6 +938,7 @@ export default function Dashboard() {
       // Joining-gift quiz appears once, right after the first successful sign-up / sign-in
       if (!u.quizDone) setShowQuiz(true);
       loadUserSubs(u.id);
+      loadUserApps(u);
       // Load any admin-created tasks (best-effort; falls back to built-in tasks)
       try {
         const r = await fetch('/api/db', {
@@ -790,7 +958,7 @@ export default function Dashboard() {
     const refresh = async () => {
       if (document.visibilityState === 'visible') {
         const u = await getCurrentUser().catch(() => null);
-        if (u) { setUser(u); loadUserSubs(u.id); }
+        if (u) { setUser(u); loadUserSubs(u.id); loadUserApps(u); }
       }
     };
     document.addEventListener('visibilitychange', refresh);
@@ -803,8 +971,37 @@ export default function Dashboard() {
   }, [user, router]);
   const handleBidClick     = useCallback(() => { setSelectedTask(null); router.push('/activate'); }, [router]);
 
+  // Open the proposal form for a task (must be activated first).
+  const handleApplyClick = useCallback(task => {
+    if (!user?.activated) { setSelectedTask(null); router.push('/activate'); return; }
+    setSelectedTask(null);
+    setApplyTask(task);
+  }, [user, router]);
+
+  // Submit a proposal; returns { ok, message } so the modal can show feedback.
+  async function submitProposal(message, extra) {
+    if (!applyTask || !user) return { ok: false, message: 'Something went wrong.' };
+    const res = await applyForTask({ user, task: applyTask, message, extra });
+    if (res.success) {
+      await loadUserApps(user);
+      return { ok: true };
+    }
+    return { ok: false, message: res.message || 'Could not submit your proposal.' };
+  }
+
+  // Jump straight to a task's modal from the notices banner.
+  function openTaskById(taskId) {
+    const t = (tasksReady && dbTasks.length ? dbTasks : (TASKS || [])).find(x => String(x.id) === String(taskId));
+    if (t) setSelectedTask(t);
+  }
+
   function handleSubmitTask(task) {
     if (!user?.activated) { router.push('/activate'); return; }        // active account required first
+    // Regular tasks require an approved proposal before work can be submitted.
+    if (!isOffer(task)) {
+      const app = userApps[String(task.id)];
+      if (!app || app.status !== 'approved') { setApplyTask(task); return; }
+    }
     if (!isOffer(task) && !user.premium) { router.push('/premium'); return; }  // offers skip premium
     router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }
@@ -1001,10 +1198,12 @@ export default function Dashboard() {
             ))}
           </div>
 
+          <ApplicationNotices apps={userApps} subs={userSubs} onStart={openTaskById} />
+
           <div style={{ marginBottom: 16, fontSize: 14, color: 'var(--gray)' }}>
             Showing <strong>{filteredTasks.length}</strong> tasks
             {user.activated && (
-              <span style={{ marginLeft: 10, color: '#059669', fontWeight: 600 }}>✅ All tasks unlocked</span>
+              <span style={{ marginLeft: 10, color: '#0F766E', fontWeight: 600 }}>📝 Apply with a proposal to unlock a task</span>
             )}
           </div>
 
@@ -1012,6 +1211,8 @@ export default function Dashboard() {
             {filteredTasks.map(task => {
               const sub   = userSubs[String(task.id)];
               const offer = isOffer(task);
+              const app   = offer ? null : userApps[String(task.id)];
+              const appStatus = app?.status || null;
               return (
                 <div key={task.id} className="task-card" style={offer ? { border: '1.5px solid #F59E0B' } : undefined}>
                   <div className="task-card-header">
@@ -1036,6 +1237,13 @@ export default function Dashboard() {
                       ⏰ Due {task.dueDate}
                     </div>
                   )}
+                  {appStatus && (
+                    <div style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, marginBottom: 6,
+                      background: appStatus === 'approved' ? '#D1FAE5' : appStatus === 'pending' ? '#FEF3C7' : '#FEE2E2',
+                      color:      appStatus === 'approved' ? '#065F46' : appStatus === 'pending' ? '#92400E' : '#991B1B' }}>
+                      {appStatus === 'approved' ? '✅ Proposal approved' : appStatus === 'pending' ? '⏳ Proposal under review' : appStatus === 'correction' ? '✏️ Corrections requested' : '❌ Proposal rejected'}
+                    </div>
+                  )}
                   <div className="task-desc">{task.description}</div>
                   <div className="task-actions">
                     {sub ? (
@@ -1047,7 +1255,13 @@ export default function Dashboard() {
                     ) : (
                       <>
                         <button className="task-view-btn" onClick={() => handleViewTask(task)}>👁️ View / Bid</button>
-                        <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Attach your work & submit">📤 Submit</button>
+                        {offer || appStatus === 'approved' ? (
+                          <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Attach your work & submit">📤 Submit</button>
+                        ) : appStatus === 'pending' ? (
+                          <button className="task-submit-btn" onClick={() => handleViewTask(task)} style={{ opacity: 0.7 }} title="Awaiting review">⏳ Pending</button>
+                        ) : (
+                          <button className="task-submit-btn" onClick={() => handleApplyClick(task)} title="Submit a proposal to unlock">📝 Apply</button>
+                        )}
                       </>
                     )}
                   </div>
@@ -1067,7 +1281,10 @@ export default function Dashboard() {
       )}
 
       {selectedTask && (
-        <TaskModal task={selectedTask} user={user} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} onUpgradeClick={() => router.push('/premium')} onSubmit={handleSubmitTask} />
+        <TaskModal task={selectedTask} user={user} application={userApps[String(selectedTask.id)]} onClose={() => setSelectedTask(null)} onBidClick={handleBidClick} onApply={handleApplyClick} onUpgradeClick={() => router.push('/premium')} onSubmit={handleSubmitTask} />
+      )}
+      {applyTask && (
+        <ProposalModal task={applyTask} existing={userApps[String(applyTask.id)]} onClose={() => setApplyTask(null)} onSubmit={submitProposal} />
       )}
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
       {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}

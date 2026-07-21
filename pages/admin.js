@@ -26,6 +26,20 @@ async function dbProxy(op, params = {}) {
   return r.json();
 }
 
+// Sends the "Task Submission Returned for Corrections" email to one user.
+async function sendCorrectionEmail({ secret, taskName, userName, userEmail, userId, reason }) {
+  try {
+    const r = await fetch('/api/correction-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminSecret: secret, taskName, userName, userEmail, userId, reason }),
+    });
+    return r.json();
+  } catch (e) {
+    return { success: false, message: 'Network error sending email.' };
+  }
+}
+
 function fmtDate(ts) {
   if (!ts) return '—';
   return new Date(ts).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' });
@@ -821,13 +835,16 @@ function TasksTab({ secret }) {
 }
 
 // ─── Submitted-Task Review Tab ────────────────────────────────────────────────
-const SUB_COLORS = { pending: { bg: '#FEF3C7', color: '#92400E' }, approved: { bg: '#D1FAE5', color: '#065F46' }, rejected: { bg: '#FEE2E2', color: '#991B1B' } };
+const SUB_COLORS = { pending: { bg: '#FEF3C7', color: '#92400E' }, approved: { bg: '#D1FAE5', color: '#065F46' }, rejected: { bg: '#FEE2E2', color: '#991B1B' }, correction: { bg: '#FEE2E2', color: '#9A3412' } };
 
 function SubmissionsTab({ secret }) {
   const [subs,   setSubs]   = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [err,    setErr]    = useState('');
   const [busy,   setBusy]   = useState({});
+  const [msg,    setMsg]    = useState({});
+  const [correcting, setCorrecting] = useState(null);
+  const [reason, setReason] = useState('');
 
   async function load() {
     const res = await dbProxy('adminListSubmissions', { adminSecret: secret });
@@ -837,12 +854,27 @@ function SubmissionsTab({ secret }) {
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
+  function flash(id, m) { setMsg(p => ({ ...p, [id]: m })); setTimeout(() => setMsg(p => { const n = { ...p }; delete n[id]; return n; }), 4000); }
+
   async function act(s, status) {
     if (status === 'approved' && !confirm(`Approve this submission and credit KES ${Number(s.reward).toLocaleString()} to ${s.name || s.email || 'the user'}?`)) return;
     setBusy(p => ({ ...p, [s.id]: true }));
     await dbProxy('adminUpdateSubmission', { adminSecret: secret, submissionId: s.id, status });
     setBusy(p => ({ ...p, [s.id]: false }));
     await load();
+  }
+
+  function openCorrection(s) { setCorrecting(s.id); setReason(s.reason || ''); setMsg(p => { const n = { ...p }; delete n[s.id]; return n; }); }
+
+  async function sendCorrection(s) {
+    setBusy(p => ({ ...p, [s.id]: true }));
+    const mail = await sendCorrectionEmail({ secret, taskName: s.taskTitle, userName: s.name, userEmail: s.email, userId: s.userId, reason });
+    await dbProxy('adminUpdateSubmission', { adminSecret: secret, submissionId: s.id, status: 'correction', reason });
+    setBusy(p => ({ ...p, [s.id]: false }));
+    setCorrecting(null);
+    await load();
+    if (mail.success) flash(s.id, { type: 'ok', text: '✉️ Correction email sent.' });
+    else flash(s.id, { type: 'err', text: mail.message || (mail.unsubscribed ? 'User unsubscribed.' : 'Email not sent (status still updated).') });
   }
 
   return (
@@ -853,27 +885,42 @@ function SubmissionsTab({ secret }) {
         </div>
       )}
       <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
-        {loaded ? `${subs.length} submission${subs.length === 1 ? '' : 's'}` : 'Loading…'} · approving a task credits its reward to the user&apos;s balance.
+        {loaded ? `${subs.length} submission${subs.length === 1 ? '' : 's'}` : 'Loading…'} · approving a task credits its reward to the user&apos;s balance. Use ✉️ Corrections to return work for fixes.
       </div>
       <div style={styles.tableWrap}>
         <table style={styles.table}>
           <thead><tr>{['Worker', 'Task', 'Reward (KES)', 'Note', 'Submitted', 'Status', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
             {subs.map(s => {
-              const sc = SUB_COLORS[s.status] || SUB_COLORS.pending; const b = busy[s.id];
+              const sc = SUB_COLORS[s.status] || SUB_COLORS.pending; const b = busy[s.id]; const m = msg[s.id];
               return (
                 <tr key={s.id} style={styles.tr}>
                   <td style={styles.td}><div style={{ fontWeight: 700, fontSize: 13 }}>{s.name || '—'}</div><div style={{ fontSize: 11, color: '#64748B' }}>{s.email || '—'}</div></td>
                   <td style={{ ...styles.td, maxWidth: 220 }}>{s.taskTitle || '—'}</td>
                   <td style={styles.td}><strong style={{ color: '#059669' }}>{Number(s.reward).toLocaleString()}</strong></td>
-                  <td style={{ ...styles.td, maxWidth: 200, fontSize: 12, color: '#475569' }}>{s.note || '—'}</td>
+                  <td style={{ ...styles.td, maxWidth: 200, fontSize: 12, color: '#475569' }}>{s.note || '—'}{s.reason ? <div style={{ marginTop: 4, color: '#9A3412' }}><strong>Correction:</strong> {s.reason}</div> : null}</td>
                   <td style={styles.td}>{fmtDate(s.createdAt ? new Date(s.createdAt).getTime() : null)}</td>
                   <td style={styles.td}><span style={{ ...styles.badge, background: sc.bg, color: sc.color }}>{s.status}</span></td>
-                  <td style={styles.td}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#059669' }} disabled={b || s.status === 'approved'} onClick={() => act(s, 'approved')}>✅ Approve</button>
-                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#DC2626' }} disabled={b || s.status === 'rejected'} onClick={() => act(s, 'rejected')}>❌ Reject</button>
+                  <td style={{ ...styles.td, minWidth: 210 }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#059669' }} disabled={b || s.status === 'approved'} onClick={() => act(s, 'approved')}>✅ Approve</button>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#DC2626' }} disabled={b || s.status === 'rejected'} onClick={() => act(s, 'rejected')}>❌ Reject</button>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => openCorrection(s)}>✉️ Corrections</button>
                     </div>
+                    {correcting === s.id && (
+                      <div style={{ marginTop: 8, background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>Reason for correction (editable)</div>
+                        <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3}
+                          placeholder="Explain what needs to be corrected…"
+                          style={{ ...styles.input, marginBottom: 8, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }} />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => sendCorrection(s)}>Send Email</button>
+                          <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#94A3B8' }} onClick={() => setCorrecting(null)}>Cancel</button>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#92400E', marginTop: 6 }}>Task name is inserted automatically. Sends to {s.email || 'the user'}.</div>
+                      </div>
+                    )}
+                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
                   </td>
                 </tr>
               );
@@ -969,6 +1016,189 @@ function CleanupTab({ secret, onRefresh }) {
   );
 }
 
+// ─── Task Applications (Proposals) Tab ────────────────────────────────────────
+const APP_COLORS = {
+  pending:    { bg: '#FEF3C7', color: '#92400E' },
+  approved:   { bg: '#D1FAE5', color: '#065F46' },
+  rejected:   { bg: '#FEE2E2', color: '#991B1B' },
+  correction: { bg: '#FEE2E2', color: '#9A3412' },
+};
+
+function ApplicationsTab({ secret }) {
+  const [apps,    setApps]    = useState([]);
+  const [loaded,  setLoaded]  = useState(false);
+  const [err,     setErr]     = useState('');
+  const [busy,    setBusy]    = useState({});
+  const [msg,     setMsg]     = useState({});
+  const [filter,  setFilter]  = useState('all');
+  const [correcting, setCorrecting] = useState(null);  // application id whose correction box is open
+  const [reason,  setReason]  = useState('');
+
+  async function load() {
+    const res = await dbProxy('adminListApplications', { adminSecret: secret });
+    setLoaded(true);
+    if (res.error) { setErr(res.error); setApps([]); return; }
+    setErr(''); setApps(res.data || []);
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  function flash(id, m) { setMsg(p => ({ ...p, [id]: m })); setTimeout(() => setMsg(p => { const n = { ...p }; delete n[id]; return n; }), 4000); }
+
+  async function setStatus(a, status) {
+    if (status === 'approved' && !confirm(`Approve ${a.name || a.email || 'this applicant'}'s proposal for "${a.taskTitle}"? This unlocks the task for them.`)) return;
+    let rejectReason = '';
+    if (status === 'rejected') {
+      rejectReason = prompt(`Reason for rejecting this application? (optional — shown to the user)`, a.reason || '') || '';
+    }
+    setBusy(p => ({ ...p, [a.id]: true }));
+    const res = await dbProxy('adminUpdateApplication', { adminSecret: secret, applicationId: a.id, status, reason: rejectReason });
+    setBusy(p => ({ ...p, [a.id]: false }));
+    if (res.success) { await load(); flash(a.id, { type: 'ok', text: status === 'approved' ? 'Approved — task unlocked.' : 'Updated.' }); }
+    else flash(a.id, { type: 'err', text: res.error || 'Failed.' });
+  }
+
+  function openCorrection(a) {
+    setCorrecting(a.id);
+    setReason(a.reason || '');
+    setMsg(p => { const n = { ...p }; delete n[a.id]; return n; });
+  }
+
+  async function sendCorrection(a) {
+    setBusy(p => ({ ...p, [a.id]: true }));
+    // 1) email the user   2) mark the application "correction" (+ audit log)
+    const mail = await sendCorrectionEmail({ secret, taskName: a.taskTitle, userName: a.name, userEmail: a.email, userId: a.userId, reason });
+    await dbProxy('adminUpdateApplication', { adminSecret: secret, applicationId: a.id, status: 'correction', reason });
+    setBusy(p => ({ ...p, [a.id]: false }));
+    setCorrecting(null);
+    await load();
+    if (mail.success) flash(a.id, { type: 'ok', text: '✉️ Correction email sent.' });
+    else flash(a.id, { type: 'err', text: mail.message || (mail.unsubscribed ? 'User unsubscribed.' : 'Email not sent (status still updated).') });
+  }
+
+  const counts = apps.reduce((m, a) => { m[a.status] = (m[a.status] || 0) + 1; return m; }, {});
+  const filtered = filter === 'all' ? apps : apps.filter(a => a.status === filter);
+
+  return (
+    <div style={{ padding: '20px 32px' }}>
+      {err && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991B1B', fontSize: 13, maxWidth: 820 }}>
+          ⚠️ Could not load applications: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {[['all', 'All'], ['pending', 'Pending'], ['approved', 'Approved'], ['correction', 'Correction'], ['rejected', 'Rejected']].map(([k, label]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            style={{ padding: '7px 14px', borderRadius: 999, border: '1.5px solid ' + (filter === k ? '#0F766E' : '#E2E8F0'),
+              background: filter === k ? '#0F766E' : '#fff', color: filter === k ? '#fff' : '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            {label}{k !== 'all' && counts[k] ? ` (${counts[k]})` : ''}
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
+        {loaded ? `${filtered.length} application${filtered.length === 1 ? '' : 's'}` : 'Loading…'} · approving a proposal unlocks the task for the applicant.
+      </div>
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead><tr>{['Applicant', 'Task', 'Proposal', 'Submitted', 'Status', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {filtered.map(a => {
+              const sc = APP_COLORS[a.status] || APP_COLORS.pending; const b = busy[a.id]; const m = msg[a.id];
+              return (
+                <tr key={a.id} style={styles.tr}>
+                  <td style={styles.td}>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{a.name || '—'}</div>
+                    <div style={{ fontSize: 11, color: '#64748B' }}>{a.email || '—'}</div>
+                    <div style={{ fontSize: 10, color: '#94A3B8' }}>ID: {a.userId || '—'}</div>
+                  </td>
+                  <td style={{ ...styles.td, maxWidth: 200 }}>{a.taskTitle || '—'}</td>
+                  <td style={{ ...styles.td, maxWidth: 320, fontSize: 12.5, color: '#334155' }}>
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{a.message || '—'}</div>
+                    {a.extra ? <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #E2E8F0', color: '#64748B' }}><strong>Extra:</strong> {a.extra}</div> : null}
+                    {a.reason ? <div style={{ marginTop: 6, color: '#9A3412' }}><strong>Reason:</strong> {a.reason}</div> : null}
+                  </td>
+                  <td style={styles.td}>{fmtDate(a.createdAt ? new Date(a.createdAt).getTime() : null)}</td>
+                  <td style={styles.td}><span style={{ ...styles.badge, background: sc.bg, color: sc.color }}>{a.status}</span></td>
+                  <td style={{ ...styles.td, minWidth: 220 }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#059669' }} disabled={b || a.status === 'approved'} onClick={() => setStatus(a, 'approved')}>✅ Approve</button>
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#DC2626' }} disabled={b || a.status === 'rejected'} onClick={() => setStatus(a, 'rejected')}>❌ Reject</button>
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => openCorrection(a)}>✉️ Corrections</button>
+                    </div>
+                    {correcting === a.id && (
+                      <div style={{ marginTop: 8, background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>Reason for correction (editable)</div>
+                        <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3}
+                          placeholder="Explain what needs to be corrected…"
+                          style={{ ...styles.input, marginBottom: 8, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }} />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => sendCorrection(a)}>Send Email</button>
+                          <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#94A3B8' }} onClick={() => setCorrecting(null)}>Cancel</button>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#92400E', marginTop: 6 }}>Task name is inserted automatically. Sends to {a.email || 'the user'}.</div>
+                      </div>
+                    )}
+                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
+                  </td>
+                </tr>
+              );
+            })}
+            {loaded && filtered.length === 0 && !err && (
+              <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No applications{filter === 'all' ? ' yet' : ` with status "${filter}"`}.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Audit Log Tab ────────────────────────────────────────────────────────────
+function AuditTab({ secret }) {
+  const [rows,   setRows]   = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [err,    setErr]    = useState('');
+
+  async function load() {
+    const res = await dbProxy('adminListActions', { adminSecret: secret });
+    setLoaded(true);
+    if (res.error) { setErr(res.error); setRows([]); return; }
+    setErr(''); setRows(res.data || []);
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  return (
+    <div style={{ padding: '20px 32px' }}>
+      {err && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991B1B', fontSize: 13, maxWidth: 820 }}>
+          ⚠️ Could not load the audit log: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code>.
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ fontSize: 13, color: '#64748B' }}>{loaded ? `${rows.length} recent action${rows.length === 1 ? '' : 's'}` : 'Loading…'} · newest first.</div>
+        <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 13, width: 'auto' }} onClick={load}>Refresh</button>
+      </div>
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead><tr>{['When', 'Action', 'Entity', 'Detail'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} style={styles.tr}>
+                <td style={{ ...styles.td, whiteSpace: 'nowrap' }}>{fmtDate(r.createdAt ? new Date(r.createdAt).getTime() : null)}</td>
+                <td style={styles.td}><span style={{ ...styles.badge, background: '#EEF2FF', color: '#3730A3' }}>{r.action}</span></td>
+                <td style={styles.td}>{r.entity}{r.entityId ? ` #${r.entityId}` : ''}</td>
+                <td style={{ ...styles.td, maxWidth: 420, fontSize: 12.5, color: '#475569' }}>{r.detail || '—'}</td>
+              </tr>
+            ))}
+            {loaded && rows.length === 0 && !err && (
+              <tr><td colSpan={4} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No admin actions logged yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 export default function AdminPanel() {
   const [secret,      setSecret]      = useState('');
@@ -1037,12 +1267,14 @@ export default function AdminPanel() {
       {/* Tabs */}
       <div style={styles.tabs}>
         {[
-          { key: 'users',       label: `👤 Users (${users.length})` },
-          { key: 'withdrawals', label: `💸 Withdrawals (${withdrawals.length})` },
-          { key: 'tasks',       label: '📋 Tasks' },
-          { key: 'submissions', label: '📥 Submissions' },
-          { key: 'broadcast',   label: '📣 Broadcast' },
-          { key: 'cleanup',     label: '🧹 Clean Emails' },
+          { key: 'users',        label: `👤 Users (${users.length})` },
+          { key: 'withdrawals',  label: `💸 Withdrawals (${withdrawals.length})` },
+          { key: 'tasks',        label: '📋 Tasks' },
+          { key: 'applications', label: '📝 Applications' },
+          { key: 'submissions',  label: '📥 Submissions' },
+          { key: 'audit',        label: '🧾 Audit Log' },
+          { key: 'broadcast',    label: '📣 Broadcast' },
+          { key: 'cleanup',      label: '🧹 Clean Emails' },
         ].map(t => (
           <button key={t.key} style={{ ...styles.tabBtn, ...(tab === t.key ? styles.tabBtnActive : {}) }}
             onClick={() => setTab(t.key)}>
@@ -1051,12 +1283,14 @@ export default function AdminPanel() {
         ))}
       </div>
 
-      {tab === 'users'       && <UsersTab       users={users}             secret={secret} onRefresh={refresh} />}
-      {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} secret={secret} onRefresh={refresh} />}
-      {tab === 'tasks'       && <TasksTab       secret={secret} />}
-      {tab === 'submissions' && <SubmissionsTab secret={secret} />}
-      {tab === 'broadcast'   && <BroadcastTab   secret={secret} userCount={users.length} />}
-      {tab === 'cleanup'     && <CleanupTab     secret={secret} onRefresh={refresh} />}
+      {tab === 'users'        && <UsersTab        users={users}             secret={secret} onRefresh={refresh} />}
+      {tab === 'withdrawals'  && <WithdrawalsTab  withdrawals={withdrawals} secret={secret} onRefresh={refresh} />}
+      {tab === 'tasks'        && <TasksTab        secret={secret} />}
+      {tab === 'applications' && <ApplicationsTab secret={secret} />}
+      {tab === 'submissions'  && <SubmissionsTab  secret={secret} />}
+      {tab === 'audit'        && <AuditTab        secret={secret} />}
+      {tab === 'broadcast'    && <BroadcastTab    secret={secret} userCount={users.length} />}
+      {tab === 'cleanup'      && <CleanupTab      secret={secret} onRefresh={refresh} />}
     </div>
   );
 }
