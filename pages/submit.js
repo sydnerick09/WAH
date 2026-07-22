@@ -7,6 +7,7 @@ import { useUser } from '../lib/useUser';
 import { getToken } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 import FlowShell from '../components/FlowShell';
+import Icon from '../components/Icon';
 
 const MAX_MB = 5;
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.mp3,.mp4,image/*';
@@ -105,11 +106,11 @@ export default function SubmitPage() {
   // An active account is required before submitting any task
   if (!user.activated) {
     return (
-      <FlowShell title="Submit Task" subtitle="Active account required" icon="📤">
+      <FlowShell title="Submit Task" subtitle="Active account required" icon="upload">
         <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>
           You need an <strong>active account</strong> before you can submit tasks. Activate your account to get started.
         </div>
-        <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }} onClick={() => router.push('/activate')}>✅ Activate My Account</button>
+        <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/activate')}><Icon name="check" size={16} /> Activate My Account</button>
       </FlowShell>
     );
   }
@@ -120,7 +121,7 @@ export default function SubmitPage() {
     const pending = appStatus === 'pending';
     const needsFix = appStatus === 'correction' || appStatus === 'rejected';
     return (
-      <FlowShell title="Submit Task" subtitle="Proposal approval required" icon="📝">
+      <FlowShell title="Submit Task" subtitle="Proposal approval required" icon="edit">
         <div className="pay-message" style={{ borderColor: pending ? '#4b5563' : '#1f2937', background: pending ? '#f9fafb' : '#f9fafb', marginBottom: 18 }}>
           {pending
             ? <>Your proposal for <strong>{task.title}</strong> is <strong>under review</strong>. You&apos;ll be able to submit your work once it&apos;s approved.</>
@@ -128,7 +129,7 @@ export default function SubmitPage() {
               ? <>Your proposal for <strong>{task.title}</strong> {appStatus === 'rejected' ? 'was not approved' : 'needs corrections'}. Please re-apply from your dashboard.</>
               : <>You need an <strong>approved proposal</strong> before you can submit <strong>{task.title}</strong>. Apply for the task from your dashboard first.</>}
         </div>
-        <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }} onClick={() => router.push('/dashboard')}>← Back to Dashboard</button>
+        <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={16} /> Back to Dashboard</button>
       </FlowShell>
     );
   }
@@ -136,18 +137,18 @@ export default function SubmitPage() {
   // Premium is required to submit, except limited-time OFFER tasks (id starts with offer_)
   if (!user.premium && !String(task?.id || '').startsWith('offer_')) {
     return (
-      <FlowShell title="Submit Task" subtitle="Premium required" icon="📤">
+      <FlowShell title="Submit Task" subtitle="Premium required" icon="upload">
         <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>
           Submitting completed tasks requires <strong>Premium</strong>. Upgrade to unlock task submissions.
         </div>
-        <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }} onClick={() => router.push('/premium')}>⭐ Go to Premium</button>
+        <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/premium')}><Icon name="star" size={16} /> Go to Premium</button>
       </FlowShell>
     );
   }
 
   if (!task) {
     return (
-      <FlowShell title="Submit Task" icon="📤">
+      <FlowShell title="Submit Task" icon="upload">
         <div className="pay-message" style={{ marginBottom: 18 }}>That task could not be found.</div>
         <button className="pay-btn" onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
       </FlowShell>
@@ -156,22 +157,22 @@ export default function SubmitPage() {
 
   if (done) {
     return (
-      <FlowShell title="Submit Task" subtitle="Submission received" icon="📤">
+      <FlowShell title="Submit Task" subtitle="Submission received" icon="upload">
         <div style={{ textAlign: 'center', padding: '10px 0' }}>
-          <div style={{ fontSize: 56, marginBottom: 8 }}>✅</div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={52} /></div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: '#374151', marginBottom: 6 }}>Submission Sent</div>
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
             Your file <strong>{file?.name}</strong> for <strong>{task.title}</strong> has been submitted. We’ve emailed you a confirmation at <strong>{user.email}</strong> and our team will review your work.
           </div>
           {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 8 }}>{error}</div>}
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #374151, #374151)', marginTop: 18 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
         </div>
       </FlowShell>
     );
   }
 
   return (
-    <FlowShell title="Submit Your Work" subtitle={task.title} icon="📤">
+    <FlowShell title="Submit Your Work" subtitle={task.title} icon="upload">
       <div className="pay-message" style={{ marginBottom: 18 }}>
         Attach your completed work for <strong>{task.title}</strong> ({task.category}) and submit. Accepted: documents, images, audio, video or zip, up to {MAX_MB} MB.
       </div>
@@ -185,7 +186,7 @@ export default function SubmitPage() {
           padding: '26px 16px', cursor: 'pointer', background: file ? '#f9fafb' : '#F9FAFB', textAlign: 'center',
         }}
       >
-        <span style={{ fontSize: 34 }}>{file ? '📄' : '📎'}</span>
+        <span style={{ color: '#111827', display: 'flex' }}><Icon name={file ? 'file' : 'upload'} size={32} /></span>
         {file ? (
           <>
             <span style={{ fontWeight: 700, fontSize: 14, color: '#111827', wordBreak: 'break-all' }}>{file.name}</span>
@@ -213,9 +214,9 @@ export default function SubmitPage() {
       {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 8 }}>{error}</div>}
 
       <button className="pay-btn" style={{ marginTop: 18, opacity: file ? 1 : 0.6 }} onClick={handleSubmit} disabled={loading || !file}>
-        {loading ? <><span className="spinner" /> Uploading…</> : '📤 Submit Work'}
+        {loading ? <><span className="spinner" /> Uploading…</> : <><Icon name="upload" size={16} /> Submit Work</>}
       </button>
-      <div className="pay-secure">🔐 Your file is emailed securely to our review team</div>
+      <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your file is emailed securely to our review team</div>
     </FlowShell>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import FlowShell from '../components/FlowShell';
+import Icon from '../components/Icon';
 
 const PREMIUM_FEE = 480;
 
@@ -42,7 +43,7 @@ export default function PremiumPage() {
   }
 
   return (
-    <FlowShell title="Premium" subtitle="KES 480 / month • required to submit tasks" icon="⭐">
+    <FlowShell title="Premium" subtitle="KES 480 / month • required to submit tasks" icon="star">
       <div className="pay-amount" style={{ marginBottom: 16 }}>
         <div className="pay-amount-label">Premium Membership</div>
         <div className="pay-amount-value" style={{ color: '#374151' }}>KES {PREMIUM_FEE}</div>
@@ -51,14 +52,14 @@ export default function PremiumPage() {
 
       <div className="premium-features">
         {[
-          ['🚀', 'Unlimited task bidding'],
-          ['💰', 'Priority payouts & withdrawals'],
-          ['📊', 'Advanced earnings dashboard'],
-          ['🎯', 'Exclusive high-paying tasks'],
-          ['🏆', 'Premium badge on your profile'],
-          ['📞', 'Dedicated support line'],
+          ['upload',    'Unlimited task bidding'],
+          ['cash',      'Priority payouts & withdrawals'],
+          ['chart',     'Advanced earnings dashboard'],
+          ['star',      'Exclusive high-paying tasks'],
+          ['shield',    'Premium badge on your profile'],
+          ['phone',     'Dedicated support line'],
         ].map(([icon, text]) => (
-          <div key={text} className="premium-feature-item"><span>{icon}</span><span>{text}</span></div>
+          <div key={text} className="premium-feature-item"><span style={{ display: 'flex' }}><Icon name={icon} size={18} /></span><span>{text}</span></div>
         ))}
       </div>
 
@@ -71,10 +72,10 @@ export default function PremiumPage() {
         style={{ borderColor: error ? '#4b5563' : undefined }}
       />
       {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
-      <button className="pay-btn" style={{ marginTop: 18, background: 'linear-gradient(135deg, #1f2937, #374151)' }} onClick={pay} disabled={loading}>
-        {loading ? <><span className="spinner" /> Processing…</> : `🔒 Pay KES ${PREMIUM_FEE} via Paystack`}
+      <button className="pay-btn" style={{ marginTop: 18, background: '#000000' }} onClick={pay} disabled={loading}>
+        {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="lock" size={16} /> Pay KES {PREMIUM_FEE} via Paystack</>}
       </button>
-      <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
+      <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • M-Pesa supported</div>
     </FlowShell>
   );
 }

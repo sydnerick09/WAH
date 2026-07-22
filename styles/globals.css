@@ -293,7 +293,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 
 /* ── Auth Pages ─────────────────────────────────────────────────────────────── */
 .auth-page { min-height: 100vh; background: var(--black-soft); display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; overflow: hidden; }
-.auth-grid-bg { position: absolute; inset: 0; background-image: linear-gradient(rgba(17,24,39,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(17,24,39,0.08) 1px, transparent 1px); background-size: 48px 48px; }
+.auth-grid-bg { position: absolute; inset: 0; background-color: rgba(255,255,255,0.02); }
 .auth-card { background: var(--white); border-radius: var(--radius-xl); padding: 48px 40px; width: 100%; max-width: 480px; position: relative; z-index: 2; box-shadow: var(--shadow-xl); }
 .auth-logo    { font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--green); text-align: center; margin-bottom: 8px; letter-spacing: 0.5px; }
 .auth-tagline { font-family: var(--font-accent);  text-align: center; font-size: 14px; color: var(--gray); margin-bottom: 32px; }
@@ -788,8 +788,8 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   position: absolute; top: 0; bottom: 0; width: 60px; z-index: 2;
   pointer-events: none;
 }
-.ticker-strip::before { left: 0; background: linear-gradient(90deg, #000000, transparent); }
-.ticker-strip::after  { right: 0; background: linear-gradient(-90deg, #000000, transparent); }
+.ticker-strip::before { left: 0; }
+.ticker-strip::after  { right: 0; }
 
 .ticker-track {
   display: flex; gap: 0;

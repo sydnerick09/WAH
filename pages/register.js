@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { registerUser, setCurrentUser, getBoundEmail, bindBrowser } from '../lib/auth';
 import { isEmail, isPhone } from '../lib/validate';
+import Icon from '../components/Icon';
 
 const COUNTRIES = [
   'Kenya', 'Uganda', 'Tanzania', 'Rwanda', 'Ethiopia', 'Nigeria', 'Ghana',
@@ -294,7 +295,7 @@ export default function Register() {
                 padding: '12px 14px', background: cv ? '#f9fafb' : '#F9FAFB',
               }}
             >
-              <span style={{ fontSize: 22 }}>{cv ? '📄' : '📎'}</span>
+              <span style={{ color: '#111827', display: 'flex' }}><Icon name={cv ? 'file' : 'upload'} size={20} /></span>
               <span style={{ fontSize: 13, color: cv ? '#1f2937' : '#6B7280', wordBreak: 'break-all' }}>
                 {cv ? `${cv.name} • tap to change` : `Attach your CV (PDF or Word, max ${CV_MAX_MB} MB)`}
               </span>

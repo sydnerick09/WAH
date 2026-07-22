@@ -84,6 +84,12 @@ export default function Login() {
             />
           </div>
 
+          <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 14 }}>
+            <Link href="/forgot-password" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'underline' }}>
+              Forgot password?
+            </Link>
+          </div>
+
           <button type="submit" className="auth-btn" disabled={loading}>
             {loading ? (
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
@@ -100,8 +106,8 @@ export default function Login() {
           <Link href="/register">Create one for free →</Link>
         </div>
 
-        <div style={{ marginTop: 32, padding: '16px', background: 'var(--blue-pale)', borderRadius: 8, fontSize: 13, color: 'var(--gray)', lineHeight: 1.6 }}>
-          <strong style={{ color: 'var(--blue)' }}>New to Business Hub?</strong>
+        <div style={{ marginTop: 32, padding: '16px', background: 'var(--green-pale)', borderRadius: 8, fontSize: 13, color: 'var(--gray)', lineHeight: 1.6 }}>
+          <strong style={{ color: 'var(--green)' }}>New to Business Hub?</strong>
           <br />
           Join now for free. A one-time activation fee of KES 50 gives you full access to all tasks and bidding features.
         </div>

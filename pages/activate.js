@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import { activateWithBalance } from '../lib/auth';
 import FlowShell from '../components/FlowShell';
+import Icon from '../components/Icon';
 
 const FEE = 50;
 
@@ -66,7 +67,7 @@ export default function ActivatePage() {
   }
 
   return (
-    <FlowShell title="Activate Your Account" subtitle="KES 50 one-time activation • unlocks bidding" icon="🔓">
+    <FlowShell title="Activate Your Account" subtitle="KES 50 one-time activation • unlocks bidding" icon="unlock">
       <div className="pay-amount" style={{ marginBottom: 18 }}>
         <div className="pay-amount-label">Your Balance</div>
         <div className="pay-amount-value" style={{ color: enough ? '#374151' : '#111827' }}>KES {balance.toLocaleString()}</div>
@@ -80,7 +81,7 @@ export default function ActivatePage() {
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="pay-btn" style={{ flex: 1, background: '#E5E7EB', color: '#374151' }} onClick={() => router.push('/dashboard')}>Cancel</button>
-            <button className="pay-btn" style={{ flex: 2 }} onClick={() => { setError(''); setStep('password'); }}>✅ Yes, activate</button>
+            <button className="pay-btn" style={{ flex: 2 }} onClick={() => { setError(''); setStep('password'); }}><Icon name="check" size={16} /> Yes, activate</button>
           </div>
         </>
       )}
@@ -102,9 +103,9 @@ export default function ActivatePage() {
           />
           {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
           <button className="pay-btn" style={{ marginTop: 18 }} onClick={submitPassword} disabled={loading}>
-            {loading ? <><span className="spinner" /> Activating…</> : '🔒 Confirm & Activate'}
+            {loading ? <><span className="spinner" /> Activating…</> : <><Icon name="lock" size={16} /> Confirm & Activate</>}
           </button>
-          <div className="pay-secure">🔐 KES 50 will be deducted from your balance</div>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> KES 50 will be deducted from your balance</div>
         </>
       )}
 
@@ -123,23 +124,23 @@ export default function ActivatePage() {
           />
           {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
           <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
-            {loading ? <><span className="spinner" /> Processing…</> : `🔒 Add KES ${topup} via Paystack`}
+            {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="lock" size={16} /> Add KES {topup} via Paystack</>}
           </button>
-          <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • M-Pesa supported</div>
         </>
       )}
 
       {step === 'success' && (
         <div style={{ textAlign: 'center', padding: '10px 0' }}>
-          <div style={{ fontSize: 56, marginBottom: 8 }}>✅</div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={52} /></div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: '#374151', marginBottom: 6 }}>
             Account Activated!
           </div>
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
             Your account is now active. KES 50 has been applied as your activation fee, you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
           </div>
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #374151, #374151)', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
-            🚀 Start Bidding
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
+            Start Bidding
           </button>
         </div>
       )}

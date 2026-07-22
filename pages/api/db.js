@@ -4,7 +4,8 @@ import { verifyUnsubToken } from '../../lib/unsubToken';
 import { sendApprovalEmail } from '../../lib/approvalEmail';
 import { isEmail, isPhone, nonEmpty, isPositiveNumber, clean } from '../../lib/validate';
 import { hashPassword, verifyPassword } from '../../lib/password';
-import { issueToken, verifyToken } from '../../lib/token';
+import { issueToken, verifyToken, issueResetToken, verifyResetToken, peekUid } from '../../lib/token';
+import { sendResetEmail } from '../../lib/resetEmail';
 
 function getAdmin() {
   return createClient(
@@ -392,6 +393,56 @@ export default async function handler(req, res) {
           try { await db.from('users').update({ password: hashPassword(password) }).eq('id', data.id); } catch (_) {}
         }
         return res.json({ success: true, user: norm(data), authToken: issueToken(data.id) });
+      }
+
+      case 'requestPasswordReset': {
+        // Public. Always responds the same way so it never reveals whether an
+        // account exists (no user enumeration). Rate-limited per email + per IP
+        // to prevent email bombing / abuse.
+        const email = clean(p.email, 120).toLowerCase();
+        const genericOk = { success: true };
+        if (!isEmail(email)) return res.json(genericOk);
+
+        const WINDOW = 60 * 60 * 1000;
+        const ipBucket    = `pwreset-ip:${clientIp(req)}`;
+        const emailBucket = `pwreset-email:${email}`;
+        const ipChk = await rlCheck(db, ipBucket, 12, WINDOW);   // 12 / hr / IP
+        const emChk = await rlCheck(db, emailBucket, 5, WINDOW);  //  5 / hr / email
+        if (ipChk.blocked || emChk.blocked) return res.json(genericOk);
+        await rlHit(db, ipBucket, WINDOW);
+        await rlHit(db, emailBucket, WINDOW);
+
+        const { data: rows } = await db.from('users')
+          .select('id,email,full_name,password').ilike('email', email).limit(5);
+        const u = (rows || []).find(r => String(r.email).toLowerCase() === email);
+        if (u) {
+          const token    = issueResetToken(u.id, u.password);
+          const base     = process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app';
+          const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
+          await sendResetEmail({ userEmail: u.email, userName: u.full_name, resetUrl });
+        }
+        return res.json(genericOk);
+      }
+
+      case 'resetPassword': {
+        // Public. Verifies the reset token against the user's CURRENT password
+        // hash (so the link is single-use + 30-min), then sets the new password.
+        const token       = String(p.token || '');
+        const newPassword = String(p.newPassword ?? '');
+        const badLink = { success: false, error: 'This reset link is invalid or has expired. Please request a new one.' };
+        if (newPassword.length < 8) return res.json({ success: false, error: 'Password must be at least 8 characters.' });
+
+        const uid = peekUid(token);
+        if (!uid) return res.json(badLink);
+        const { data: u } = await db.from('users').select('id,password').eq('id', uid).maybeSingle();
+        if (!u) return res.json(badLink);
+
+        const verified = verifyResetToken(token, u.password);
+        if (!verified || verified !== String(u.id)) return res.json(badLink);
+
+        const { error } = await db.from('users').update({ password: hashPassword(newPassword) }).eq('id', u.id);
+        if (error) return res.json({ success: false, error: 'Could not reset your password. Please try again.' });
+        return res.json({ success: true });
       }
 
       case 'getUser': {

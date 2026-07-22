@@ -3,8 +3,11 @@
 // withdraw). Gives a consistent professional header with a Back button and a
 // centered content column, replacing the old pop-up modals.
 import { useRouter } from 'next/router';
+import Icon from './Icon';
 
-export default function FlowShell({ title, subtitle, icon, accent = 'linear-gradient(135deg, #1f2937, #374151)', maxWidth = 560, children }) {
+// `icon` is an Icon component name (e.g. "star"). `accent` is a flat colour
+// (black by default) — no gradients, per the flat 2017 black & white theme.
+export default function FlowShell({ title, subtitle, icon, accent = '#000000', maxWidth = 560, children }) {
   const router = useRouter();
 
   return (
@@ -16,11 +19,11 @@ export default function FlowShell({ title, subtitle, icon, accent = 'linear-grad
             aria-label="Back to dashboard"
             style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 10, padding: '8px 12px', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}
           >
-            ← Back
+            <Icon name="arrowLeft" size={16} /> Back
           </button>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, lineHeight: 1.2 }}>
-              {icon ? `${icon} ` : ''}{title}
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {icon ? <Icon name={icon} size={18} /> : null}{title}
             </div>
             {subtitle && <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>{subtitle}</div>}
           </div>

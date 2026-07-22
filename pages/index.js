@@ -300,7 +300,7 @@ export default function Home() {
       <StatsPanel />
 
       {/* Quick Nav Buttons */}
-      <section style={{ background: 'var(--blue)', padding: '0' }}>
+      <section style={{ background: 'var(--green)', padding: '0' }}>
         <div
           style={{
             maxWidth: 1200,
@@ -451,7 +451,7 @@ export default function Home() {
                   border: '1px solid var(--gray-light)',
                   borderRadius: 10,
                   padding: 24,
-                  borderTop: '3px solid var(--blue)',
+                  borderTop: '3px solid var(--green)',
                   opacity: user ? 1 : 0.7,
                   position: 'relative',
                 }}
@@ -459,8 +459,8 @@ export default function Home() {
                 <span
                   style={{
                     display: 'inline-block',
-                    background: 'var(--blue-pale)',
-                    color: 'var(--blue)',
+                    background: 'var(--green-pale)',
+                    color: 'var(--green)',
                     padding: '2px 10px',
                     borderRadius: 100,
                     fontSize: 11,
@@ -493,7 +493,7 @@ export default function Home() {
                     style={{
                       fontFamily: 'var(--font-display)',
                       fontSize: 22,
-                      color: 'var(--blue)',
+                      color: 'var(--green)',
                     }}
                   >
                     {t.pay}
@@ -502,7 +502,7 @@ export default function Home() {
                   <Link
                     href={user ? '/dashboard' : '/login'}
                     style={{
-                      background: 'var(--blue)',
+                      background: 'var(--green)',
                       color: 'white',
                       padding: '8px 16px',
                       borderRadius: 6,
@@ -558,7 +558,7 @@ export default function Home() {
               <div key={cat.label} style={{
                 background: '#fff',
                 border: '1.5px solid',
-                borderColor: cat.live ? 'var(--blue)' : '#E2E8F0',
+                borderColor: cat.live ? 'var(--green)' : '#E2E8F0',
                 borderRadius: 14,
                 padding: '22px 20px',
                 position: 'relative',
@@ -613,38 +613,38 @@ export default function Home() {
             {[
               {
                 name: 'Upwork',
-                icon: '🟢',
+                icon: 'briefcase',
                 desc: 'Global freelance jobs for professionals',
                 url: 'https://www.upwork.com',
-                color: '#374151',
+                color: '#e5e7eb',
               },
               {
                 name: 'EasyPro',
-                icon: '⚡',
+                icon: 'star',
                 desc: 'Earn easily with quick digital tasks',
                 url: 'https://easypro.app',
-                color: '#9ca3af',
+                color: '#e5e7eb',
               },
               {
                 name: 'Studypool',
-                icon: '📚',
+                icon: 'file',
                 desc: 'Get paid to help students with homework',
                 url: 'https://www.studypool.com',
-                color: '#4b5563',
+                color: '#e5e7eb',
               },
               {
                 name: 'Outlier',
-                icon: '🤖',
+                icon: 'server',
                 desc: 'Train AI models and earn per task',
                 url: 'https://outlier.ai',
-                color: '#6b7280',
+                color: '#e5e7eb',
               },
               {
                 name: 'Fiverr',
-                icon: '🎯',
+                icon: 'briefcase',
                 desc: 'Sell your skills as freelance services',
                 url: 'https://www.fiverr.com',
-                color: '#4b5563',
+                color: '#e5e7eb',
               },
             ].map(p => (
               <a
@@ -674,7 +674,7 @@ export default function Home() {
                 }}>
                   COMING SOON
                 </span>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>{p.icon}</div>
+                <div style={{ marginBottom: 10, color: '#fff' }}><Icon name={p.icon} size={30} /></div>
                 <div style={{
                   fontFamily: 'var(--font-display)', fontWeight: 700,
                   fontSize: 17, color: p.color, marginBottom: 6,
