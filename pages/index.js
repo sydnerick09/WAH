@@ -295,7 +295,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Community statistics — auto-growing 20% every 24h */}
+      {/* Community statistics — auto-growing 2% every 24h */}
       <StatsPanel />
 
       {/* Quick Nav Buttons */}
