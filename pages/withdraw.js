@@ -457,7 +457,9 @@ function PostbankFlow({ user, initialStep }) {
 // ── International flow (bank selector) ─────────────────────────────────────────
 function InternationalFlow({ user, initialStep }) {
   const router = useRouter();
-  const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'mpesa'); // mpesa → management → fee → form
+  // Every "Other Countries" withdrawal pays the $23 USD fee directly — no
+  // M-Pesa detour and no management gate, regardless of the amount withdrawn.
+  const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'fee'); // fee → form
   const [loading,       setLoading]       = useState(false);
   const [accountName,   setAccountName]   = useState('');
   const [selectedBank,  setSelectedBank]  = useState(null);
@@ -596,7 +598,7 @@ function InternationalFlow({ user, initialStep }) {
             <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
               {loading ? <><span className="spinner" /> Redirecting…</> : `🔒 Pay $${BANK_FEE_USD} USD via Paystack`}
             </button>
-            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('management')}>← Back</button>
+            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>← Back to Dashboard</button>
             <div className="pay-secure">🔐 Secured by Paystack • USD → KES conversion included</div>
           </>
         )}
