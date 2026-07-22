@@ -1,4 +1,4 @@
-// pages/premium.js — full-page premium upgrade (KES 480 / month via Paystack)
+// pages/premium.js, full-page premium upgrade (KES 480 / month via Paystack)
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';

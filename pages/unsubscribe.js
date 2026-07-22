@@ -1,4 +1,4 @@
-// pages/unsubscribe.js — token-protected email opt-out landing page.
+// pages/unsubscribe.js, token-protected email opt-out landing page.
 // Reached from the {UNSUBSCRIBE_LINK} in account emails.
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';

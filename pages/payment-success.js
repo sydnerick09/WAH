@@ -56,7 +56,7 @@ export default function PaymentSuccess() {
         router.replace('/dashboard');
 
       } else if (plan === 'premium_topup') {
-        // Legacy plan — treat as a normal premium upgrade
+        // Legacy plan, treat as a normal premium upgrade
         if (user) await upgradeToPremium(user.id);
         alert('Payment successful! Premium is now active. You can submit tasks.');
         router.replace('/dashboard');
@@ -65,15 +65,15 @@ export default function PaymentSuccess() {
         router.replace(`/dashboard?plan=withdrawal_fee&reference=${encodeURIComponent(reference)}`);
 
       } else if (plan === 'mpesa_withdrawal_fee') {
-        // Fee paid — open the M-Pesa withdrawal form on the withdraw page
+        // Fee paid, open the M-Pesa withdrawal form on the withdraw page
         router.replace('/withdraw?method=mpesa&step=form');
 
       } else if (plan === 'postbank_withdrawal_fee') {
-        // Fee paid — open the Postbank Kenya withdrawal form
+        // Fee paid, open the Postbank Kenya withdrawal form
         router.replace('/withdraw?method=postbank&step=form');
 
       } else if (plan === 'international_withdrawal_fee') {
-        // Fee paid — open the Other Countries bank withdrawal form
+        // Fee paid, open the Other Countries bank withdrawal form
         router.replace('/withdraw?method=international&step=form');
 
       } else {

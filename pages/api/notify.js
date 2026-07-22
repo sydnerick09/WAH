@@ -3,7 +3,7 @@
 // withdrawal request, etc.) AND sends the client an automatic confirmation reply.
 // Requires SMTP credentials in the environment (see setup notes below):
 //   SMTP_USER   = your Gmail address (e.g. businesshub.comke@gmail.com)
-//   SMTP_PASS   = a Gmail *App Password* (16 chars) — NOT your normal password
+//   SMTP_PASS   = a Gmail *App Password* (16 chars), NOT your normal password
 //   NOTIFY_EMAIL= where admin notifications should land (defaults to SMTP_USER)
 //   SMTP_HOST / SMTP_PORT / SMTP_SECURE are optional (default Gmail SSL:465)
 import nodemailer from 'nodemailer';
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
 
   const transporter = getTransporter();
   if (!transporter) {
-    // No credentials configured yet — tell the client so it can fall back gracefully.
+    // No credentials configured yet, tell the client so it can fall back gracefully.
     return res.status(200).json({ success: false, configured: false, message: 'Email is not configured yet.' });
   }
 
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
       await transporter.sendMail({
         from: fromAddr,
         to: email,
-        subject: 'We’ve received your request — Business Hub',
+        subject: 'We’ve received your request, Business Hub',
         html: `
           <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;">
             <p>Hi ${esc(name) || 'there'},</p>

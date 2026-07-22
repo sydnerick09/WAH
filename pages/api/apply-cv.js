@@ -1,5 +1,5 @@
 // pages/api/apply-cv.js
-// Optional CV upload on registration — emails the applicant's CV (as an
+// Optional CV upload on registration, emails the applicant's CV (as an
 // attachment) to the admin address that receives withdrawal requests, etc.
 // Uses the same SMTP + NOTIFY_EMAIL setup as /api/notify and /api/submit-task.
 import formidable from "formidable";

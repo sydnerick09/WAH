@@ -102,7 +102,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: false, message: 'A valid recipient email is required.' });
   }
 
-  // Honour the unsubscribe opt-out (best-effort — needs the DB configured).
+  // Honour the unsubscribe opt-out (best-effort, needs the DB configured).
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -159,7 +159,7 @@ export default function Register() {
         fd.append('phone', form.phone.trim());
         fd.append('country', form.country);
         await fetch('/api/apply-cv', { method: 'POST', body: fd });
-      } catch (_) { /* ignore — CV is optional */ }
+      } catch (_) { /* ignore, CV is optional */ }
     }
 
     bindBrowser(email);

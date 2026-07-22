@@ -8,7 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
-// Default message — the Business Hub welcome / announcement.
+// Default message, the Business Hub welcome / announcement.
 const DEFAULT_SUBJECT = 'Welcome to Business Hub';
 const DEFAULT_BODY = `Dear Client,
 
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
   }
   if (error) return res.status(500).json({ success: false, message: error.message });
 
-  // Unique, valid, lower-cased recipient list — excluding opted-out users
+  // Unique, valid, lower-cased recipient list, excluding opted-out users
   const seen = new Set();
   let recipients = (rows || [])
     .filter(r => !r.unsubscribed)

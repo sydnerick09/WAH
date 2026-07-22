@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { getCurrentUser, logout, awardQuizBonus } from '../lib/auth';
 import { applyForTask, listMyApplications, applicationsByTask } from '../lib/applications';
 import { TASKS } from '../lib/tasks';
+import Icon from '../components/Icon';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ import { TASKS } from '../lib/tasks';
 // server-side; the client only reacts to the flags the API returns.
 const isOffer = t => String(t?.id || '').startsWith('offer_');
 
-// Fisher-Yates shuffle — scatters offer tasks randomly among the others.
+// Fisher-Yates shuffle, scatters offer tasks randomly among the others.
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -46,7 +47,7 @@ function getOrGenerateWithdrawals() {
   const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const mask = p => `${p}*****${String(rand(10, 99))}`;
 
-  // 70 payouts today: 63 Kenyan (KES 2,100–9,300) + 7 Jamaican (KES 2,100–7,200)
+  // 70 payouts today: 63 Kenyan (KES 2,100 to 9,300) + 7 Jamaican (KES 2,100 to 7,200)
   const records = [
     ...Array.from({ length: 63 }, () => {
       const prefix = kenyaSrc.prefixes[rand(0, kenyaSrc.prefixes.length - 1)];
@@ -64,7 +65,7 @@ function getOrGenerateWithdrawals() {
     [records[i], records[j]] = [records[j], records[i]];
   }
 
-  // Featured payout — a real member's successful withdrawal today. Phone masked
+  // Featured payout, a real member's successful withdrawal today. Phone masked
   // in the same +254 style as the others; seeded frequently so it recurs in the
   // ticker and the rotating list for strong social proof.
   const featured = {
@@ -81,7 +82,7 @@ function getOrGenerateWithdrawals() {
   return withFeatured;
 }
 
-// Pending payouts — currently being processed (shown in the Pending tab)
+// Pending payouts, currently being processed (shown in the Pending tab)
 function getOrGeneratePending() {
   const LS_KEY = 'bh_pending_withdrawals_v1';
   try {
@@ -109,7 +110,7 @@ function getOrGeneratePending() {
   return records;
 }
 
-// Member reviews — includes the two client-supplied testimonials verbatim.
+// Member reviews, includes the two client-supplied testimonials verbatim.
 const REVIEWS = [
   { name: 'James Otieno',      country: 'Nairobi, Kenya',    flag: '🇰🇪', rating: 4,
     text: 'I tried withdrawing once, but it failed, but I tried twice, then it went through.' },
@@ -120,7 +121,7 @@ const REVIEWS = [
   { name: 'Chinedu Okafor',    country: 'Lagos, Nigeria',    flag: '🇳🇬', rating: 5,
     text: 'I was skeptical at first, but after my very first successful withdrawal I upgraded to premium. Worth every naira.' },
   { name: 'Ama Mensah',        country: 'Accra, Ghana',      flag: '🇬🇭', rating: 4,
-    text: 'Accuracy is everything here — confirm your account details and the payment goes through the first time, no repeat fees.' },
+    text: 'Accuracy is everything here, confirm your account details and the payment goes through the first time, no repeat fees.' },
   { name: 'Andre Campbell',    country: 'Kingston, Jamaica', flag: '🇯🇲', rating: 5,
     text: 'From Kingston with love. Once my bank details were correct, the transfer came through clean. Professional platform.' },
   { name: 'Sarah Nakato',      country: 'Kampala, Uganda',   flag: '🇺🇬', rating: 5,
@@ -190,7 +191,7 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
 
           {/* Offers skip the proposal step entirely */}
           {isActivated && offer && (
-            <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task (Offer — No Premium)</button>
+            <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task (Offer, No Premium)</button>
           )}
 
           {/* Regular tasks: proposal required before work can be submitted */}
@@ -206,7 +207,7 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
               {(!appStatus || appStatus === 'rejected' || appStatus === 'correction') && (
                 <button className="submit-btn" onClick={() => onApply(task)}
                   style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }}>
-                  {appStatus ? '🔄 Update & Resubmit Proposal' : '📝 Apply — Submit a Proposal'}
+                  {appStatus ? '🔄 Update & Resubmit Proposal' : '📝 Apply, Submit a Proposal'}
                 </button>
               )}
 
@@ -219,7 +220,7 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
               {approved && !isPremium && (
                 <>
                   <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600 }}>
-                    ✅ Proposal approved — this task is unlocked for you.
+                    ✅ Proposal approved, this task is unlocked for you.
                   </div>
                   <button className="submit-btn" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }}>⭐ Upgrade to Premium to Submit</button>
                 </>
@@ -228,7 +229,7 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
               {approved && isPremium && (
                 <>
                   <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600 }}>
-                    ✅ Proposal approved — this task is unlocked for you.
+                    ✅ Proposal approved, this task is unlocked for you.
                   </div>
                   <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task</button>
                 </>
@@ -243,7 +244,7 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
 
 // ─── Proposal (Bid) Form ──────────────────────────────────────────────────────
 // A user must submit a proposal and have it approved before working on a task.
-// Proposals are kept short — max 40 words per field — to avoid bulk text.
+// Proposals are kept short, max 40 words per field, to avoid bulk text.
 const MAX_PROPOSAL_WORDS = 40;
 const wordCount  = s => { const t = String(s || '').trim(); return t ? t.split(/\s+/).length : 0; };
 const clampWords = (s, max) => {
@@ -294,7 +295,7 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
           ) : (
             <>
               <p style={{ fontSize: 14, color: 'var(--gray)', marginBottom: 4 }}>
-                You&apos;re applying for <strong>{task.title}</strong>. Tell us why you&apos;re a good fit — this proposal
+                You&apos;re applying for <strong>{task.title}</strong>. Tell us why you&apos;re a good fit, this proposal
                 is reviewed before you can begin the task.
               </p>
               <div className="pay-phone-label" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -305,7 +306,7 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
                 className="pay-phone-input"
                 value={message}
                 onChange={e => setMessage(clampWords(e.target.value, MAX_PROPOSAL_WORDS))}
-                placeholder="Briefly say why you're suitable — keep it short (max 40 words)…"
+                placeholder="Briefly say why you're suitable, keep it short (max 40 words)…"
                 rows={4}
                 style={{ resize: 'vertical', minHeight: 92, fontFamily: 'inherit' }}
               />
@@ -352,7 +353,7 @@ function ApplicationNotices({ apps, subs, onStart }) {
         <div key={`ap-${a.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
           background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 12, padding: '12px 16px', marginBottom: 8 }}>
           <div style={{ fontSize: 13.5, color: '#1f2937' }}>
-            ✅ <strong>Approved!</strong> Your proposal for <strong>{a.taskTitle}</strong> was accepted — you can start it now.
+            ✅ <strong>Approved!</strong> Your proposal for <strong>{a.taskTitle}</strong> was accepted, you can start it now.
           </div>
           <button className="task-view-btn" style={{ padding: '8px 14px', whiteSpace: 'nowrap' }} onClick={() => onStart(a.taskId)}>Start task →</button>
         </div>
@@ -360,7 +361,7 @@ function ApplicationNotices({ apps, subs, onStart }) {
       {attention.map(a => (
         <div key={`at-${a.id}`} style={{ background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 12, padding: '12px 16px', marginBottom: 8, fontSize: 13.5, color: '#374151' }}>
           {a.status === 'rejected' ? '❌' : '✏️'} Your proposal for <strong>{a.taskTitle}</strong> {a.status === 'rejected' ? 'was not approved' : 'needs corrections'}.
-          {a.reason ? <span> — {a.reason}</span> : null} <button onClick={() => onStart(a.taskId)} style={{ background: 'none', border: 'none', color: '#374151', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13.5 }}>Open</button>
+          {a.reason ? <span>, {a.reason}</span> : null} <button onClick={() => onStart(a.taskId)} style={{ background: 'none', border: 'none', color: '#374151', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13.5 }}>Open</button>
         </div>
       ))}
       {pending.length > 0 && (
@@ -374,7 +375,7 @@ function ApplicationNotices({ apps, subs, onStart }) {
 
 // ─── Joining-Gift Quiz ────────────────────────────────────────────────────────
 // Five general-knowledge questions. KES 10 per correct answer (max KES 50).
-// The user is never told whether an answer was right — they just move on, and
+// The user is never told whether an answer was right, they just move on, and
 // the total earned is revealed on the final screen.
 const QUIZ_QUESTIONS = [
   { q: 'Rearrange these words into a correct sentence: “client / the / satisfied / was / very”',
@@ -414,7 +415,7 @@ function QuizModal({ user, onComplete }) {
 
     if (!isLast) { setStep(step + 1); return; }
 
-    // Grade — we generated the questions, so we know the answers
+    // Grade, we generated the questions, so we know the answers
     let correct = 0;
     QUIZ_QUESTIONS.forEach((qq, i) => { if (next[i] === qq.answer) correct += 1; });
     const earned = correct * 10;
@@ -445,7 +446,7 @@ function QuizModal({ user, onComplete }) {
           {!isResult && (
             <>
               <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', marginBottom: 18 }}>
-                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#374151' }}>KES 10</strong> — get all 5 and your <strong>KES 50</strong> activation is covered!
+                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#374151' }}>KES 10</strong>, get all 5 and your <strong>KES 50</strong> activation is covered!
               </div>
 
               {/* Progress bar */}
@@ -508,7 +509,7 @@ function QuizModal({ user, onComplete }) {
               </div>
               <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 16 }}>
                 {result.earned === 50
-                  ? 'Perfect score! Your full KES 50 joining gift has been added to your balance — it fully covers your account activation. 🎁'
+                  ? 'Perfect score! Your full KES 50 joining gift has been added to your balance, it fully covers your account activation. 🎁'
                   : result.earned > 0
                   ? `KES ${result.earned} has been added to your balance. When you activate, you can top up the remaining KES ${50 - result.earned} to reach the KES 50 activation fee.`
                   : 'No reward earned this time. You will need to pay the KES 50 activation fee when you choose to start bidding on tasks.'}
@@ -669,7 +670,7 @@ function ReferralModal({ user, onClose }) {
   );
 }
 
-// ─── Activity Feed — compact tabbed widget (Live / Pending / Reviews) ────────
+// ─── Activity Feed, compact tabbed widget (Live / Pending / Reviews) ────────
 function Stars({ n }) {
   return (
     <span style={{ color: '#9ca3af', fontSize: 12, letterSpacing: 1 }}>
@@ -753,7 +754,7 @@ function ActivityFeed({ withdrawals, pending }) {
         </div>
       )}
 
-      {/* Content — fixed compact height */}
+      {/* Content, fixed compact height */}
       <div style={{ minHeight: 132 }}>
         {tab === 'live' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -884,8 +885,8 @@ function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithd
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--green)', marginBottom: 14 }}>
             KES {(user?.balance || 0).toLocaleString()}
           </div>
-          <button className="logout-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={onLogout}>
-            ⏏ Sign Out
+          <button className="logout-btn" style={{ width: '100%', justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: 8 }} onClick={onLogout}>
+            <Icon name="power" size={16} /> Sign Out
           </button>
         </div>
       </div>
@@ -985,7 +986,12 @@ export default function Dashboard() {
     return () => document.removeEventListener('visibilitychange', refresh);
   }, [user]);
 
-  const handleLogout       = useCallback(() => { logout(); router.push('/'); }, [router]);
+  const handleLogout       = useCallback(() => {
+    // Confirm before signing out; cancel keeps the user where they are.
+    if (typeof window !== 'undefined' && !window.confirm('Are you sure you want to sign out?')) return;
+    logout();                 // clears the session + any stored auth data
+    router.push('/login');    // back to the Login screen
+  }, [router]);
   const handleViewTask     = useCallback(task => {
     if (!user?.activated) { router.push('/activate'); } else { setSelectedTask(task); }
   }, [user, router]);
@@ -1033,7 +1039,7 @@ export default function Dashboard() {
   const allTasks = source.filter(t => {
     const sub = userSubs[String(t.id)];
     if (sub) {
-      // The user submitted this task — keep it visible ("already submitted /
+      // The user submitted this task, keep it visible ("already submitted /
       // done") until the server marks it cleared, then remove it.
       return !sub.cleared;
     }
@@ -1115,7 +1121,7 @@ export default function Dashboard() {
             <p>{user.email} • {user.country}</p>
             <div style={{ marginTop: 12 }}>
               <span className={`status-badge ${user.activated ? 'status-active' : 'status-inactive'}`}>
-                {user.activated ? '✅ Active — Access valid 1 month' : '⚠️ Inactive — Pay KES 50 to Bid'}
+                {user.activated ? '✅ Active, Access valid 1 month' : '⚠️ Inactive, Pay KES 50 to Bid'}
               </span>
             </div>
           </div>

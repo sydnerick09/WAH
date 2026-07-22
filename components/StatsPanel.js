@@ -1,4 +1,4 @@
-// components/StatsPanel.js — reusable community-statistics panel.
+// components/StatsPanel.js, reusable community-statistics panel.
 // Shows the four live metrics (People Joined, Earning Members, Tasks Available,
 // Tasks Completed) that grow 20% every 24 hours. Part of the shared design
 // system; safe to drop onto any page.
@@ -12,7 +12,7 @@ const ITEMS = [
   { key: 'tasksCompleted', icon: 'check', label: 'Tasks Completed' },
 ];
 
-export default function StatsPanel({ heading = 'Our Growing Community', subtitle = 'Real momentum — updated every day.' }) {
+export default function StatsPanel({ heading = 'Our Growing Community', subtitle = 'Real momentum, updated every day.' }) {
   const stats = useCommunityStats();
 
   return (

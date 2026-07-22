@@ -37,7 +37,7 @@ const WHY_ITEMS = [
   {
     icon: 'globe',
     title: 'Work From Anywhere',
-    desc: 'On your phone, laptop, or tablet — earn from wherever you are.',
+    desc: 'On your phone, laptop, or tablet, earn from wherever you are.',
   },
   {
     icon: 'lock',
@@ -168,7 +168,7 @@ export default function Home() {
             opacity="0.55"
           />
 
-          {/* ── Top edge — main glowing gold line (animates in) ── */}
+          {/* ── Top edge, main glowing gold line (animates in) ── */}
           <path
             className="ribbon-draw"
             d="M-80,692 L418,82 L648,382 L970,77 L1540,447"
@@ -195,35 +195,35 @@ export default function Home() {
             opacity="0.40"
           />
 
-          {/* ── Sparkle 1 — first peak ── */}
+          {/* ── Sparkle 1, first peak ── */}
           <g className="sp-a" transform="translate(418,80)">
             <line className="sp-v" x1="0" y1="-22" x2="0" y2="22" stroke="#e5e7eb" strokeWidth="1.1"/>
             <line className="sp-h" x1="-22" y1="0" x2="22" y2="0" stroke="#e5e7eb" strokeWidth="1.1"/>
             <circle className="sp-dot" cx="0" cy="0" r="2.6" fill="#FFFFFF"/>
           </g>
 
-          {/* ── Sparkle 2 — descending slope after peak 1 ── */}
+          {/* ── Sparkle 2, descending slope after peak 1 ── */}
           <g className="sp-b" transform="translate(510,218)">
             <line className="sp-v" x1="0" y1="-17" x2="0" y2="17" stroke="#9ca3af" strokeWidth="0.9"/>
             <line className="sp-h" x1="-17" y1="0" x2="17" y2="0" stroke="#9ca3af" strokeWidth="0.9"/>
             <circle className="sp-dot" cx="0" cy="0" r="1.9" fill="#FFFFFF"/>
           </g>
 
-          {/* ── Sparkle 3 — second peak ── */}
+          {/* ── Sparkle 3, second peak ── */}
           <g className="sp-c" transform="translate(970,77)">
             <line className="sp-v" x1="0" y1="-22" x2="0" y2="22" stroke="#e5e7eb" strokeWidth="1.1"/>
             <line className="sp-h" x1="-22" y1="0" x2="22" y2="0" stroke="#e5e7eb" strokeWidth="1.1"/>
             <circle className="sp-dot" cx="0" cy="0" r="2.6" fill="#FFFFFF"/>
           </g>
 
-          {/* ── Sparkle 4 — ascending slope between peaks ── */}
+          {/* ── Sparkle 4, ascending slope between peaks ── */}
           <g className="sp-d" transform="translate(812,230)">
             <line className="sp-v" x1="0" y1="-15" x2="0" y2="15" stroke="#9ca3af" strokeWidth="0.85"/>
             <line className="sp-h" x1="-15" y1="0" x2="15" y2="0" stroke="#9ca3af" strokeWidth="0.85"/>
             <circle className="sp-dot" cx="0" cy="0" r="1.6" fill="#FFFFFF"/>
           </g>
 
-          {/* ── Sparkle 5 — right exit area ── */}
+          {/* ── Sparkle 5, right exit area ── */}
           <g className="sp-e" transform="translate(1185,395)">
             <line className="sp-v" x1="0" y1="-18" x2="0" y2="18" stroke="#9ca3af" strokeWidth="0.9"/>
             <line className="sp-h" x1="-18" y1="0" x2="18" y2="0" stroke="#9ca3af" strokeWidth="0.9"/>
@@ -260,7 +260,7 @@ export default function Home() {
               className="btn-primary"
               style={{ fontSize: 16, padding: '16px 40px' }}
             >
-              Join Now — It&apos;s Free
+              Join Now, It&apos;s Free
             </Link>
 
             <Link
@@ -296,7 +296,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Community statistics — auto-growing 2% every 24h */}
+      {/* Community statistics, auto-growing 2% every 24h */}
       <StatsPanel />
 
       {/* Quick Nav Buttons */}
@@ -546,14 +546,14 @@ export default function Home() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
             {[
-              { icon: '✅', label: 'Social Media Tasks',    desc: 'Likes, follows, reviews & more',        live: true  },
-              { icon: '✍️', label: 'Writing & Articles',    desc: 'Blog posts, captions, copy',            live: false },
-              { icon: '📋', label: 'Data Entry',            desc: 'Forms, spreadsheets, databases',        live: false },
-              { icon: '🔍', label: 'Online Research',       desc: 'Market research & fact-finding',        live: false },
-              { icon: '🎓', label: 'Academic Assignments',  desc: 'Essays, homework & study tasks',        live: false },
-              { icon: '📺', label: 'Video Watching',        desc: 'Watch & review video content',          live: false },
-              { icon: '📊', label: 'Survey & Feedback',     desc: 'Fill surveys, share opinions',          live: false },
-              { icon: '🏢', label: 'Business Support',      desc: 'Virtual assistance & admin tasks',      live: false },
+              { icon: 'users',     label: 'Social Media Tasks',    desc: 'Likes, follows, reviews & more',        live: true  },
+              { icon: 'edit',      label: 'Writing & Articles',    desc: 'Blog posts, captions, copy',            live: false },
+              { icon: 'tasks',     label: 'Data Entry',            desc: 'Forms, spreadsheets, databases',        live: false },
+              { icon: 'search',    label: 'Online Research',       desc: 'Market research & fact-finding',        live: false },
+              { icon: 'file',      label: 'Academic Assignments',  desc: 'Essays, homework & study tasks',        live: false },
+              { icon: 'camera',    label: 'Video Watching',        desc: 'Watch & review video content',          live: false },
+              { icon: 'chart',     label: 'Survey & Feedback',     desc: 'Fill surveys, share opinions',          live: false },
+              { icon: 'briefcase', label: 'Business Support',      desc: 'Virtual assistance & admin tasks',      live: false },
             ].map(cat => (
               <div key={cat.label} style={{
                 background: '#fff',
@@ -585,7 +585,7 @@ export default function Home() {
                     LIVE
                   </span>
                 )}
-                <div style={{ fontSize: 30, marginBottom: 10 }}>{cat.icon}</div>
+                <div style={{ marginBottom: 10, color: 'var(--black)' }}><Icon name={cat.icon} size={28} /></div>
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: 'var(--black)', marginBottom: 6 }}>{cat.label}</div>
                 <div style={{ fontSize: 13, color: 'var(--gray)', lineHeight: 1.5 }}>{cat.desc}</div>
               </div>

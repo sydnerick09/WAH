@@ -24,7 +24,7 @@ export default function Login() {
     }
     const email = form.email.trim().toLowerCase();
 
-    // One account per browser — this browser is bound to a single account
+    // One account per browser, this browser is bound to a single account
     const bound = getBoundEmail();
     if (bound && bound !== email) {
       setError('This browser is already linked to a different account. Only one account can be used per browser.');

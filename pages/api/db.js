@@ -90,18 +90,18 @@ function freshDatePosted(row) {
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   const d = new Date();
-  d.setDate(d.getDate() - (h % 6)); // 0–5 days ago
+  d.setDate(d.getDate() - (h % 6)); // 0 to 5 days ago
   return d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-// A rolling future deadline (7–14 days out), stable per task and relative to
+// A rolling future deadline (7 to 14 days out), stable per task and relative to
 // today, so admin-created tasks always show a due date that stays in the future.
 function freshDueDate(row) {
   const key = String(row.id ?? row.title ?? '');
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   const d = new Date();
-  d.setDate(d.getDate() + 7 + (h % 8)); // 7–14 days ahead
+  d.setDate(d.getDate() + 7 + (h % 8)); // 7 to 14 days ahead
   return d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
@@ -765,7 +765,7 @@ export default async function handler(req, res) {
         if (error) return res.json({ success: false, error: error.message });
         await logAction(db, {
           action: `application_${status}`, entity: 'application', entityId: applicationId,
-          detail: `${data?.task_title || ''} — ${data?.user_email || ''}${reason ? ` — ${reason}` : ''}`,
+          detail: `${data?.task_title || ''}, ${data?.user_email || ''}${reason ? `, ${reason}` : ''}`,
         });
         return res.json({ success: true, application: normApp(data) });
       }
@@ -842,10 +842,10 @@ export default async function handler(req, res) {
         if (error) return res.json({ success: false, error: error.message });
         await logAction(db, {
           action: `submission_${status}`, entity: 'submission', entityId: submissionId,
-          detail: `${sub.task_title || ''} — ${sub.user_email || ''}${reason ? ` — ${reason}` : ''}`,
+          detail: `${sub.task_title || ''}, ${sub.user_email || ''}${reason ? `, ${reason}` : ''}`,
         });
 
-        // Auto-send the "Task Approved & Earnings Credited" email — only after a
+        // Auto-send the "Task Approved & Earnings Credited" email, only after a
         // successful new approval whose balance credit committed. Email failure
         // never rolls back the approval; it's logged so the admin can resend.
         let email = null;
@@ -947,7 +947,7 @@ export default async function handler(req, res) {
         const { data, error } = await query;
         if (error) return res.json({ data: [], error: error.message });
         // The dashboard shows "already submitted/done", then the task clears
-        // 3 hours after submission — that timing is decided here (server-side).
+        // 3 hours after submission, that timing is decided here (server-side).
         const CLEAR_MS = 3 * 60 * 60 * 1000;
         const nowMs = Date.now();
         return res.json({ data: (data || []).map(r => ({
@@ -959,7 +959,7 @@ export default async function handler(req, res) {
       }
 
       case 'adminSeedOfferTasks': {
-        // Launch a fresh batch of 15 limited-time OFFER tasks (KES 2,000–4,200).
+        // Launch a fresh batch of 15 limited-time OFFER tasks (KES 2,000 to 4,200).
         // No premium needed, one submission each (slots=1), 9-hour window (from
         // created_at). Re-running replaces the batch and restarts the 9 hours.
         if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
@@ -984,7 +984,7 @@ export default async function handler(req, res) {
         const rows = OFFERS.map((o, i) => ({
           id:          `offer_${i + 1}`,
           title:       o.title,
-          description: `${o.title}. 🔥 Limited-time OFFER — no premium needed and first come, first served (only one person can complete each offer). Submit your completed work the same way as any other task before the offer ends.`,
+          description: `${o.title}. 🔥 Limited-time OFFER, no premium needed and first come, first served (only one person can complete each offer). Submit your completed work the same way as any other task before the offer ends.`,
           category:    o.category,
           poster:      'Business Hub • Offer',
           location:    'Remote',

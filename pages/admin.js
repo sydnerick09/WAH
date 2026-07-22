@@ -69,7 +69,7 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
             {isSuspending ? '🚫 Suspend Account' : '✅ Unsuspend Account'}
           </div>
           <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
-            {modal.user.fullName} — {modal.user.email}
+            {modal.user.fullName}, {modal.user.email}
           </div>
         </div>
         <div style={{ padding: 24 }}>
@@ -598,7 +598,7 @@ function BroadcastTab({ secret, userCount }) {
           ok: true,
           text: test
             ? `Test email sent to your own inbox (${data.sent} sent).`
-            : `Done — ${data.sent} sent, ${data.failed} failed out of ${data.total} client(s).`,
+            : `Done, ${data.sent} sent, ${data.failed} failed out of ${data.total} client(s).`,
         });
       } else {
         setResult({ ok: false, text: data.message || 'Failed to send.' });
@@ -718,7 +718,7 @@ function TasksTab({ secret }) {
   }
 
   async function launchOffers() {
-    if (!confirm('Launch a fresh batch of 15 OFFER tasks (KES 2,000–4,200)?\n\nNo premium needed, one submission each, and they run for 9 hours. This replaces any current offer batch and restarts the 9-hour window.')) return;
+    if (!confirm('Launch a fresh batch of 15 OFFER tasks (KES 2,000 to 4,200)?\n\nNo premium needed, one submission each, and they run for 9 hours. This replaces any current offer batch and restarts the 9-hour window.')) return;
     setCreating(true);
     const res = await dbProxy('adminSeedOfferTasks', { adminSecret: secret });
     setCreating(false);
@@ -734,7 +734,7 @@ function TasksTab({ secret }) {
       <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 20px', marginBottom: 20, maxWidth: 820, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 15, color: '#374151' }}>🔥 Limited-time Offer Tasks</div>
-          <div style={{ fontSize: 12.5, color: '#4b5563', marginTop: 2 }}>15 tasks · KES 2,000–4,200 · no premium needed · one submission each · 9-hour window.</div>
+          <div style={{ fontSize: 12.5, color: '#4b5563', marginTop: 2 }}>15 tasks · KES 2,000 to 4,200 · no premium needed · one submission each · 9-hour window.</div>
         </div>
         <button style={{ ...styles.btn, background: '#4b5563', width: 'auto', padding: '10px 18px', fontSize: 14, whiteSpace: 'nowrap' }} disabled={creating} onClick={launchOffers}>
           {creating ? 'Working…' : 'Launch 15 Offer Tasks'}
@@ -825,7 +825,7 @@ function TasksTab({ secret }) {
               );
             })}
             {loaded && tasks.length === 0 && !err && (
-              <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No custom tasks yet — create one above.</td></tr>
+              <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No custom tasks yet, create one above.</td></tr>
             )}
           </tbody>
         </table>
@@ -864,7 +864,7 @@ function SubmissionsTab({ secret }) {
     await load();
     // On approval, surface the auto-sent confirmation email's delivery status.
     if (status === 'approved' && res?.email) {
-      if (res.email.sent) flash(s.id, { type: 'ok', text: '✅ Approved — confirmation email sent.' });
+      if (res.email.sent) flash(s.id, { type: 'ok', text: '✅ Approved, confirmation email sent.' });
       else flash(s.id, { type: 'err', text: `Approved & credited, but email ${String(res.email.status || 'failed').toLowerCase()}. Use “Resend”.` });
     } else if (status === 'approved') {
       flash(s.id, { type: 'ok', text: '✅ Approved & credited.' });
@@ -987,7 +987,7 @@ function CleanupTab({ secret, onRefresh }) {
           🧹 Remove Invalid / Bounced Emails
         </div>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>
-          Paste the addresses that bounced (the ones your “Mail Delivery Subsystem” failure notices list). One per line, or separated by commas — mixed text is fine, only valid email addresses are picked up.
+          Paste the addresses that bounced (the ones your “Mail Delivery Subsystem” failure notices list). One per line, or separated by commas, mixed text is fine, only valid email addresses are picked up.
         </p>
         <p style={{ fontSize: 12.5, color: '#1f2937', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
           ⚠️ This <strong>permanently deletes</strong> the matching accounts. It only removes <strong>exact</strong> address matches, so double-check before deleting.
@@ -1066,12 +1066,12 @@ function ApplicationsTab({ secret }) {
     if (status === 'approved' && !confirm(`Approve ${a.name || a.email || 'this applicant'}'s proposal for "${a.taskTitle}"? This unlocks the task for them.`)) return;
     let rejectReason = '';
     if (status === 'rejected') {
-      rejectReason = prompt(`Reason for rejecting this application? (optional — shown to the user)`, a.reason || '') || '';
+      rejectReason = prompt(`Reason for rejecting this application? (optional, shown to the user)`, a.reason || '') || '';
     }
     setBusy(p => ({ ...p, [a.id]: true }));
     const res = await dbProxy('adminUpdateApplication', { adminSecret: secret, applicationId: a.id, status, reason: rejectReason });
     setBusy(p => ({ ...p, [a.id]: false }));
-    if (res.success) { await load(); flash(a.id, { type: 'ok', text: status === 'approved' ? 'Approved — task unlocked.' : 'Updated.' }); }
+    if (res.success) { await load(); flash(a.id, { type: 'ok', text: status === 'approved' ? 'Approved, task unlocked.' : 'Updated.' }); }
     else flash(a.id, { type: 'err', text: res.error || 'Failed.' });
   }
 
@@ -1275,7 +1275,7 @@ export default function AdminPanel() {
       <div style={styles.header}>
         <div>
           <div style={styles.logo}>BUSINESS HUB</div>
-          <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>Admin — Full Database Manager</p>
+          <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>Admin, Full Database Manager</p>
         </div>
         <button style={{ ...styles.btn, padding: '8px 18px', fontSize: 13, width: 'auto' }} onClick={refresh}>
           Refresh

@@ -1,4 +1,4 @@
-// components/Icon.js — reusable monochrome line-icon set inspired by the classic
+// components/Icon.js, reusable monochrome line-icon set inspired by the classic
 // 2010-era web-app icon vocabulary (Silk / Fugue / Glyphish common icons), drawn
 // as clean single-color strokes so they inherit the current text color and fit
 // the black & white theme. Usage: <Icon name="users" size={20} />

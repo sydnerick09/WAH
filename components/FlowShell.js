@@ -1,7 +1,7 @@
 // components/FlowShell.js
 // Full-page wrapper used by the flow pages (activate, skills-test, premium,
 // withdraw). Gives a consistent professional header with a Back button and a
-// centered content column — replacing the old pop-up modals.
+// centered content column, replacing the old pop-up modals.
 import { useRouter } from 'next/router';
 
 export default function FlowShell({ title, subtitle, icon, accent = 'linear-gradient(135deg, #1f2937, #374151)', maxWidth = 560, children }) {

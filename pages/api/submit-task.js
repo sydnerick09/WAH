@@ -50,7 +50,7 @@ export default async function handler(req, res) {
   const userName  = get("userName");
   const note      = get("note");
 
-  // ── 2b. Proposal gate — regular tasks require an APPROVED application ──────
+  // ── 2b. Proposal gate, regular tasks require an APPROVED application ──────
   // Offer tasks (offer_…) are exempt. Best-effort: if the DB isn't configured we
   // can't verify, so we don't block (matches the rest of this endpoint).
   const isOfferTask = String(taskId || "").startsWith("offer_");
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
       if (!appErr && !appRow) {
         return res.status(403).json({ success: false, message: "An approved proposal is required before you can submit this task." });
       }
-    } catch (_) { /* verification unavailable — fall through */ }
+    } catch (_) { /* verification unavailable, fall through */ }
   }
 
   // Format the task's payment for the email (so admin sees what the task costs)
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
   const fileName = uploadedFile.originalFilename || `submission-${Date.now()}`;
   const mimeType = uploadedFile.mimetype || "application/octet-stream";
 
-  // ── 4. Validate file type — no images (matches client-side restriction) ───
+  // ── 4. Validate file type, no images (matches client-side restriction) ───
   const allowedTypes = [
     "application/pdf",
     "application/msword",
@@ -150,7 +150,7 @@ export default async function handler(req, res) {
     from: `"Business Hub" <${process.env.SMTP_USER}>`,
     to: destination,
     replyTo: userEmail && userEmail !== "N/A" ? userEmail : undefined,
-    subject: `[Task Submission] ${taskTitle} (${paymentDisplay}) — ${userName !== "N/A" ? userName : "User " + userId}`,
+    subject: `[Task Submission] ${taskTitle} (${paymentDisplay}), ${userName !== "N/A" ? userName : "User " + userId}`,
     html: `
       <h2>New Task Submission</h2>
       <table cellpadding="8" style="border-collapse:collapse;font-family:Inter,sans-serif;font-size:14px;">
@@ -185,11 +185,11 @@ export default async function handler(req, res) {
       await transporter.sendMail({
         from: `"Business Hub" <${process.env.SMTP_USER}>`,
         to: userEmail,
-        subject: `We received your submission — ${taskTitle}`,
+        subject: `We received your submission, ${taskTitle}`,
         html: `
           <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;">
             <p>Hi ${escHtml(userName !== "N/A" ? userName : "there")},</p>
-            <p>Thank you — we’ve received your submission for <strong>${escHtml(taskTitle)}</strong> with your attached file <strong>${escHtml(fileName)}</strong>. Our team will review it and get back to you.</p>
+            <p>Thank you, we’ve received your submission for <strong>${escHtml(taskTitle)}</strong> with your attached file <strong>${escHtml(fileName)}</strong>. Our team will review it and get back to you.</p>
             <p>Warm regards,<br/>The Business Hub Team</p>
           </div>`,
       });
@@ -200,7 +200,7 @@ export default async function handler(req, res) {
 
   // ── 7b. Log the submission for admin review (approve/reject) ───────────────
   // Best-effort: if the `submissions` table or DB isn't configured, submission
-  // still succeeds — this just won't appear in the admin review list.
+  // still succeeds, this just won't appear in the admin review list.
   try {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const db = createClient(
@@ -219,7 +219,7 @@ export default async function handler(req, res) {
         status:     "pending",
       });
 
-      // Offer tasks are one-submission-only — mark claimed so the offer is
+      // Offer tasks are one-submission-only, mark claimed so the offer is
       // removed from everyone else's dashboard once someone submits it.
       if (taskId && taskId !== "N/A" && taskId.startsWith("offer_")) {
         const { data: t } = await db.from("tasks").select("claimed").eq("id", taskId).maybeSingle();

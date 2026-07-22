@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   styles/globals.css — Business Hub Enhanced
+   styles/globals.css, Business Hub Enhanced
    ══════════════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;500;600;700&display=swap');
@@ -32,7 +32,7 @@
   --gray:        #64748B;
   --gray-light:  #E2E8F0;
 
-  /* Typography — Inter (UI/body) + Poppins (display headings), professionally paired */
+  /* Typography, Inter (UI/body) + Poppins (display headings), professionally paired */
   --font-display: 'Poppins', 'Inter', system-ui, sans-serif;
   --font-body:    'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
   --font-mono:    'Inter', system-ui, sans-serif;
@@ -58,7 +58,7 @@
   --radius-xl: 20px;
   --radius-2xl: 24px;
 
-  /* Motion — context-appropriate transition timings (no single global speed) */
+  /* Motion, context-appropriate transition timings (no single global speed) */
   --t-fast:     0.12s;   /* buttons, small toggles */
   --t-dropdown: 0.14s;   /* dropdowns / popovers */
   --t-nav:      0.2s;    /* navigation */
@@ -157,7 +157,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   pointer-events: none; z-index: 0;
 }
 
-/* Sparkle cross arms — CSS-driven on SVG elements */
+/* Sparkle cross arms, CSS-driven on SVG elements */
 .sp-v {
   transform-box: fill-box; transform-origin: center;
   animation: spV 3s ease-in-out infinite;
@@ -318,7 +318,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 /* ══════════════════════════════════════════════════════════════════════════════
    DASHBOARD
    ══════════════════════════════════════════════════════════════════════════════ */
-/* Dashboard — space background */
+/* Dashboard, space background */
 .dashboard {
   min-height: 100vh;
   background: #000000 url('/dashboard-bg.jpg') center/cover fixed no-repeat;
@@ -394,7 +394,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 .referral-copy-btn     { background: rgba(255,255,255,0.2); color: var(--white); border: 1px solid rgba(255,255,255,0.4); padding: 8px 16px; border-radius: 50px; font-family: var(--font-display); font-size: 13px; font-weight: 600; transition: background 0.2s; }
 .referral-copy-btn:hover { background: rgba(255,255,255,0.35); }
 
-/* ── Quick Actions — 5-tile grid ── */
+/* ── Quick Actions, 5-tile grid ── */
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -587,7 +587,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 .withdraw-footer-note { text-align: center; font-family: var(--font-sub); font-size: 12px; color: var(--gray); margin-top: 12px; line-height: 1.6; }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   COMING SOON MODAL — Withdraw with M-Pesa
+   COMING SOON MODAL, Withdraw with M-Pesa
    ══════════════════════════════════════════════════════════════════════════════ */
 .coming-soon-modal-card {
   background: var(--white);
@@ -754,7 +754,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   LIVE WITHDRAWALS — ANIMATED TICKER
+   LIVE WITHDRAWALS, ANIMATED TICKER
    ══════════════════════════════════════════════════════════════════════════════ */
 .withdrawals-feed {
   margin: 28px 0;

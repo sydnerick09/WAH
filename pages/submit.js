@@ -1,4 +1,4 @@
-// pages/submit.js — task submission with a file/document attachment.
+// pages/submit.js, task submission with a file/document attachment.
 // Uploads the completed work to /api/submit-task, which emails it (as an
 // attachment) to the admin and sends the client an auto-reply confirmation.
 import { useState, useEffect } from 'react';
@@ -131,7 +131,7 @@ export default function SubmitPage() {
     );
   }
 
-  // Premium is required to submit — except limited-time OFFER tasks (id starts with offer_)
+  // Premium is required to submit, except limited-time OFFER tasks (id starts with offer_)
   if (!user.premium && !String(task?.id || '').startsWith('offer_')) {
     return (
       <FlowShell title="Submit Task" subtitle="Premium required" icon="📤">
@@ -171,7 +171,7 @@ export default function SubmitPage() {
   return (
     <FlowShell title="Submit Your Work" subtitle={task.title} icon="📤">
       <div className="pay-message" style={{ marginBottom: 18 }}>
-        Attach your completed work for <strong>{task.title}</strong> ({task.category}) and submit. Accepted: documents, images, audio, video or zip — up to {MAX_MB} MB.
+        Attach your completed work for <strong>{task.title}</strong> ({task.category}) and submit. Accepted: documents, images, audio, video or zip, up to {MAX_MB} MB.
       </div>
 
       <div className="pay-phone-label">Your completed work (file)</div>

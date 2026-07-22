@@ -1,4 +1,4 @@
-// pages/activate.js — full-page account activation (replaces the pop-up)
+// pages/activate.js, full-page account activation (replaces the pop-up)
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
@@ -136,7 +136,7 @@ export default function ActivatePage() {
             Account Activated!
           </div>
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
-            Your account is now active. KES 50 has been applied as your activation fee — you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
+            Your account is now active. KES 50 has been applied as your activation fee, you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
           </div>
           <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #374151, #374151)', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
             🚀 Start Bidding

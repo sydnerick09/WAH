@@ -1,4 +1,4 @@
-// pages/skills-test.js — the Premium Skills Test has been removed.
+// pages/skills-test.js, the Premium Skills Test has been removed.
 // This route now just redirects to the Premium page.
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
