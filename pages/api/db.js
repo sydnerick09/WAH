@@ -105,6 +105,14 @@ function freshDueDate(row) {
   return d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+// Proposals are capped at a small word count to avoid bulk text (mirrors the
+// client-side limit on the application form).
+function clampWords(s, max = 40) {
+  const t = String(s || '').trim();
+  const words = t.split(/\s+/).filter(Boolean);
+  return words.length <= max ? t : words.slice(0, max).join(' ');
+}
+
 // Admin-managed task (stored in the `tasks` table). Shape matches lib/tasks.js
 // so it can be shown on the dashboard alongside the built-in tasks.
 function normTask(row) {
@@ -716,8 +724,8 @@ export default async function handler(req, res) {
           user_name:  userName ?? '',
           task_id:    String(taskId),
           task_title: taskTitle ?? '',
-          message:    String(message).trim(),
-          extra:      extra ? String(extra).trim() : '',
+          message:    clampWords(message, 40),
+          extra:      extra ? clampWords(extra, 40) : '',
           status:     'pending',
         }).select().single();
         if (error) return res.json({ success: false, error: error.message });

@@ -243,6 +243,14 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
 
 // ─── Proposal (Bid) Form ──────────────────────────────────────────────────────
 // A user must submit a proposal and have it approved before working on a task.
+// Proposals are kept short — max 40 words per field — to avoid bulk text.
+const MAX_PROPOSAL_WORDS = 40;
+const wordCount  = s => { const t = String(s || '').trim(); return t ? t.split(/\s+/).length : 0; };
+const clampWords = (s, max) => {
+  const words = String(s || '').trim().split(/\s+/).filter(Boolean);
+  return words.length <= max ? s : words.slice(0, max).join(' ');
+};
+
 function ProposalModal({ task, existing, onClose, onSubmit }) {
   const [message, setMessage] = useState(existing?.message || '');
   const [extra,   setExtra]   = useState(existing?.extra || '');
@@ -250,8 +258,14 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
   const [error,   setError]   = useState('');
   const [done,    setDone]    = useState(false);
 
+  const msgWords   = wordCount(message);
+  const extraWords = wordCount(extra);
+
   async function submit() {
     if (!message.trim()) { setError('Please write a short message describing why you are suitable.'); return; }
+    if (msgWords > MAX_PROPOSAL_WORDS || extraWords > MAX_PROPOSAL_WORDS) {
+      setError(`Please keep each field to ${MAX_PROPOSAL_WORDS} words or fewer.`); return;
+    }
     setError(''); setBusy(true);
     const res = await onSubmit(message.trim(), extra.trim());
     setBusy(false);
@@ -283,23 +297,29 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
                 You&apos;re applying for <strong>{task.title}</strong>. Tell us why you&apos;re a good fit — this proposal
                 is reviewed before you can begin the task.
               </p>
-              <div className="pay-phone-label" style={{ marginTop: 14 }}>Your proposal / cover letter <span style={{ color: '#DC2626' }}>*</span></div>
+              <div className="pay-phone-label" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span>Your proposal / cover letter <span style={{ color: '#DC2626' }}>*</span></span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: msgWords >= MAX_PROPOSAL_WORDS ? '#DC2626' : 'var(--gray)' }}>{msgWords}/{MAX_PROPOSAL_WORDS} words</span>
+              </div>
               <textarea
                 className="pay-phone-input"
                 value={message}
-                onChange={e => setMessage(e.target.value)}
-                placeholder="Briefly explain why you're suitable for this task, your relevant experience, and how you'll approach it…"
-                rows={5}
-                style={{ resize: 'vertical', minHeight: 110, fontFamily: 'inherit' }}
+                onChange={e => setMessage(clampWords(e.target.value, MAX_PROPOSAL_WORDS))}
+                placeholder="Briefly say why you're suitable — keep it short (max 40 words)…"
+                rows={4}
+                style={{ resize: 'vertical', minHeight: 92, fontFamily: 'inherit' }}
               />
-              <div className="pay-phone-label" style={{ marginTop: 14 }}>Additional information (optional)</div>
+              <div className="pay-phone-label" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span>Additional information (optional)</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: extraWords >= MAX_PROPOSAL_WORDS ? '#DC2626' : 'var(--gray)' }}>{extraWords}/{MAX_PROPOSAL_WORDS} words</span>
+              </div>
               <textarea
                 className="pay-phone-input"
                 value={extra}
-                onChange={e => setExtra(e.target.value)}
-                placeholder="Portfolio link, availability, questions for the poster… (optional)"
+                onChange={e => setExtra(clampWords(e.target.value, MAX_PROPOSAL_WORDS))}
+                placeholder="Portfolio link, availability… (optional, max 40 words)"
                 rows={3}
-                style={{ resize: 'vertical', minHeight: 70, fontFamily: 'inherit' }}
+                style={{ resize: 'vertical', minHeight: 64, fontFamily: 'inherit' }}
               />
               {error && <div style={{ color: '#ef4444', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
               <button className="submit-btn" style={{ marginTop: 16, opacity: busy ? 0.7 : 1 }} onClick={submit} disabled={busy}>
