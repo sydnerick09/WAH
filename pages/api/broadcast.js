@@ -40,7 +40,7 @@ function bodyToHtml(body, name) {
   return `
     <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;max-width:600px;">
       ${intro}${paragraphs}
-      <p style="margin-top:18px;color:#125C37;font-weight:600;">— The Business Hub Team</p>
+      <p style="margin-top:18px;color:#1f2937;font-weight:600;">— The Business Hub Team</p>
     </div>`;
 }
 

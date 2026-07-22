@@ -69,13 +69,13 @@ export default function ActivatePage() {
     <FlowShell title="Activate Your Account" subtitle="KES 50 one-time activation • unlocks bidding" icon="🔓">
       <div className="pay-amount" style={{ marginBottom: 18 }}>
         <div className="pay-amount-label">Your Balance</div>
-        <div className="pay-amount-value" style={{ color: enough ? '#059669' : '#111827' }}>KES {balance.toLocaleString()}</div>
+        <div className="pay-amount-value" style={{ color: enough ? '#374151' : '#111827' }}>KES {balance.toLocaleString()}</div>
         <div className="pay-amount-sub">Activation fee: KES 50{enough ? ' • fully covered by your balance' : ` • short by KES ${topup}`}</div>
       </div>
 
       {step === 'confirm' && (
         <>
-          <div className="pay-message" style={{ borderColor: '#125C37', background: '#F0FFF4', marginBottom: 18 }}>
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>
             Are you sure you want to use your balance to activate your account? <strong>KES 50</strong> will be deducted from your balance as the activation fee.
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -98,9 +98,9 @@ export default function ActivatePage() {
             onChange={e => { setPassword(e.target.value); setError(''); }}
             placeholder="Enter your password"
             onKeyDown={e => { if (e.key === 'Enter') submitPassword(); }}
-            style={{ borderColor: error ? '#ef4444' : undefined }}
+            style={{ borderColor: error ? '#4b5563' : undefined }}
           />
-          {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
+          {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
           <button className="pay-btn" style={{ marginTop: 18 }} onClick={submitPassword} disabled={loading}>
             {loading ? <><span className="spinner" /> Activating…</> : '🔒 Confirm & Activate'}
           </button>
@@ -110,8 +110,8 @@ export default function ActivatePage() {
 
       {step === 'topup' && (
         <>
-          <div className="pay-message" style={{ borderColor: '#1D4ED8', background: '#EFF6FF', marginBottom: 18 }}>
-            Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Add <strong style={{ color: '#1D4ED8' }}>KES {topup}</strong> via Paystack to activate your account.
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', marginBottom: 18 }}>
+            Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Add <strong style={{ color: '#1f2937' }}>KES {topup}</strong> via Paystack to activate your account.
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
           <input
@@ -119,9 +119,9 @@ export default function ActivatePage() {
             value={phone}
             onChange={e => { setPhone(e.target.value); setError(''); }}
             placeholder="+254 7XX XXX XXX"
-            style={{ borderColor: error ? '#ef4444' : undefined }}
+            style={{ borderColor: error ? '#4b5563' : undefined }}
           />
-          {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
+          {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
           <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
             {loading ? <><span className="spinner" /> Processing…</> : `🔒 Add KES ${topup} via Paystack`}
           </button>
@@ -132,13 +132,13 @@ export default function ActivatePage() {
       {step === 'success' && (
         <div style={{ textAlign: 'center', padding: '10px 0' }}>
           <div style={{ fontSize: 56, marginBottom: 8 }}>✅</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: '#059669', marginBottom: 6 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: '#374151', marginBottom: 6 }}>
             Account Activated!
           </div>
-          <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', textAlign: 'left', marginTop: 12 }}>
+          <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
             Your account is now active. KES 50 has been applied as your activation fee — you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
           </div>
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
+          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #374151, #374151)', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
             🚀 Start Bidding
           </button>
         </div>

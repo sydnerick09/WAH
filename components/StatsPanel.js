@@ -3,12 +3,13 @@
 // Tasks Completed) that grow 20% every 24 hours. Part of the shared design
 // system; safe to drop onto any page.
 import { useCommunityStats } from '../lib/stats';
+import Icon from './Icon';
 
 const ITEMS = [
-  { key: 'peopleJoined',   icon: '👥', label: 'People Joined' },
-  { key: 'earningMembers', icon: '💸', label: 'Earning Members' },
-  { key: 'tasksAvailable', icon: '📋', label: 'Tasks Available' },
-  { key: 'tasksCompleted', icon: '✅', label: 'Tasks Completed' },
+  { key: 'peopleJoined',   icon: 'users', label: 'People Joined' },
+  { key: 'earningMembers', icon: 'cash',  label: 'Earning Members' },
+  { key: 'tasksAvailable', icon: 'tasks', label: 'Tasks Available' },
+  { key: 'tasksCompleted', icon: 'check', label: 'Tasks Completed' },
 ];
 
 export default function StatsPanel({ heading = 'Our Growing Community', subtitle = 'Real momentum — updated every day.' }) {
@@ -27,7 +28,7 @@ export default function StatsPanel({ heading = 'Our Growing Community', subtitle
               role="group"
               aria-label={`${it.label}: ${stats[it.key].toLocaleString()}`}
             >
-              <div className="stat-card-icon" aria-hidden="true">{it.icon}</div>
+              <div className="stat-card-icon" aria-hidden="true"><Icon name={it.icon} size={30} /></div>
               <div className="stat-card-num">{stats[it.key].toLocaleString()}</div>
               <div className="stat-card-label">{it.label}</div>
             </div>

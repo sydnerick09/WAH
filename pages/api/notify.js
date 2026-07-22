@@ -85,7 +85,7 @@ export default async function handler(req, res) {
           <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;">
             <p>Hi ${esc(name) || 'there'},</p>
             <p>Thank you for reaching out to <strong>Business Hub</strong>. We’ve received your <strong>${esc(type).toLowerCase()}</strong> and our team will get back to you shortly.</p>
-            <p style="background:#F0FFF4;border:1px solid #6EE7B7;border-radius:8px;padding:12px 14px;">
+            <p style="background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;padding:12px 14px;">
               <strong>Summary</strong><br/>${esc(details).replace(/\n/g, '<br/>')}
             </p>
             <p>Warm regards,<br/>The Business Hub Team</p>

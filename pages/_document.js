@@ -7,7 +7,7 @@ export default function Document() {
       <Head>
         <meta charSet="utf-8" />
         <meta name="description" content="Online Business Hub — Work, Earn, Grow. Complete tasks, post assignments, and earn money from anywhere in Kenya." />
-        <meta name="theme-color" content="#0047FF" />
+        <meta name="theme-color" content="#1f2937" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
         <link

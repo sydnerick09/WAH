@@ -156,7 +156,7 @@ export default async function handler(req, res) {
       <table cellpadding="8" style="border-collapse:collapse;font-family:Inter,sans-serif;font-size:14px;">
         <tr><td><strong>Task ID</strong></td><td>${escHtml(taskId)}</td></tr>
         <tr><td><strong>Task Title</strong></td><td>${escHtml(taskTitle)}</td></tr>
-        <tr><td><strong>Task Payment</strong></td><td><strong style="color:#059669;">${escHtml(paymentDisplay)}</strong></td></tr>
+        <tr><td><strong>Task Payment</strong></td><td><strong style="color:#374151;">${escHtml(paymentDisplay)}</strong></td></tr>
         <tr><td><strong>Category</strong></td><td>${escHtml(taskCategory)}</td></tr>
         <tr><td><strong>Name</strong></td><td>${escHtml(userName)}</td></tr>
         <tr><td><strong>User ID</strong></td><td>${escHtml(userId)}</td></tr>

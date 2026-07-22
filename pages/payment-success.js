@@ -96,7 +96,7 @@ export default function PaymentSuccess() {
     }}>
       <div style={{
         width: 40, height: 40, borderRadius: '50%',
-        border: '4px solid #E2E8F0', borderTopColor: '#059669',
+        border: '4px solid #E2E8F0', borderTopColor: '#374151',
         animation: 'spin 0.8s linear infinite',
       }} />
       <p style={{ color: '#64748B', fontSize: 15 }}>Verifying your payment…</p>

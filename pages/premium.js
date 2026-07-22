@@ -45,7 +45,7 @@ export default function PremiumPage() {
     <FlowShell title="Premium" subtitle="KES 480 / month • required to submit tasks" icon="⭐">
       <div className="pay-amount" style={{ marginBottom: 16 }}>
         <div className="pay-amount-label">Premium Membership</div>
-        <div className="pay-amount-value" style={{ color: '#6D28D9' }}>KES {PREMIUM_FEE}</div>
+        <div className="pay-amount-value" style={{ color: '#374151' }}>KES {PREMIUM_FEE}</div>
         <div className="pay-amount-sub">One month • unlock task submissions</div>
       </div>
 
@@ -68,10 +68,10 @@ export default function PremiumPage() {
         value={phone}
         onChange={e => { setPhone(e.target.value); setError(''); }}
         placeholder="+254 7XX XXX XXX"
-        style={{ borderColor: error ? '#ef4444' : undefined }}
+        style={{ borderColor: error ? '#4b5563' : undefined }}
       />
-      {error && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</div>}
-      <button className="pay-btn" style={{ marginTop: 18, background: 'linear-gradient(135deg, #4C1D95, #6D28D9)' }} onClick={pay} disabled={loading}>
+      {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
+      <button className="pay-btn" style={{ marginTop: 18, background: 'linear-gradient(135deg, #1f2937, #374151)' }} onClick={pay} disabled={loading}>
         {loading ? <><span className="spinner" /> Processing…</> : `🔒 Pay KES ${PREMIUM_FEE} via Paystack`}
       </button>
       <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getCurrentUser } from '../lib/auth';
 import StatsPanel from '../components/StatsPanel';
+import Icon from '../components/Icon';
 
 const HOW_ITEMS = [
   {
@@ -34,22 +35,22 @@ const HOW_ITEMS = [
 
 const WHY_ITEMS = [
   {
-    icon: '🌍',
+    icon: 'globe',
     title: 'Work From Anywhere',
     desc: 'On your phone, laptop, or tablet — earn from wherever you are.',
   },
   {
-    icon: '🔒',
+    icon: 'lock',
     title: 'Secure & Transparent',
     desc: 'No scams, no hidden fees, and your payments are protected.',
   },
   {
-    icon: '👥',
+    icon: 'users',
     title: 'A Community of Earners',
     desc: 'Thousands of real users working daily and making money.',
   },
   {
-    icon: '✅',
+    icon: 'check',
     title: 'Perfect for Everyone',
     desc: 'Students, freelancers, job seekers, stay-at-home parents, or professionals.',
   },
@@ -140,8 +141,8 @@ export default function Home() {
               patternUnits="userSpaceOnUse"
               patternTransform="rotate(33 720 400)"
             >
-              <line x1="0" y1="0" x2="0" y2="13" stroke="#C9933A" strokeWidth="0.5" strokeOpacity="0.38"/>
-              <line x1="0" y1="0" x2="13" y2="0" stroke="#C9933A" strokeWidth="0.5" strokeOpacity="0.38"/>
+              <line x1="0" y1="0" x2="0" y2="13" stroke="#6b7280" strokeWidth="0.5" strokeOpacity="0.38"/>
+              <line x1="0" y1="0" x2="13" y2="0" stroke="#6b7280" strokeWidth="0.5" strokeOpacity="0.38"/>
             </pattern>
             {/* Soft glow filter for main edge lines */}
             <filter id="lineGlow" x="-25%" y="-25%" width="150%" height="150%">
@@ -172,7 +173,7 @@ export default function Home() {
             className="ribbon-draw"
             d="M-80,692 L418,82 L648,382 L970,77 L1540,447"
             fill="none"
-            stroke="#C9933A"
+            stroke="#6b7280"
             strokeWidth="2.2"
             style={{ filter: 'url(#lineGlow)' }}
             opacity="0.95"
@@ -181,7 +182,7 @@ export default function Home() {
           <path
             d="M-80,690 L418,80 L648,380 L970,75 L1540,445"
             fill="none"
-            stroke="#FFE09A"
+            stroke="#e5e7eb"
             strokeWidth="0.75"
             opacity="0.72"
           />
@@ -189,43 +190,43 @@ export default function Home() {
           <path
             d="M-80,745 L418,135 L648,435 L970,130 L1540,500"
             fill="none"
-            stroke="#C9933A"
+            stroke="#6b7280"
             strokeWidth="1.2"
             opacity="0.40"
           />
 
           {/* ── Sparkle 1 — first peak ── */}
           <g className="sp-a" transform="translate(418,80)">
-            <line className="sp-v" x1="0" y1="-22" x2="0" y2="22" stroke="#FFE09A" strokeWidth="1.1"/>
-            <line className="sp-h" x1="-22" y1="0" x2="22" y2="0" stroke="#FFE09A" strokeWidth="1.1"/>
+            <line className="sp-v" x1="0" y1="-22" x2="0" y2="22" stroke="#e5e7eb" strokeWidth="1.1"/>
+            <line className="sp-h" x1="-22" y1="0" x2="22" y2="0" stroke="#e5e7eb" strokeWidth="1.1"/>
             <circle className="sp-dot" cx="0" cy="0" r="2.6" fill="#FFFFFF"/>
           </g>
 
           {/* ── Sparkle 2 — descending slope after peak 1 ── */}
           <g className="sp-b" transform="translate(510,218)">
-            <line className="sp-v" x1="0" y1="-17" x2="0" y2="17" stroke="#E8C46A" strokeWidth="0.9"/>
-            <line className="sp-h" x1="-17" y1="0" x2="17" y2="0" stroke="#E8C46A" strokeWidth="0.9"/>
+            <line className="sp-v" x1="0" y1="-17" x2="0" y2="17" stroke="#9ca3af" strokeWidth="0.9"/>
+            <line className="sp-h" x1="-17" y1="0" x2="17" y2="0" stroke="#9ca3af" strokeWidth="0.9"/>
             <circle className="sp-dot" cx="0" cy="0" r="1.9" fill="#FFFFFF"/>
           </g>
 
           {/* ── Sparkle 3 — second peak ── */}
           <g className="sp-c" transform="translate(970,77)">
-            <line className="sp-v" x1="0" y1="-22" x2="0" y2="22" stroke="#FFE09A" strokeWidth="1.1"/>
-            <line className="sp-h" x1="-22" y1="0" x2="22" y2="0" stroke="#FFE09A" strokeWidth="1.1"/>
+            <line className="sp-v" x1="0" y1="-22" x2="0" y2="22" stroke="#e5e7eb" strokeWidth="1.1"/>
+            <line className="sp-h" x1="-22" y1="0" x2="22" y2="0" stroke="#e5e7eb" strokeWidth="1.1"/>
             <circle className="sp-dot" cx="0" cy="0" r="2.6" fill="#FFFFFF"/>
           </g>
 
           {/* ── Sparkle 4 — ascending slope between peaks ── */}
           <g className="sp-d" transform="translate(812,230)">
-            <line className="sp-v" x1="0" y1="-15" x2="0" y2="15" stroke="#E8C46A" strokeWidth="0.85"/>
-            <line className="sp-h" x1="-15" y1="0" x2="15" y2="0" stroke="#E8C46A" strokeWidth="0.85"/>
+            <line className="sp-v" x1="0" y1="-15" x2="0" y2="15" stroke="#9ca3af" strokeWidth="0.85"/>
+            <line className="sp-h" x1="-15" y1="0" x2="15" y2="0" stroke="#9ca3af" strokeWidth="0.85"/>
             <circle className="sp-dot" cx="0" cy="0" r="1.6" fill="#FFFFFF"/>
           </g>
 
           {/* ── Sparkle 5 — right exit area ── */}
           <g className="sp-e" transform="translate(1185,395)">
-            <line className="sp-v" x1="0" y1="-18" x2="0" y2="18" stroke="#E8C46A" strokeWidth="0.9"/>
-            <line className="sp-h" x1="-18" y1="0" x2="18" y2="0" stroke="#E8C46A" strokeWidth="0.9"/>
+            <line className="sp-v" x1="0" y1="-18" x2="0" y2="18" stroke="#9ca3af" strokeWidth="0.9"/>
+            <line className="sp-h" x1="-18" y1="0" x2="18" y2="0" stroke="#9ca3af" strokeWidth="0.9"/>
             <circle className="sp-dot" cx="0" cy="0" r="1.9" fill="#FFFFFF"/>
           </g>
         </svg>
@@ -353,7 +354,7 @@ export default function Home() {
               className="section-tag"
               style={{
                 background: 'rgba(0,71,255,0.15)',
-                color: '#7FA8FF',
+                color: '#9ca3af',
               }}
             >
               Platform Features
@@ -567,7 +568,7 @@ export default function Home() {
                 {!cat.live && (
                   <span style={{
                     position: 'absolute', top: 12, right: 12,
-                    background: '#FEF3C7', color: '#92400E',
+                    background: '#f3f4f6', color: '#374151',
                     fontSize: 10, fontWeight: 700, padding: '3px 8px',
                     borderRadius: 20, letterSpacing: 0.5,
                   }}>
@@ -577,7 +578,7 @@ export default function Home() {
                 {cat.live && (
                   <span style={{
                     position: 'absolute', top: 12, right: 12,
-                    background: '#D1FAE5', color: '#065F46',
+                    background: '#e5e7eb', color: '#1f2937',
                     fontSize: 10, fontWeight: 700, padding: '3px 8px',
                     borderRadius: 20, letterSpacing: 0.5,
                   }}>
@@ -615,35 +616,35 @@ export default function Home() {
                 icon: '🟢',
                 desc: 'Global freelance jobs for professionals',
                 url: 'https://www.upwork.com',
-                color: '#14A800',
+                color: '#374151',
               },
               {
                 name: 'EasyPro',
                 icon: '⚡',
                 desc: 'Earn easily with quick digital tasks',
                 url: 'https://easypro.app',
-                color: '#F59E0B',
+                color: '#9ca3af',
               },
               {
                 name: 'Studypool',
                 icon: '📚',
                 desc: 'Get paid to help students with homework',
                 url: 'https://www.studypool.com',
-                color: '#3B82F6',
+                color: '#4b5563',
               },
               {
                 name: 'Outlier',
                 icon: '🤖',
                 desc: 'Train AI models and earn per task',
                 url: 'https://outlier.ai',
-                color: '#8B5CF6',
+                color: '#6b7280',
               },
               {
                 name: 'Fiverr',
                 icon: '🎯',
                 desc: 'Sell your skills as freelance services',
                 url: 'https://www.fiverr.com',
-                color: '#1DBF73',
+                color: '#4b5563',
               },
             ].map(p => (
               <a
@@ -667,7 +668,7 @@ export default function Home() {
               >
                 <span style={{
                   position: 'absolute', top: 12, right: 12,
-                  background: 'rgba(254,243,199,0.15)', color: '#FCD34D',
+                  background: 'rgba(254,243,199,0.15)', color: '#d1d5db',
                   fontSize: 10, fontWeight: 700, padding: '3px 8px',
                   borderRadius: 20, letterSpacing: 0.5,
                 }}>
@@ -703,7 +704,7 @@ export default function Home() {
           <div className="why-grid">
             {WHY_ITEMS.map((item) => (
               <div key={item.title} className="why-card">
-                <div className="why-icon">{item.icon}</div>
+                <div className="why-icon"><Icon name={item.icon} size={26} /></div>
                 <h3 className="why-title">{item.title}</h3>
                 <p className="why-desc">{item.desc}</p>
               </div>

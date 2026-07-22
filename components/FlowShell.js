@@ -4,7 +4,7 @@
 // centered content column — replacing the old pop-up modals.
 import { useRouter } from 'next/router';
 
-export default function FlowShell({ title, subtitle, icon, accent = 'linear-gradient(135deg, #125C37, #1A7A4A)', maxWidth = 560, children }) {
+export default function FlowShell({ title, subtitle, icon, accent = 'linear-gradient(135deg, #1f2937, #374151)', maxWidth = 560, children }) {
   const router = useRouter();
 
   return (

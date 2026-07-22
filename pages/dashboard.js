@@ -197,37 +197,37 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
           {isActivated && !offer && (
             <>
               {(appStatus === 'rejected' || appStatus === 'correction') && (
-                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', margin: '4px 0 12px', fontSize: 13, color: '#991B1B' }}>
+                <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 14px', margin: '4px 0 12px', fontSize: 13, color: '#1f2937' }}>
                   <strong>{appStatus === 'rejected' ? 'Application rejected.' : 'Corrections requested.'}</strong>
-                  {application?.reason ? <div style={{ marginTop: 4, color: '#7F1D1D' }}>{application.reason}</div> : null}
+                  {application?.reason ? <div style={{ marginTop: 4, color: '#111827' }}>{application.reason}</div> : null}
                 </div>
               )}
 
               {(!appStatus || appStatus === 'rejected' || appStatus === 'correction') && (
                 <button className="submit-btn" onClick={() => onApply(task)}
-                  style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>
+                  style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }}>
                   {appStatus ? '🔄 Update & Resubmit Proposal' : '📝 Apply — Submit a Proposal'}
                 </button>
               )}
 
               {appStatus === 'pending' && (
-                <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#92400E', textAlign: 'center', fontWeight: 600 }}>
+                <div style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#374151', textAlign: 'center', fontWeight: 600 }}>
                   ⏳ Your proposal is under review. You&apos;ll be able to start this task once it&apos;s approved.
                 </div>
               )}
 
               {approved && !isPremium && (
                 <>
-                  <div style={{ background: '#D1FAE5', border: '1px solid #6EE7B7', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#065F46', fontWeight: 600 }}>
+                  <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600 }}>
                     ✅ Proposal approved — this task is unlocked for you.
                   </div>
-                  <button className="submit-btn" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #125C37, #1A7A4A)' }}>⭐ Upgrade to Premium to Submit</button>
+                  <button className="submit-btn" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }}>⭐ Upgrade to Premium to Submit</button>
                 </>
               )}
 
               {approved && isPremium && (
                 <>
-                  <div style={{ background: '#D1FAE5', border: '1px solid #6EE7B7', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#065F46', fontWeight: 600 }}>
+                  <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600 }}>
                     ✅ Proposal approved — this task is unlocked for you.
                   </div>
                   <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task</button>
@@ -284,7 +284,7 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
           {done ? (
             <div style={{ textAlign: 'center', padding: '8px 0' }}>
               <div style={{ fontSize: 52, marginBottom: 8 }}>📨</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: '#059669', marginBottom: 6 }}>Proposal sent for review</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: '#374151', marginBottom: 6 }}>Proposal sent for review</div>
               <p style={{ fontSize: 14, color: 'var(--gray)', lineHeight: 1.6 }}>
                 Your proposal for <strong>{task.title}</strong> has been submitted. Our team will review it, and once it&apos;s
                 <strong> approved</strong> the task will unlock on your dashboard so you can start working.
@@ -298,8 +298,8 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
                 is reviewed before you can begin the task.
               </p>
               <div className="pay-phone-label" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span>Your proposal / cover letter <span style={{ color: '#DC2626' }}>*</span></span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: msgWords >= MAX_PROPOSAL_WORDS ? '#DC2626' : 'var(--gray)' }}>{msgWords}/{MAX_PROPOSAL_WORDS} words</span>
+                <span>Your proposal / cover letter <span style={{ color: '#374151' }}>*</span></span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: msgWords >= MAX_PROPOSAL_WORDS ? '#374151' : 'var(--gray)' }}>{msgWords}/{MAX_PROPOSAL_WORDS} words</span>
               </div>
               <textarea
                 className="pay-phone-input"
@@ -311,7 +311,7 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
               />
               <div className="pay-phone-label" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span>Additional information (optional)</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: extraWords >= MAX_PROPOSAL_WORDS ? '#DC2626' : 'var(--gray)' }}>{extraWords}/{MAX_PROPOSAL_WORDS} words</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: extraWords >= MAX_PROPOSAL_WORDS ? '#374151' : 'var(--gray)' }}>{extraWords}/{MAX_PROPOSAL_WORDS} words</span>
               </div>
               <textarea
                 className="pay-phone-input"
@@ -321,7 +321,7 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
                 rows={3}
                 style={{ resize: 'vertical', minHeight: 64, fontFamily: 'inherit' }}
               />
-              {error && <div style={{ color: '#ef4444', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+              {error && <div style={{ color: '#4b5563', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
               <button className="submit-btn" style={{ marginTop: 16, opacity: busy ? 0.7 : 1 }} onClick={submit} disabled={busy}>
                 {busy ? <><span className="spinner" /> Submitting…</> : '📤 Submit Proposal'}
               </button>
@@ -350,17 +350,17 @@ function ApplicationNotices({ apps, subs, onStart }) {
     <div style={{ margin: '0 0 18px' }}>
       {approved.map(a => (
         <div key={`ap-${a.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
-          background: '#ECFDF5', border: '1px solid #6EE7B7', borderRadius: 12, padding: '12px 16px', marginBottom: 8 }}>
-          <div style={{ fontSize: 13.5, color: '#065F46' }}>
+          background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 12, padding: '12px 16px', marginBottom: 8 }}>
+          <div style={{ fontSize: 13.5, color: '#1f2937' }}>
             ✅ <strong>Approved!</strong> Your proposal for <strong>{a.taskTitle}</strong> was accepted — you can start it now.
           </div>
           <button className="task-view-btn" style={{ padding: '8px 14px', whiteSpace: 'nowrap' }} onClick={() => onStart(a.taskId)}>Start task →</button>
         </div>
       ))}
       {attention.map(a => (
-        <div key={`at-${a.id}`} style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 12, padding: '12px 16px', marginBottom: 8, fontSize: 13.5, color: '#92400E' }}>
+        <div key={`at-${a.id}`} style={{ background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 12, padding: '12px 16px', marginBottom: 8, fontSize: 13.5, color: '#374151' }}>
           {a.status === 'rejected' ? '❌' : '✏️'} Your proposal for <strong>{a.taskTitle}</strong> {a.status === 'rejected' ? 'was not approved' : 'needs corrections'}.
-          {a.reason ? <span> — {a.reason}</span> : null} <button onClick={() => onStart(a.taskId)} style={{ background: 'none', border: 'none', color: '#92400E', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13.5 }}>Open</button>
+          {a.reason ? <span> — {a.reason}</span> : null} <button onClick={() => onStart(a.taskId)} style={{ background: 'none', border: 'none', color: '#374151', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13.5 }}>Open</button>
         </div>
       ))}
       {pending.length > 0 && (
@@ -432,7 +432,7 @@ function QuizModal({ user, onComplete }) {
   return (
     <div className="modal-overlay" style={{ zIndex: 1000 }}>
       <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)' }}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #374151, #374151)' }}>
           <div>
             <div className="pay-modal-title">🎁 Your KES 50 Joining Gift</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
@@ -444,13 +444,13 @@ function QuizModal({ user, onComplete }) {
         <div className="pay-modal-body">
           {!isResult && (
             <>
-              <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', marginBottom: 18 }}>
-                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#059669' }}>KES 10</strong> — get all 5 and your <strong>KES 50</strong> activation is covered!
+              <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', marginBottom: 18 }}>
+                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#374151' }}>KES 10</strong> — get all 5 and your <strong>KES 50</strong> activation is covered!
               </div>
 
               {/* Progress bar */}
               <div style={{ height: 6, borderRadius: 4, background: '#E5E7EB', marginBottom: 20, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${(step / total) * 100}%`, background: '#059669', transition: 'width 0.3s' }} />
+                <div style={{ height: '100%', width: `${(step / total) * 100}%`, background: '#374151', transition: 'width 0.3s' }} />
               </div>
 
               <div style={{ fontWeight: 700, fontSize: 16, color: '#111827', marginBottom: 14 }}>
@@ -468,15 +468,15 @@ function QuizModal({ user, onComplete }) {
                       style={{
                         display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
                         padding: '13px 16px', borderRadius: 10, cursor: 'pointer', fontSize: 15,
-                        border: `2px solid ${active ? '#059669' : '#E5E7EB'}`,
-                        background: active ? '#F0FFF4' : '#fff',
+                        border: `2px solid ${active ? '#374151' : '#E5E7EB'}`,
+                        background: active ? '#f9fafb' : '#fff',
                         color: '#111827', fontWeight: active ? 700 : 500,
                       }}
                     >
                       <span style={{
                         width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                        border: `2px solid ${active ? '#059669' : '#CBD5E1'}`,
-                        background: active ? '#059669' : '#fff',
+                        border: `2px solid ${active ? '#374151' : '#CBD5E1'}`,
+                        background: active ? '#374151' : '#fff',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: '#fff', fontSize: 12,
                       }}>{active ? '✓' : ''}</span>
@@ -488,7 +488,7 @@ function QuizModal({ user, onComplete }) {
 
               <button
                 className="pay-btn"
-                style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)', marginTop: 22, opacity: selected == null ? 0.5 : 1 }}
+                style={{ background: 'linear-gradient(135deg, #374151, #374151)', marginTop: 22, opacity: selected == null ? 0.5 : 1 }}
                 onClick={handleNext}
                 disabled={selected == null || saving}
               >
@@ -500,13 +500,13 @@ function QuizModal({ user, onComplete }) {
           {isResult && result && (
             <div style={{ textAlign: 'center', padding: '10px 0' }}>
               <div style={{ fontSize: 56, marginBottom: 8 }}>{result.earned === 50 ? '🎉' : result.earned > 0 ? '🎊' : '📝'}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 800, color: '#059669', marginBottom: 4 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 800, color: '#374151', marginBottom: 4 }}>
                 KES {result.earned}
               </div>
               <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 6 }}>
                 You answered <strong>{result.correct} of {total}</strong> correctly.
               </div>
-              <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4', textAlign: 'left', marginTop: 16 }}>
+              <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 16 }}>
                 {result.earned === 50
                   ? 'Perfect score! Your full KES 50 joining gift has been added to your balance — it fully covers your account activation. 🎁'
                   : result.earned > 0
@@ -515,7 +515,7 @@ function QuizModal({ user, onComplete }) {
               </div>
               <button
                 className="pay-btn"
-                style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)', marginTop: 20 }}
+                style={{ background: 'linear-gradient(135deg, #374151, #374151)', marginTop: 20 }}
                 onClick={() => onComplete(doneUser)}
               >
                 Continue to Dashboard →
@@ -553,7 +553,7 @@ function TrainingModal({ user, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)' }}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #374151, #374151)' }}>
           <div>
             <div className="pay-modal-title">🎓 TRAINING</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Apply for professional training</div>
@@ -582,7 +582,7 @@ function TrainingModal({ user, onClose }) {
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
           <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)' }} onClick={handleTrainingPay} disabled={loading}>
+          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #374151, #374151)' }} onClick={handleTrainingPay} disabled={loading}>
             {loading ? <><span className="spinner" /> Processing...</> : '🎓 Pay & Apply Now'}
           </button>
           <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
@@ -610,7 +610,7 @@ function ReferralModal({ user, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #059669, #1A7A4A)' }}>
+        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #374151, #374151)' }}>
           <div>
             <div className="pay-modal-title">🔗 Your Referral Link</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Earn KES 132 per referral</div>
@@ -618,8 +618,8 @@ function ReferralModal({ user, onClose }) {
           <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
         </div>
         <div className="pay-modal-body">
-          <div className="pay-message" style={{ borderColor: '#059669', background: '#F0FFF4' }}>
-            Share your referral link and earn <strong style={{ color: '#059669' }}>KES 132</strong> for every friend who signs up and activates their account.
+          <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb' }}>
+            Share your referral link and earn <strong style={{ color: '#374151' }}>KES 132</strong> for every friend who signs up and activates their account.
           </div>
           <div style={{ marginBottom: 16 }}>
             <div className="pay-phone-label">Your unique referral link</div>
@@ -632,7 +632,7 @@ function ReferralModal({ user, onClose }) {
               />
               <button
                 onClick={copyLink}
-                style={{ padding: '0 20px', background: copied ? '#059669' : 'var(--green)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, border: 'none', cursor: 'pointer', transition: 'background 0.2s', whiteSpace: 'nowrap' }}
+                style={{ padding: '0 20px', background: copied ? '#374151' : 'var(--green)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, border: 'none', cursor: 'pointer', transition: 'background 0.2s', whiteSpace: 'nowrap' }}
               >
                 {copied ? '✓ Copied!' : 'Copy'}
               </button>
@@ -654,8 +654,8 @@ function ReferralModal({ user, onClose }) {
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
             {[
-              { label: '📱 WhatsApp', color: '#25D366', url: `https://wa.me/?text=Join%20Business%20Hub%20and%20earn%20online!%20${encodeURIComponent(referralLink)}` },
-              { label: '✉️ Email',    color: '#EA4335', url: `mailto:?subject=Join%20Business%20Hub&body=Hey!%20Join%20me%20on%20Business%20Hub.%20Use%20my%20link:%20${encodeURIComponent(referralLink)}` },
+              { label: '📱 WhatsApp', color: '#4b5563', url: `https://wa.me/?text=Join%20Business%20Hub%20and%20earn%20online!%20${encodeURIComponent(referralLink)}` },
+              { label: '✉️ Email',    color: '#4b5563', url: `mailto:?subject=Join%20Business%20Hub&body=Hey!%20Join%20me%20on%20Business%20Hub.%20Use%20my%20link:%20${encodeURIComponent(referralLink)}` },
             ].map(btn => (
               <a key={btn.label} href={user?.activated ? btn.url : '#'} target="_blank" rel="noopener noreferrer"
                 style={{ flex: 1, padding: 12, background: btn.color, color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, textAlign: 'center', display: 'block', opacity: user?.activated ? 1 : 0.5, pointerEvents: user?.activated ? 'auto' : 'none' }}>
@@ -672,7 +672,7 @@ function ReferralModal({ user, onClose }) {
 // ─── Activity Feed — compact tabbed widget (Live / Pending / Reviews) ────────
 function Stars({ n }) {
   return (
-    <span style={{ color: '#F59E0B', fontSize: 12, letterSpacing: 1 }}>
+    <span style={{ color: '#9ca3af', fontSize: 12, letterSpacing: 1 }}>
       {'★'.repeat(n)}<span style={{ color: '#E5E7EB' }}>{'★'.repeat(5 - n)}</span>
     </span>
   );
@@ -715,7 +715,7 @@ function ActivityFeed({ withdrawals, pending }) {
       {/* Header + tabs */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14, color: '#111827' }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E', boxShadow: '0 0 0 3px rgba(34,197,94,0.2)' }} />
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4b5563', boxShadow: '0 0 0 3px rgba(34,197,94,0.2)' }} />
           Withdrawals & Reviews
         </div>
         <div style={{ display: 'flex', gap: 4, background: '#F3F4F6', padding: 3, borderRadius: 10 }}>
@@ -758,7 +758,7 @@ function ActivityFeed({ withdrawals, pending }) {
         {tab === 'live' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {liveShown.map((item, i) => (
-              <div key={`${item.phone}-${i}`} style={item.featured ? { ...row, background: '#F0FFF4', border: '1px solid #A7F3D0' } : row}>
+              <div key={`${item.phone}-${i}`} style={item.featured ? { ...row, background: '#f9fafb', border: '1px solid #e5e7eb' } : row}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                   <span style={{ fontSize: 18 }}>{item.flag}</span>
                   <div>
@@ -767,8 +767,8 @@ function ActivityFeed({ withdrawals, pending }) {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 800, fontSize: 13, color: '#059669' }}>KES {item.amount.toLocaleString()}</div>
-                  <div style={{ fontSize: 10.5, color: '#059669', fontWeight: 600 }}>✓ Successful</div>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: '#374151' }}>KES {item.amount.toLocaleString()}</div>
+                  <div style={{ fontSize: 10.5, color: '#374151', fontWeight: 600 }}>✓ Successful</div>
                 </div>
               </div>
             ))}
@@ -789,11 +789,11 @@ function ActivityFeed({ withdrawals, pending }) {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 800, fontSize: 13, color: '#111827' }}>KES {p.amount.toLocaleString()}</div>
-                    <div style={{ fontSize: 10.5, color: '#D97706', fontWeight: 700 }}>⏳ Processing • ~{p.etaMin} min</div>
+                    <div style={{ fontSize: 10.5, color: '#6b7280', fontWeight: 700 }}>⏳ Processing • ~{p.etaMin} min</div>
                   </div>
                 </div>
-                <div style={{ height: 5, borderRadius: 3, background: '#FDE68A', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${p.progress}%`, background: 'linear-gradient(90deg,#F59E0B,#F97316)' }} />
+                <div style={{ height: 5, borderRadius: 3, background: '#e5e7eb', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${p.progress}%`, background: 'linear-gradient(90deg,#9ca3af,#6b7280)' }} />
                 </div>
               </div>
             ))}
@@ -804,7 +804,7 @@ function ActivityFeed({ withdrawals, pending }) {
           <div style={{ background: '#F9FAFB', border: '1px solid #F1F5F9', borderRadius: 12, padding: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <span style={{ width: 34, height: 34, borderRadius: '50%', background: '#125C37', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>
+                <span style={{ width: 34, height: 34, borderRadius: '50%', background: '#1f2937', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>
                   {review.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                 </span>
                 <div>
@@ -817,7 +817,7 @@ function ActivityFeed({ withdrawals, pending }) {
             <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>“{review.text}”</p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 12 }}>
               {REVIEWS.map((_, i) => (
-                <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i === reviewIdx % REVIEWS.length ? '#125C37' : '#D1D5DB' }} />
+                <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i === reviewIdx % REVIEWS.length ? '#1f2937' : '#D1D5DB' }} />
               ))}
             </div>
           </div>
@@ -1064,24 +1064,24 @@ export default function Dashboard() {
 
   if (user.suspended) {
     return (
-      <div style={{ minHeight: '100vh', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Manrope, sans-serif', padding: 24 }}>
+      <div style={{ minHeight: '100vh', background: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Manrope, sans-serif', padding: 24 }}>
         <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '48px 36px', maxWidth: 440, width: '100%', textAlign: 'center' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>🚫</div>
-          <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 22, color: '#991B1B', marginBottom: 8 }}>
+          <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 22, color: '#1f2937', marginBottom: 8 }}>
             Account Suspended
           </h2>
           <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, marginBottom: 20 }}>
             Your account has been suspended and you cannot access Business Hub at this time.
           </p>
           {user.suspendReason && (
-            <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#991B1B', marginBottom: 4 }}>Reason</div>
-              <div style={{ fontSize: 13, color: '#7F1D1D' }}>{user.suspendReason}</div>
+            <div style={{ background: '#e5e7eb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#1f2937', marginBottom: 4 }}>Reason</div>
+              <div style={{ fontSize: 13, color: '#111827' }}>{user.suspendReason}</div>
             </div>
           )}
           <p style={{ fontSize: 13, color: '#9CA3AF' }}>
             If you believe this is a mistake, please contact support at{' '}
-            <a href="mailto:businesshub.comke@gmail.com" style={{ color: '#DC2626' }}>businesshub.comke@gmail.com</a>
+            <a href="mailto:businesshub.comke@gmail.com" style={{ color: '#374151' }}>businesshub.comke@gmail.com</a>
           </p>
         </div>
       </div>
@@ -1223,7 +1223,7 @@ export default function Dashboard() {
           <div style={{ marginBottom: 16, fontSize: 14, color: 'var(--gray)' }}>
             Showing <strong>{filteredTasks.length}</strong> tasks
             {user.activated && (
-              <span style={{ marginLeft: 10, color: '#0F766E', fontWeight: 600 }}>📝 Apply with a proposal to unlock a task</span>
+              <span style={{ marginLeft: 10, color: '#111827', fontWeight: 600 }}>📝 Apply with a proposal to unlock a task</span>
             )}
           </div>
 
@@ -1234,7 +1234,7 @@ export default function Dashboard() {
               const app   = offer ? null : userApps[String(task.id)];
               const appStatus = app?.status || null;
               return (
-                <div key={task.id} className="task-card" style={offer ? { border: '1.5px solid #F59E0B' } : undefined}>
+                <div key={task.id} className="task-card" style={offer ? { border: '1.5px solid #9ca3af' } : undefined}>
                   <div className="task-card-header">
                     <div className="task-poster">
                       <div className="task-poster-avatar">{task.poster.charAt(0).toUpperCase()}</div>
@@ -1246,21 +1246,21 @@ export default function Dashboard() {
                     <div className="task-payment">KES {task.payment.toLocaleString()}</div>
                   </div>
                   {offer && (
-                    <div style={{ display: 'inline-block', background: '#FEF3C7', color: '#92400E', fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 999, marginBottom: 6 }}>
+                    <div style={{ display: 'inline-block', background: '#f3f4f6', color: '#374151', fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 999, marginBottom: 6 }}>
                       🔥 OFFER · No premium needed
                     </div>
                   )}
                   <div className="task-category">{task.category}</div>
                   <div className="task-title">{task.title}</div>
                   {task.dueDate && (
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#B45309', margin: '2px 0 6px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#4b5563', margin: '2px 0 6px' }}>
                       ⏰ Due {task.dueDate}
                     </div>
                   )}
                   {appStatus && (
                     <div style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, marginBottom: 6,
-                      background: appStatus === 'approved' ? '#D1FAE5' : appStatus === 'pending' ? '#FEF3C7' : '#FEE2E2',
-                      color:      appStatus === 'approved' ? '#065F46' : appStatus === 'pending' ? '#92400E' : '#991B1B' }}>
+                      background: appStatus === 'approved' ? '#e5e7eb' : appStatus === 'pending' ? '#f3f4f6' : '#e5e7eb',
+                      color:      appStatus === 'approved' ? '#1f2937' : appStatus === 'pending' ? '#374151' : '#1f2937' }}>
                       {appStatus === 'approved' ? '✅ Proposal approved' : appStatus === 'pending' ? '⏳ Proposal under review' : appStatus === 'correction' ? '✏️ Corrections requested' : '❌ Proposal rejected'}
                     </div>
                   )}
@@ -1268,8 +1268,8 @@ export default function Dashboard() {
                   <div className="task-actions">
                     {sub ? (
                       <div style={{ flex: 1, textAlign: 'center', padding: '10px 12px', borderRadius: 8, fontWeight: 700, fontSize: 14,
-                        background: sub.status === 'approved' ? '#D1FAE5' : '#DBEAFE',
-                        color:      sub.status === 'approved' ? '#065F46' : '#1E40AF' }}>
+                        background: sub.status === 'approved' ? '#e5e7eb' : '#e5e7eb',
+                        color:      sub.status === 'approved' ? '#1f2937' : '#111827' }}>
                         {sub.status === 'approved' ? '✅ Already done' : '✅ Already submitted'}
                       </div>
                     ) : (

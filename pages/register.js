@@ -203,9 +203,9 @@ export default function Register() {
         {referrerId && (
           <div
             style={{
-              background: '#EFF6FF',
-              border: '1px solid #BFDBFE',
-              color: '#1D4ED8',
+              background: '#f3f4f6',
+              border: '1px solid #d1d5db',
+              color: '#1f2937',
               padding: '12px 16px',
               borderRadius: 10,
               marginBottom: 20,
@@ -218,9 +218,9 @@ export default function Register() {
         )}
 
         {deviceUsed && (
-          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', padding: '12px 16px', borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 600 }}>
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', color: '#374151', padding: '12px 16px', borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 600 }}>
             This browser already has a Business Hub account. Only one account is allowed per browser.{' '}
-            <Link href="/login" style={{ color: '#B45309', textDecoration: 'underline' }}>Log in instead →</Link>
+            <Link href="/login" style={{ color: '#4b5563', textDecoration: 'underline' }}>Log in instead →</Link>
           </div>
         )}
 
@@ -318,12 +318,12 @@ export default function Register() {
               htmlFor="cv-file"
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                border: `1.5px dashed ${cv ? '#059669' : '#CBD5E1'}`, borderRadius: 10,
-                padding: '12px 14px', background: cv ? '#F0FFF4' : '#F9FAFB',
+                border: `1.5px dashed ${cv ? '#374151' : '#CBD5E1'}`, borderRadius: 10,
+                padding: '12px 14px', background: cv ? '#f9fafb' : '#F9FAFB',
               }}
             >
               <span style={{ fontSize: 22 }}>{cv ? '📄' : '📎'}</span>
-              <span style={{ fontSize: 13, color: cv ? '#065F46' : '#6B7280', wordBreak: 'break-all' }}>
+              <span style={{ fontSize: 13, color: cv ? '#1f2937' : '#6B7280', wordBreak: 'break-all' }}>
                 {cv ? `${cv.name} • tap to change` : `Attach your CV (PDF or Word, max ${CV_MAX_MB} MB)`}
               </span>
             </label>

@@ -52,9 +52,9 @@ function daysLeft(paidAt) {
 }
 
 const STATUS_COLORS = {
-  pending:  { bg: '#FEF3C7', color: '#92400E' },
-  approved: { bg: '#D1FAE5', color: '#065F46' },
-  declined: { bg: '#FEE2E2', color: '#991B1B' },
+  pending:  { bg: '#f3f4f6', color: '#374151' },
+  approved: { bg: '#e5e7eb', color: '#1f2937' },
+  declined: { bg: '#e5e7eb', color: '#1f2937' },
 };
 
 // ─── Suspend Confirmation Modal ───────────────────────────────────────────────
@@ -64,7 +64,7 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
   return (
     <div style={styles.modalOverlay}>
       <div style={styles.modalCard}>
-        <div style={{ background: isSuspending ? '#DC2626' : '#059669', borderRadius: '12px 12px 0 0', padding: '20px 24px', color: '#fff' }}>
+        <div style={{ background: isSuspending ? '#374151' : '#374151', borderRadius: '12px 12px 0 0', padding: '20px 24px', color: '#fff' }}>
           <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17 }}>
             {isSuspending ? '🚫 Suspend Account' : '✅ Unsuspend Account'}
           </div>
@@ -95,7 +95,7 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
             </p>
           )}
           <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-            <button style={{ ...styles.btn, background: isSuspending ? '#DC2626' : '#059669', flex: 1 }} onClick={onConfirm}>
+            <button style={{ ...styles.btn, background: isSuspending ? '#374151' : '#374151', flex: 1 }} onClick={onConfirm}>
               {isSuspending ? 'Yes, Suspend' : 'Yes, Unsuspend'}
             </button>
             <button style={{ ...styles.btn, background: '#64748B', flex: 1 }} onClick={onCancel}>Cancel</button>
@@ -250,11 +250,11 @@ function UsersTab({ users, secret, onRefresh }) {
               const premDaysEdit = getEdit(user.id, 'premiumDays',   premDays ?? (isPrem ? 30 : 0));
 
               return (
-                <tr key={user.id} style={{ ...styles.tr, background: isSusp ? '#FFF1F1' : undefined }}>
+                <tr key={user.id} style={{ ...styles.tr, background: isSusp ? '#f9fafb' : undefined }}>
 
                   {/* Name / Email / Phone */}
                   <td style={styles.td}>
-                    {isSusp && <span style={{ ...styles.badge, background: '#FEE2E2', color: '#991B1B', fontSize: 10, marginBottom: 6, display: 'inline-block' }}>🚫 SUSPENDED</span>}
+                    {isSusp && <span style={{ ...styles.badge, background: '#e5e7eb', color: '#1f2937', fontSize: 10, marginBottom: 6, display: 'inline-block' }}>🚫 SUSPENDED</span>}
                     <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Full Name</div>
                     <input
                       style={{ ...styles.numInput, width: '100%', marginBottom: 6 }}
@@ -279,7 +279,7 @@ function UsersTab({ users, secret, onRefresh }) {
                     />
                     <div style={{ fontSize: 11, color: '#64748B', margin: '6px 0 2px' }}>🔑 Password</div>
                     <input
-                      style={{ ...styles.numInput, width: '100%', fontFamily: 'monospace', color: '#0F766E', fontWeight: 600 }}
+                      style={{ ...styles.numInput, width: '100%', fontFamily: 'monospace', color: '#111827', fontWeight: 600 }}
                       value={getEdit(user.id, 'password', user.password || '')}
                       onChange={e => setEdit(user.id, 'password', e.target.value)}
                       placeholder="(no password on file)"
@@ -287,7 +287,7 @@ function UsersTab({ users, secret, onRefresh }) {
                     <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Type a new password here, then Save to change it.</div>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{user.country || '—'}</div>
                     {isSusp && user.suspendReason && (
-                      <div style={{ fontSize: 11, color: '#991B1B', marginTop: 2 }}>Reason: {user.suspendReason}</div>
+                      <div style={{ fontSize: 11, color: '#1f2937', marginTop: 2 }}>Reason: {user.suspendReason}</div>
                     )}
                   </td>
 
@@ -296,7 +296,7 @@ function UsersTab({ users, secret, onRefresh }) {
                     <div style={styles.dateRow}><span style={styles.dateLabel}>Joined</span><span style={styles.dateVal}>{fmtDate(user.createdAt)}</span></div>
                     <div style={styles.dateRow}><span style={styles.dateLabel}>Activated</span><span style={styles.dateVal}>{fmtDate(user.activatedAt)}</span></div>
                     <div style={styles.dateRow}><span style={styles.dateLabel}>Premium paid</span><span style={styles.dateVal}>{fmtDate(user.premiumPaidAt)}</span></div>
-                    {isSusp && <div style={styles.dateRow}><span style={{ ...styles.dateLabel, color: '#991B1B' }}>Suspended</span><span style={styles.dateVal}>{fmtDate(user.suspendedAt)}</span></div>}
+                    {isSusp && <div style={styles.dateRow}><span style={{ ...styles.dateLabel, color: '#1f2937' }}>Suspended</span><span style={styles.dateVal}>{fmtDate(user.suspendedAt)}</span></div>}
                   </td>
 
                   {/* Balance */}
@@ -308,7 +308,7 @@ function UsersTab({ users, secret, onRefresh }) {
                   {/* Activation */}
                   <td style={styles.td}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ ...styles.badge, background: isAct ? '#D1FAE5' : '#FEE2E2', color: isAct ? '#065F46' : '#991B1B' }}>
+                      <span style={{ ...styles.badge, background: isAct ? '#e5e7eb' : '#e5e7eb', color: isAct ? '#1f2937' : '#1f2937' }}>
                         {isAct ? 'Active' : 'Inactive'}
                       </span>
                       <input type="number" min="0" max="3" style={{ ...styles.numInput, width: 54 }}
@@ -323,7 +323,7 @@ function UsersTab({ users, secret, onRefresh }) {
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 6 }}>
                       <input type="checkbox" checked={premVal}
                         onChange={e => setEdit(user.id, 'premium', e.target.checked)}
-                        style={{ width: 16, height: 16, accentColor: '#0F766E' }} />
+                        style={{ width: 16, height: 16, accentColor: '#111827' }} />
                       <span style={{ fontSize: 13 }}>{premVal ? 'ON' : 'OFF'}</span>
                     </label>
                     {premVal && (
@@ -338,11 +338,11 @@ function UsersTab({ users, secret, onRefresh }) {
 
                   {/* Status badge */}
                   <td style={styles.td}>
-                    <span style={{ ...styles.badge, background: isSusp ? '#FEE2E2' : isAct ? '#D1FAE5' : '#F1F5F9', color: isSusp ? '#991B1B' : isAct ? '#065F46' : '#64748B' }}>
+                    <span style={{ ...styles.badge, background: isSusp ? '#e5e7eb' : isAct ? '#e5e7eb' : '#F1F5F9', color: isSusp ? '#1f2937' : isAct ? '#1f2937' : '#64748B' }}>
                       {isSusp ? 'Suspended' : isAct ? 'Active' : 'Inactive'}
                     </span>
                     {isPrem && !isSusp && (
-                      <span style={{ ...styles.badge, background: '#ECFDF5', color: '#065F46', display: 'block', marginTop: 4 }}>⭐ Premium</span>
+                      <span style={{ ...styles.badge, background: '#f3f4f6', color: '#1f2937', display: 'block', marginTop: 4 }}>⭐ Premium</span>
                     )}
                   </td>
 
@@ -352,17 +352,17 @@ function UsersTab({ users, secret, onRefresh }) {
                       disabled={isSaving} onClick={() => saveUser(user)}>
                       {isSaving ? 'Saving…' : 'Save'}
                     </button>
-                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: isSusp ? '#059669' : '#DC2626' }}
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: isSusp ? '#374151' : '#374151' }}
                       disabled={isSaving}
                       onClick={() => { setSuspendReason(''); setSuspendModal({ user, action: isSusp ? 'unsuspend' : 'suspend' }); }}>
                       {isSusp ? '✅ Unsuspend' : '🚫 Suspend'}
                     </button>
-                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#7F1D1D' }}
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#111827' }}
                       disabled={isSaving}
                       onClick={() => deleteUser(user)}>
                       🗑️ Delete
                     </button>
-                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
+                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#1f2937' : '#1f2937' }}>{m.text}</p>}
                   </td>
                 </tr>
               );
@@ -537,11 +537,11 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
                   {/* Actions */}
                   <td style={styles.td}>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#059669' }}
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#374151' }}
                         disabled={isSaving || isDel} onClick={() => setStatus(wd, 'approved')}>
                         ✅ Approve
                       </button>
-                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#DC2626' }}
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, flex: 1, background: '#374151' }}
                         disabled={isSaving || isDel} onClick={() => setStatus(wd, 'declined')}>
                         ❌ Reject
                       </button>
@@ -550,11 +550,11 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
                       disabled={isSaving || isDel} onClick={() => saveWithdrawal(wd)}>
                       {isSaving ? 'Saving…' : 'Save edits'}
                     </button>
-                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#EF4444' }}
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#4b5563' }}
                       disabled={isSaving || isDel} onClick={() => deleteWithdrawal(wd)}>
                       {isDel ? 'Deleting…' : 'Delete'}
                     </button>
-                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
+                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#1f2937' : '#1f2937' }}>{m.text}</p>}
                   </td>
                 </tr>
               );
@@ -612,7 +612,7 @@ function BroadcastTab({ secret, userCount }) {
   return (
     <div style={{ padding: '20px 32px', maxWidth: 720 }}>
       <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24 }}>
-        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#0F766E', marginBottom: 4 }}>
+        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#111827', marginBottom: 4 }}>
           📣 Email All Clients
         </div>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
@@ -647,7 +647,7 @@ function BroadcastTab({ secret, userCount }) {
         </div>
 
         {result && (
-          <p style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: result.ok ? '#065F46' : '#991B1B' }}>
+          <p style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: result.ok ? '#1f2937' : '#1f2937' }}>
             {result.text}
           </p>
         )}
@@ -731,19 +731,19 @@ function TasksTab({ secret }) {
   return (
     <div style={{ padding: '20px 32px' }}>
       {/* Offer launcher */}
-      <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12, padding: '16px 20px', marginBottom: 20, maxWidth: 820, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 20px', marginBottom: 20, maxWidth: 820, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 15, color: '#92400E' }}>🔥 Limited-time Offer Tasks</div>
-          <div style={{ fontSize: 12.5, color: '#B45309', marginTop: 2 }}>15 tasks · KES 2,000–4,200 · no premium needed · one submission each · 9-hour window.</div>
+          <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 15, color: '#374151' }}>🔥 Limited-time Offer Tasks</div>
+          <div style={{ fontSize: 12.5, color: '#4b5563', marginTop: 2 }}>15 tasks · KES 2,000–4,200 · no premium needed · one submission each · 9-hour window.</div>
         </div>
-        <button style={{ ...styles.btn, background: '#B45309', width: 'auto', padding: '10px 18px', fontSize: 14, whiteSpace: 'nowrap' }} disabled={creating} onClick={launchOffers}>
+        <button style={{ ...styles.btn, background: '#4b5563', width: 'auto', padding: '10px 18px', fontSize: 14, whiteSpace: 'nowrap' }} disabled={creating} onClick={launchOffers}>
           {creating ? 'Working…' : 'Launch 15 Offer Tasks'}
         </button>
       </div>
 
       {/* Create form */}
       <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24, marginBottom: 20, maxWidth: 820 }}>
-        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#0F766E', marginBottom: 14 }}>➕ Create Task</div>
+        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#111827', marginBottom: 14 }}>➕ Create Task</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ gridColumn: '1 / -1' }}>
             <label style={styles.fieldLabel}>Title</label>
@@ -773,11 +773,11 @@ function TasksTab({ secret }) {
         <button style={{ ...styles.btn, marginTop: 14, maxWidth: 220 }} disabled={creating} onClick={createTask}>
           {creating ? 'Creating…' : '➕ Create Task'}
         </button>
-        {nm && <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 600, color: nm.type === 'ok' ? '#065F46' : '#991B1B' }}>{nm.text}</span>}
+        {nm && <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 600, color: nm.type === 'ok' ? '#1f2937' : '#1f2937' }}>{nm.text}</span>}
       </div>
 
       {err && (
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991B1B', fontSize: 13, maxWidth: 820 }}>
+        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load tasks: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
         </div>
       )}
@@ -812,14 +812,14 @@ function TasksTab({ secret }) {
                   </td>
                   <td style={styles.td}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={getEdit(t.id, 'active', t.active)} onChange={e => setEdit(t.id, 'active', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#0F766E' }} />
+                      <input type="checkbox" checked={getEdit(t.id, 'active', t.active)} onChange={e => setEdit(t.id, 'active', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#111827' }} />
                       <span style={{ fontSize: 12 }}>{getEdit(t.id, 'active', t.active) ? 'On' : 'Off'}</span>
                     </label>
                   </td>
                   <td style={styles.td}>
                     <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%' }} disabled={busy} onClick={() => saveTask(t)}>{busy ? 'Saving…' : 'Save'}</button>
-                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#7F1D1D' }} disabled={busy} onClick={() => deleteTask(t)}>🗑️ Delete</button>
-                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#111827' }} disabled={busy} onClick={() => deleteTask(t)}>🗑️ Delete</button>
+                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#1f2937' : '#1f2937' }}>{m.text}</p>}
                   </td>
                 </tr>
               );
@@ -835,7 +835,7 @@ function TasksTab({ secret }) {
 }
 
 // ─── Submitted-Task Review Tab ────────────────────────────────────────────────
-const SUB_COLORS = { pending: { bg: '#FEF3C7', color: '#92400E' }, approved: { bg: '#D1FAE5', color: '#065F46' }, rejected: { bg: '#FEE2E2', color: '#991B1B' }, correction: { bg: '#FEE2E2', color: '#9A3412' } };
+const SUB_COLORS = { pending: { bg: '#f3f4f6', color: '#374151' }, approved: { bg: '#e5e7eb', color: '#1f2937' }, rejected: { bg: '#e5e7eb', color: '#1f2937' }, correction: { bg: '#e5e7eb', color: '#374151' } };
 
 function SubmissionsTab({ secret }) {
   const [subs,   setSubs]   = useState([]);
@@ -895,7 +895,7 @@ function SubmissionsTab({ secret }) {
   return (
     <div style={{ padding: '20px 32px' }}>
       {err && (
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991B1B', fontSize: 13, maxWidth: 820 }}>
+        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load submissions: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
         </div>
       )}
@@ -912,33 +912,33 @@ function SubmissionsTab({ secret }) {
                 <tr key={s.id} style={styles.tr}>
                   <td style={styles.td}><div style={{ fontWeight: 700, fontSize: 13 }}>{s.name || '—'}</div><div style={{ fontSize: 11, color: '#64748B' }}>{s.email || '—'}</div></td>
                   <td style={{ ...styles.td, maxWidth: 220 }}>{s.taskTitle || '—'}</td>
-                  <td style={styles.td}><strong style={{ color: '#059669' }}>{Number(s.reward).toLocaleString()}</strong></td>
-                  <td style={{ ...styles.td, maxWidth: 200, fontSize: 12, color: '#475569' }}>{s.note || '—'}{s.reason ? <div style={{ marginTop: 4, color: '#9A3412' }}><strong>Correction:</strong> {s.reason}</div> : null}</td>
+                  <td style={styles.td}><strong style={{ color: '#374151' }}>{Number(s.reward).toLocaleString()}</strong></td>
+                  <td style={{ ...styles.td, maxWidth: 200, fontSize: 12, color: '#475569' }}>{s.note || '—'}{s.reason ? <div style={{ marginTop: 4, color: '#374151' }}><strong>Correction:</strong> {s.reason}</div> : null}</td>
                   <td style={styles.td}>{fmtDate(s.createdAt ? new Date(s.createdAt).getTime() : null)}</td>
                   <td style={styles.td}><span style={{ ...styles.badge, background: sc.bg, color: sc.color }}>{s.status}</span></td>
                   <td style={{ ...styles.td, minWidth: 210 }}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#059669' }} disabled={b || s.status === 'approved'} onClick={() => act(s, 'approved')}>✅ Approve</button>
-                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#DC2626' }} disabled={b || s.status === 'rejected'} onClick={() => act(s, 'rejected')}>❌ Reject</button>
-                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => openCorrection(s)}>✉️ Corrections</button>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#374151' }} disabled={b || s.status === 'approved'} onClick={() => act(s, 'approved')}>✅ Approve</button>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#374151' }} disabled={b || s.status === 'rejected'} onClick={() => act(s, 'rejected')}>❌ Reject</button>
+                      <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#4b5563' }} disabled={b} onClick={() => openCorrection(s)}>✉️ Corrections</button>
                       {s.status === 'approved' && (
-                        <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#0F766E' }} disabled={b} onClick={() => resendApproval(s)} title="Resend the approval & earnings-credited email">✉️ Resend approval</button>
+                        <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, width: 'auto', background: '#111827' }} disabled={b} onClick={() => resendApproval(s)} title="Resend the approval & earnings-credited email">✉️ Resend approval</button>
                       )}
                     </div>
                     {correcting === s.id && (
-                      <div style={{ marginTop: 8, background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>Reason for correction (editable)</div>
+                      <div style={{ marginTop: 8, background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 8, padding: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Reason for correction (editable)</div>
                         <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3}
                           placeholder="Explain what needs to be corrected…"
                           style={{ ...styles.input, marginBottom: 8, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }} />
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => sendCorrection(s)}>Send Email</button>
+                          <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#4b5563' }} disabled={b} onClick={() => sendCorrection(s)}>Send Email</button>
                           <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#94A3B8' }} onClick={() => setCorrecting(null)}>Cancel</button>
                         </div>
-                        <div style={{ fontSize: 11, color: '#92400E', marginTop: 6 }}>Task name is inserted automatically. Sends to {s.email || 'the user'}.</div>
+                        <div style={{ fontSize: 11, color: '#374151', marginTop: 6 }}>Task name is inserted automatically. Sends to {s.email || 'the user'}.</div>
                       </div>
                     )}
-                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
+                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#1f2937' : '#1f2937' }}>{m.text}</p>}
                   </td>
                 </tr>
               );
@@ -983,13 +983,13 @@ function CleanupTab({ secret, onRefresh }) {
   return (
     <div style={{ padding: '20px 32px', maxWidth: 720 }}>
       <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24 }}>
-        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#991B1B', marginBottom: 4 }}>
+        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#1f2937', marginBottom: 4 }}>
           🧹 Remove Invalid / Bounced Emails
         </div>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>
           Paste the addresses that bounced (the ones your “Mail Delivery Subsystem” failure notices list). One per line, or separated by commas — mixed text is fine, only valid email addresses are picked up.
         </p>
-        <p style={{ fontSize: 12.5, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
+        <p style={{ fontSize: 12.5, color: '#1f2937', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
           ⚠️ This <strong>permanently deletes</strong> the matching accounts. It only removes <strong>exact</strong> address matches, so double-check before deleting.
         </p>
 
@@ -1004,7 +1004,7 @@ function CleanupTab({ secret, onRefresh }) {
         </div>
 
         <button
-          style={{ ...styles.btn, background: '#991B1B' }}
+          style={{ ...styles.btn, background: '#1f2937' }}
           disabled={busy || emails.length === 0}
           onClick={run}
         >
@@ -1015,17 +1015,17 @@ function CleanupTab({ secret, onRefresh }) {
           <div style={{ marginTop: 16, fontSize: 14 }}>
             {result.ok ? (
               <>
-                <p style={{ fontWeight: 700, color: '#065F46' }}>
+                <p style={{ fontWeight: 700, color: '#1f2937' }}>
                   ✅ Deleted {result.deleted} account{result.deleted === 1 ? '' : 's'}.
                 </p>
                 {result.notFound.length > 0 && (
-                  <p style={{ color: '#92400E', marginTop: 6 }}>
+                  <p style={{ color: '#374151', marginTop: 6 }}>
                     {result.notFound.length} address{result.notFound.length === 1 ? ' was' : 'es were'} not in the database (nothing to delete): {result.notFound.join(', ')}
                   </p>
                 )}
               </>
             ) : (
-              <p style={{ fontWeight: 600, color: '#991B1B' }}>{result.text}</p>
+              <p style={{ fontWeight: 600, color: '#1f2937' }}>{result.text}</p>
             )}
           </div>
         )}
@@ -1036,10 +1036,10 @@ function CleanupTab({ secret, onRefresh }) {
 
 // ─── Task Applications (Proposals) Tab ────────────────────────────────────────
 const APP_COLORS = {
-  pending:    { bg: '#FEF3C7', color: '#92400E' },
-  approved:   { bg: '#D1FAE5', color: '#065F46' },
-  rejected:   { bg: '#FEE2E2', color: '#991B1B' },
-  correction: { bg: '#FEE2E2', color: '#9A3412' },
+  pending:    { bg: '#f3f4f6', color: '#374151' },
+  approved:   { bg: '#e5e7eb', color: '#1f2937' },
+  rejected:   { bg: '#e5e7eb', color: '#1f2937' },
+  correction: { bg: '#e5e7eb', color: '#374151' },
 };
 
 function ApplicationsTab({ secret }) {
@@ -1099,15 +1099,15 @@ function ApplicationsTab({ secret }) {
   return (
     <div style={{ padding: '20px 32px' }}>
       {err && (
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991B1B', fontSize: 13, maxWidth: 820 }}>
+        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load applications: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
         </div>
       )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {[['all', 'All'], ['pending', 'Pending'], ['approved', 'Approved'], ['correction', 'Correction'], ['rejected', 'Rejected']].map(([k, label]) => (
           <button key={k} onClick={() => setFilter(k)}
-            style={{ padding: '7px 14px', borderRadius: 999, border: '1.5px solid ' + (filter === k ? '#0F766E' : '#E2E8F0'),
-              background: filter === k ? '#0F766E' : '#fff', color: filter === k ? '#fff' : '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', borderRadius: 999, border: '1.5px solid ' + (filter === k ? '#111827' : '#E2E8F0'),
+              background: filter === k ? '#111827' : '#fff', color: filter === k ? '#fff' : '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             {label}{k !== 'all' && counts[k] ? ` (${counts[k]})` : ''}
           </button>
         ))}
@@ -1132,30 +1132,30 @@ function ApplicationsTab({ secret }) {
                   <td style={{ ...styles.td, maxWidth: 320, fontSize: 12.5, color: '#334155' }}>
                     <div style={{ whiteSpace: 'pre-wrap' }}>{a.message || '—'}</div>
                     {a.extra ? <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #E2E8F0', color: '#64748B' }}><strong>Extra:</strong> {a.extra}</div> : null}
-                    {a.reason ? <div style={{ marginTop: 6, color: '#9A3412' }}><strong>Reason:</strong> {a.reason}</div> : null}
+                    {a.reason ? <div style={{ marginTop: 6, color: '#374151' }}><strong>Reason:</strong> {a.reason}</div> : null}
                   </td>
                   <td style={styles.td}>{fmtDate(a.createdAt ? new Date(a.createdAt).getTime() : null)}</td>
                   <td style={styles.td}><span style={{ ...styles.badge, background: sc.bg, color: sc.color }}>{a.status}</span></td>
                   <td style={{ ...styles.td, minWidth: 220 }}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#059669' }} disabled={b || a.status === 'approved'} onClick={() => setStatus(a, 'approved')}>✅ Approve</button>
-                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#DC2626' }} disabled={b || a.status === 'rejected'} onClick={() => setStatus(a, 'rejected')}>❌ Reject</button>
-                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => openCorrection(a)}>✉️ Corrections</button>
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#374151' }} disabled={b || a.status === 'approved'} onClick={() => setStatus(a, 'approved')}>✅ Approve</button>
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#374151' }} disabled={b || a.status === 'rejected'} onClick={() => setStatus(a, 'rejected')}>❌ Reject</button>
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#4b5563' }} disabled={b} onClick={() => openCorrection(a)}>✉️ Corrections</button>
                     </div>
                     {correcting === a.id && (
-                      <div style={{ marginTop: 8, background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>Reason for correction (editable)</div>
+                      <div style={{ marginTop: 8, background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 8, padding: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Reason for correction (editable)</div>
                         <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3}
                           placeholder="Explain what needs to be corrected…"
                           style={{ ...styles.input, marginBottom: 8, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }} />
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#B45309' }} disabled={b} onClick={() => sendCorrection(a)}>Send Email</button>
+                          <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#4b5563' }} disabled={b} onClick={() => sendCorrection(a)}>Send Email</button>
                           <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 12, width: 'auto', background: '#94A3B8' }} onClick={() => setCorrecting(null)}>Cancel</button>
                         </div>
-                        <div style={{ fontSize: 11, color: '#92400E', marginTop: 6 }}>Task name is inserted automatically. Sends to {a.email || 'the user'}.</div>
+                        <div style={{ fontSize: 11, color: '#374151', marginTop: 6 }}>Task name is inserted automatically. Sends to {a.email || 'the user'}.</div>
                       </div>
                     )}
-                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#065F46' : '#991B1B' }}>{m.text}</p>}
+                    {m && <p style={{ marginTop: 6, fontSize: 12, color: m.type === 'ok' ? '#1f2937' : '#1f2937' }}>{m.text}</p>}
                   </td>
                 </tr>
               );
@@ -1187,7 +1187,7 @@ function AuditTab({ secret }) {
   return (
     <div style={{ padding: '20px 32px' }}>
       {err && (
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991B1B', fontSize: 13, maxWidth: 820 }}>
+        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load the audit log: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code>.
         </div>
       )}
@@ -1202,7 +1202,7 @@ function AuditTab({ secret }) {
             {rows.map(r => (
               <tr key={r.id} style={styles.tr}>
                 <td style={{ ...styles.td, whiteSpace: 'nowrap' }}>{fmtDate(r.createdAt ? new Date(r.createdAt).getTime() : null)}</td>
-                <td style={styles.td}><span style={{ ...styles.badge, background: '#EEF2FF', color: '#3730A3' }}>{r.action}</span></td>
+                <td style={styles.td}><span style={{ ...styles.badge, background: '#f3f4f6', color: '#1f2937' }}>{r.action}</span></td>
                 <td style={styles.td}>{r.entity}{r.entityId ? ` #${r.entityId}` : ''}</td>
                 <td style={{ ...styles.td, maxWidth: 420, fontSize: 12.5, color: '#475569' }}>{r.detail || '—'}</td>
               </tr>
@@ -1316,7 +1316,7 @@ export default function AdminPanel() {
 const styles = {
   loginWrap: { minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Manrope, sans-serif' },
   loginCard: { background: '#fff', borderRadius: 16, padding: '40px 36px', boxShadow: '0 8px 24px rgba(0,0,0,0.10)', width: '100%', maxWidth: 380, textAlign: 'center' },
-  logo:      { fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 22, color: '#0F766E', letterSpacing: 1, marginBottom: 4 },
+  logo:      { fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 22, color: '#111827', letterSpacing: 1, marginBottom: 4 },
   loginSub:  { fontSize: 13, color: '#64748B', marginBottom: 24 },
   input: {
     display: 'block', width: '100%', padding: '11px 14px',
@@ -1329,10 +1329,10 @@ const styles = {
     fontSize: 13, fontFamily: 'Manrope, sans-serif', background: '#F8FAFC', color: '#111827',
   },
   fieldLabel: { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 5 },
-  err: { color: '#991B1B', fontSize: 13, marginBottom: 10 },
+  err: { color: '#1f2937', fontSize: 13, marginBottom: 10 },
   btn: {
     display: 'block', width: '100%', padding: '12px',
-    background: '#0F766E', color: '#fff', borderRadius: 10,
+    background: '#111827', color: '#fff', borderRadius: 10,
     fontWeight: 700, fontSize: 15, fontFamily: 'Poppins, sans-serif',
     cursor: 'pointer', border: 'none', transition: 'background 0.2s',
   },
@@ -1340,11 +1340,11 @@ const styles = {
   header:    { background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '18px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 },
   tabs:      { display: 'flex', gap: 0, padding: '0 32px', background: '#fff', borderBottom: '2px solid #E2E8F0' },
   tabBtn:    { padding: '14px 24px', fontSize: 14, fontWeight: 600, fontFamily: 'Poppins, sans-serif', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', borderBottom: '3px solid transparent', marginBottom: -2 },
-  tabBtnActive: { color: '#0F766E', borderBottomColor: '#0F766E' },
+  tabBtnActive: { color: '#111827', borderBottomColor: '#111827' },
   searchWrap: { padding: '20px 32px 0', display: 'flex', alignItems: 'center' },
   tableWrap:  { padding: '16px 32px', overflowX: 'auto' },
   table:      { width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  th:         { background: '#0F766E', color: '#fff', fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 12, padding: '13px 14px', textAlign: 'left', whiteSpace: 'nowrap' },
+  th:         { background: '#111827', color: '#fff', fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 12, padding: '13px 14px', textAlign: 'left', whiteSpace: 'nowrap' },
   tr:         { borderBottom: '1px solid #F1F5F9' },
   td:         { padding: '13px 14px', fontSize: 13, verticalAlign: 'top' },
   badge:      { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },

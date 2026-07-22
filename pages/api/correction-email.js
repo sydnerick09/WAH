@@ -56,12 +56,12 @@ function toHtml(vars) {
     <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;max-width:600px;">
       <p>Hi ${esc(vars.userName) || 'there'},</p>
       <p>Kindly note that your submission has been <strong>sent back for corrections</strong>.</p>
-      <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:12px 14px;margin:14px 0;">
-        <div style="font-weight:700;color:#92400E;margin-bottom:4px;">Reason for Correction</div>
-        <div style="white-space:pre-wrap;color:#78350F;">${esc(vars.reason) || '—'}</div>
+      <div style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:12px 14px;margin:14px 0;">
+        <div style="font-weight:700;color:#374151;margin-bottom:4px;">Reason for Correction</div>
+        <div style="white-space:pre-wrap;color:#1f2937;">${esc(vars.reason) || '—'}</div>
       </div>
-      <p style="color:#991B1B;"><strong>Failure to make the required corrections may result in your account being placed on hold.</strong></p>
-      <p>Log in to <a href="${LOGIN_URL}" style="color:#0F766E;font-weight:600;">${LOGIN_URL}</a> to view the correction details.</p>
+      <p style="color:#1f2937;"><strong>Failure to make the required corrections may result in your account being placed on hold.</strong></p>
+      <p>Log in to <a href="${LOGIN_URL}" style="color:#111827;font-weight:600;">${LOGIN_URL}</a> to view the correction details.</p>
       <p style="margin:14px 0;">
         <span style="font-weight:700;color:#374151;">Reference Task:</span><br/>
         <span style="display:inline-block;margin-top:4px;background:#F1F5F9;border-radius:6px;padding:6px 10px;font-weight:700;color:#0F172A;">${esc(vars.taskName) || '—'}</span>
@@ -73,7 +73,7 @@ function toHtml(vars) {
         <a href="${esc(vars.unsubscribeLink)}" style="color:#94A3B8;">unsubscribe</a>.
         Unsubscribing will permanently stop all OTP and account-related email communications.
       </p>
-      <p style="margin-top:16px;color:#125C37;font-weight:600;">— The Business Hub Team</p>
+      <p style="margin-top:16px;color:#1f2937;font-weight:600;">— The Business Hub Team</p>
     </div>`;
 }
 
