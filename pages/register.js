@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { registerUser, setCurrentUser, getBoundEmail, bindBrowser } from '../lib/auth';
+import { isEmail, isPhone } from '../lib/validate';
 
 const COUNTRIES = [
   'Kenya', 'Uganda', 'Tanzania', 'Rwanda', 'Ethiopia', 'Nigeria', 'Ghana',
@@ -74,42 +75,13 @@ export default function Register() {
   }
 
   function validate() {
-    if (!form.fullName.trim()) {
-      return 'Full name is required.';
-    }
-
-    if (
-      !form.email.trim() ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
-    ) {
-      return 'Valid email is required.';
-    }
-
-    if (
-      !form.phone.trim() ||
-      !/^\+?\d{7,15}$/.test(
-        form.phone.replace(/[\s\-()]/g, '')
-      )
-    ) {
-      return 'Enter a valid phone number.';
-    }
-
-    if (!form.country) {
-      return 'Please select a country.';
-    }
-
-    if (form.password.length < 8) {
-      return 'Password must be at least 8 characters.';
-    }
-
-    if (form.password !== form.confirmPassword) {
-      return 'Passwords do not match.';
-    }
-
-    if (!form.agreedToTerms) {
-      return 'You must agree to the Terms and Conditions.';
-    }
-
+    if (!form.fullName.trim())              return 'Full name is required.';
+    if (!isEmail(form.email))               return 'Valid email is required.';
+    if (!isPhone(form.phone))               return 'Enter a valid phone number.';
+    if (!form.country)                      return 'Please select a country.';
+    if (form.password.length < 8)           return 'Password must be at least 8 characters.';
+    if (form.password !== form.confirmPassword) return 'Passwords do not match.';
+    if (!form.agreedToTerms)                return 'You must agree to the Terms and Conditions.';
     return null;
   }
 

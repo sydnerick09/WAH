@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { TASKS } from '../../lib/tasks';
 import { verifyUnsubToken } from '../../lib/unsubToken';
 import { sendApprovalEmail } from '../../lib/approvalEmail';
+import { isEmail, isPhone, nonEmpty, isPositiveNumber, clean } from '../../lib/validate';
 
 function getAdmin() {
   return createClient(
@@ -205,9 +206,20 @@ export default async function handler(req, res) {
     switch (op) {
 
       case 'registerUser': {
-        const { fullName, email, phone, country, password,
-                activated, premium, premiumPaidAt, balance,
+        const { activated, premium, premiumPaidAt, balance,
                 referralCount, referredBy } = p;
+
+        // Server-side validation + sanitization (authoritative — never trust
+        // the client). Reject malformed input before touching the database.
+        const fullName = clean(p.fullName, 80);
+        const email    = clean(p.email, 120).toLowerCase();
+        const phone    = clean(p.phone, 20);
+        const country  = clean(p.country, 60);
+        const password = String(p.password ?? '');
+        if (!nonEmpty(fullName)) return res.json({ success: false, message: 'Full name is required.' });
+        if (!isEmail(email))     return res.json({ success: false, message: 'A valid email address is required.' });
+        if (!isPhone(phone))     return res.json({ success: false, message: 'A valid phone number is required.' });
+        if (password.length < 8) return res.json({ success: false, message: 'Password must be at least 8 characters.' });
 
         // One account per email (case-insensitive)
         const { data: existing } = await db.from('users')
@@ -440,14 +452,23 @@ export default async function handler(req, res) {
       }
 
       case 'createWithdrawal': {
-        const { userId, fullName, phone, idNumber, amount } = p;
+        const userId   = clean(p.userId, 64);
+        const fullName = clean(p.fullName, 80);
+        const phone    = clean(p.phone, 20);
+        const idNumber = clean(p.idNumber, 40);
+        const amount   = Number(p.amount);
+        // Reject malformed withdrawal requests server-side.
+        if (!nonEmpty(userId))          return res.json({ data: null, error: 'Missing user.' });
+        if (!nonEmpty(fullName))        return res.json({ data: null, error: 'Account holder name is required.' });
+        if (!isPhone(phone))            return res.json({ data: null, error: 'A valid phone number is required.' });
+        if (!isPositiveNumber(amount))  return res.json({ data: null, error: 'A valid amount is required.' });
         const deadline = Date.now() + 2 * 60 * 60 * 1000;
         const { data, error } = await db.from('withdrawal_requests').insert({
           user_id:      userId,
           full_name:    fullName,
           phone,
           id_number:    idNumber,
-          amount:       Number(amount),
+          amount,
           status:       'pending',
           deadline,
           requested_at: new Date().toISOString(),
@@ -700,12 +721,19 @@ export default async function handler(req, res) {
       case 'createApplication': {
         // Public: a user submits a proposal to work on a task. One active
         // (pending/approved) application per user per task.
-        const { userId, userEmail, userName, taskId, taskTitle, message, extra } = p;
-        if (!userId || !taskId) return res.json({ success: false, error: 'Missing user or task.' });
-        if (!message || !String(message).trim()) return res.json({ success: false, error: 'A proposal message is required.' });
+        // Sanitize + validate server-side.
+        const userId    = clean(p.userId, 64);
+        const taskId    = clean(p.taskId, 64);
+        const userEmail = clean(p.userEmail, 120);
+        const userName  = clean(p.userName, 80);
+        const taskTitle = clean(p.taskTitle, 160);
+        const message   = clean(p.message, 600);
+        const extra     = clean(p.extra, 600);
+        if (!nonEmpty(userId) || !nonEmpty(taskId)) return res.json({ success: false, error: 'Missing user or task.' });
+        if (!nonEmpty(message)) return res.json({ success: false, error: 'A proposal message is required.' });
 
         const { data: prior } = await db.from('applications')
-          .select('id,status').eq('user_id', userId).eq('task_id', String(taskId))
+          .select('id,status').eq('user_id', userId).eq('task_id', taskId)
           .order('created_at', { ascending: false }).limit(1).maybeSingle();
         if (prior && (prior.status === 'pending' || prior.status === 'approved')) {
           return res.json({
@@ -720,10 +748,10 @@ export default async function handler(req, res) {
 
         const { data, error } = await db.from('applications').insert({
           user_id:    userId,
-          user_email: userEmail ?? '',
-          user_name:  userName ?? '',
-          task_id:    String(taskId),
-          task_title: taskTitle ?? '',
+          user_email: userEmail,
+          user_name:  userName,
+          task_id:    taskId,
+          task_title: taskTitle,
           message:    clampWords(message, 40),
           extra:      extra ? clampWords(extra, 40) : '',
           status:     'pending',
