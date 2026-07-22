@@ -4,6 +4,7 @@ import { verifyUnsubToken } from '../../lib/unsubToken';
 import { sendApprovalEmail } from '../../lib/approvalEmail';
 import { isEmail, isPhone, nonEmpty, isPositiveNumber, clean } from '../../lib/validate';
 import { hashPassword, verifyPassword } from '../../lib/password';
+import { issueToken, verifyToken } from '../../lib/token';
 
 function getAdmin() {
   return createClient(
@@ -37,6 +38,10 @@ function norm(row) {
   const quiz  = subs._quiz  ?? null;
   const ptest = subs._ptest ?? null;
 
+  // Extended profile fields live in task_submissions._profile (no schema change,
+  // mirrors the existing _act/_quiz/_suspended pattern).
+  const profile = subs._profile ?? {};
+
   return {
     id:               row.id,
     fullName:         row.full_name        ?? '',
@@ -44,6 +49,11 @@ function norm(row) {
     phone:            row.phone            ?? '',
     country:          row.country          ?? '',
     password:         '',
+    username:         profile.username     ?? '',
+    avatar:           profile.avatar       ?? '',
+    address:          profile.address      ?? '',
+    postalCode:       profile.postalCode   ?? '',
+    state:            profile.state        ?? '',
     activated,
     activatedAt:      actAt,
     activatedExpiresAt: actExpires,
@@ -200,11 +210,32 @@ async function logAction(db, { action, entity, entityId, detail }) {
   } catch (_) { /* audit is best-effort */ }
 }
 
+// Ops that act on a single user's own data. For these we IGNORE any user id in
+// the request body and derive the authenticated user id from the signed session
+// token, so a caller can never read or modify another user's data.
+const USER_SCOPED = new Set([
+  'getUser', 'activateUser', 'awardQuiz', 'awardPremiumTest',
+  'upgradePremiumWithBalance', 'activateWithBalance', 'upgradeToPremium',
+  'submitTask', 'createBid', 'createWithdrawal', 'getWithdrawal',
+  'updateWithdrawal', 'listUserSubmissions', 'listUserApplications',
+  'createApplication',
+  'updateProfile', 'updateAvatar', 'changeContact', 'deleteAccount',
+]);
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const db = getAdmin();
   const { op, ...p } = req.body;
+
+  // Authenticate + authorize user-scoped ops from the token (not the body).
+  if (USER_SCOPED.has(op)) {
+    const uid = verifyToken(p.authToken);
+    if (!uid) return res.status(401).json({ error: 'Unauthorized', authRequired: true });
+    p.userId = uid;   // ops read userId
+    p.id     = uid;   // getUser reads id
+    delete p.email;   // force uid-based lookups (no email-based bypass)
+  }
 
   try {
     switch (op) {
@@ -249,7 +280,7 @@ export default async function handler(req, res) {
           }
         }
 
-        return res.json({ success: true, user: norm(data) });
+        return res.json({ success: true, user: norm(data), authToken: issueToken(data.id) });
       }
 
       case 'migrateUser': {
@@ -259,11 +290,11 @@ export default async function handler(req, res) {
         // Return existing record if already in Supabase (by id or email)
         const { data: byId } = await db.from('users')
           .select('*').eq('id', u.id).maybeSingle();
-        if (byId) return res.json({ data: norm(byId) });
+        if (byId) return res.json({ data: norm(byId), authToken: issueToken(byId.id) });
 
         const { data: byEmail } = await db.from('users')
           .select('*').eq('email', u.email).maybeSingle();
-        if (byEmail) return res.json({ data: norm(byEmail) });
+        if (byEmail) return res.json({ data: norm(byEmail), authToken: issueToken(byEmail.id) });
 
         const { data: inserted, error: insertErr } = await db.from('users').insert({
           id:               u.id,
@@ -284,7 +315,7 @@ export default async function handler(req, res) {
         }).select().single();
 
         if (insertErr) return res.json({ data: null, error: insertErr.message });
-        return res.json({ data: norm(inserted) });
+        return res.json({ data: norm(inserted), authToken: issueToken(inserted.id) });
       }
 
       case 'loginUser': {
@@ -305,7 +336,7 @@ export default async function handler(req, res) {
         if (legacy) {
           try { await db.from('users').update({ password: hashPassword(password) }).eq('id', data.id); } catch (_) {}
         }
-        return res.json({ success: true, user: norm(data) });
+        return res.json({ success: true, user: norm(data), authToken: issueToken(data.id) });
       }
 
       case 'getUser': {
@@ -502,6 +533,10 @@ export default async function handler(req, res) {
       }
 
       case 'updateWithdrawal': {
+        // Only the owner may update their own withdrawal (p.userId is the token uid).
+        const { data: wd } = await db.from('withdrawal_requests')
+          .select('user_id').eq('id', p.requestId).maybeSingle();
+        if (!wd || String(wd.user_id) !== String(p.userId)) return res.json({ data: null });
         const { data } = await db.from('withdrawal_requests')
           .update({ status: p.status, updated_at: new Date().toISOString() })
           .eq('id', p.requestId).select().single();
@@ -1042,6 +1077,109 @@ export default async function handler(req, res) {
         const { error } = await db.from('tasks').insert(rows);
         if (error) return res.json({ success: false, error: error.message });
         return res.json({ success: true, inserted: rows.length });
+      }
+
+      // ─── Profile (self-service) ───────────────────────────────────────────
+      case 'updateProfile': {
+        // Only Full Name and Username are user-editable (per the profile spec).
+        // Extended fields (address, postalCode, state) are stored in _profile too
+        // so the page can round-trip them, but the UI keeps them read-only.
+        const userId = clean(p.userId, 64);
+        if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
+
+        const { data: u } = await db.from('users')
+          .select('task_submissions').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'User not found.' });
+
+        const updates = {};
+        if (p.fullName !== undefined) {
+          const fullName = clean(p.fullName, 80);
+          if (!nonEmpty(fullName)) return res.json({ success: false, error: 'Full name cannot be empty.' });
+          updates.full_name = fullName;
+        }
+
+        const subs    = { ...(u.task_submissions || {}) };
+        const profile = { ...(subs._profile || {}) };
+        if (p.username   !== undefined) profile.username   = clean(p.username, 40);
+        if (p.address    !== undefined) profile.address    = clean(p.address, 160);
+        if (p.postalCode !== undefined) profile.postalCode = clean(p.postalCode, 20);
+        if (p.state      !== undefined) profile.state      = clean(p.state, 80);
+        subs._profile = profile;
+        updates.task_submissions = subs;
+
+        const { data: updated, error } = await db.from('users')
+          .update(updates).eq('id', userId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'updateAvatar': {
+        const userId = clean(p.userId, 64);
+        const avatar = String(p.avatar ?? '');
+        if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
+        // Accept only image data URLs, and cap the stored size (~3MB of base64).
+        if (avatar && !/^data:image\/(png|jpeg|jpg|webp);base64,/.test(avatar)) {
+          return res.json({ success: false, error: 'Unsupported image format.' });
+        }
+        if (avatar.length > 3_000_000) {
+          return res.json({ success: false, error: 'Image is too large after processing.' });
+        }
+        const { data: u } = await db.from('users')
+          .select('task_submissions').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'User not found.' });
+
+        const subs    = { ...(u.task_submissions || {}) };
+        const profile = { ...(subs._profile || {}) };
+        profile.avatar = avatar;          // '' clears it back to initials
+        subs._profile  = profile;
+
+        const { data: updated, error } = await db.from('users')
+          .update({ task_submissions: subs }).eq('id', userId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'changeContact': {
+        // Changing email or phone cancels the Premium subscription (per spec).
+        // The new values arrive as newEmail/newPhone (the uid-based auth guard
+        // strips a body `email` to prevent email-based user lookups).
+        const userId = clean(p.userId, 64);
+        if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
+
+        const updates = { premium: false, premium_paid_at: null };
+        if (p.newEmail !== undefined && p.newEmail !== '') {
+          const email = clean(p.newEmail, 120).toLowerCase();
+          if (!isEmail(email)) return res.json({ success: false, error: 'A valid email address is required.' });
+          // Enforce uniqueness (case-insensitive), ignoring the user's own row.
+          const { data: existing } = await db.from('users').select('id').ilike('email', email).limit(2);
+          if ((existing || []).some(r => String(r.id) !== String(userId))) {
+            return res.json({ success: false, error: 'That email is already in use by another account.' });
+          }
+          updates.email = email;
+        }
+        if (p.newPhone !== undefined && p.newPhone !== '') {
+          const phone = clean(p.newPhone, 20);
+          if (!isPhone(phone)) return res.json({ success: false, error: 'A valid phone number is required.' });
+          updates.phone = phone;
+        }
+
+        const { data: updated, error } = await db.from('users')
+          .update(updates).eq('id', userId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'deleteAccount': {
+        // Self-service permanent deletion, keyed by the session user id. Best-effort
+        // cleanup of the user's related rows first, then the user record itself.
+        const userId = clean(p.userId, 64);
+        if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
+        try { await db.from('submissions').delete().eq('user_id', userId); } catch (_) {}
+        try { await db.from('applications').delete().eq('user_id', userId); } catch (_) {}
+        try { await db.from('withdrawal_requests').delete().eq('user_id', userId); } catch (_) {}
+        const { error } = await db.from('users').delete().eq('id', userId);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true });
       }
 
       default:

@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
+import { getToken } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 import FlowShell from '../components/FlowShell';
 
@@ -48,7 +49,7 @@ export default function SubmitPage() {
       try {
         const r = await fetch('/api/db', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ op: 'listUserApplications', userId: user.id }),
+          body: JSON.stringify({ op: 'listUserApplications', userId: user.id, authToken: getToken() }),
         });
         const { data } = await r.json();
         const mine = (Array.isArray(data) ? data : []).find(a => String(a.taskId) === String(task.id));
@@ -77,6 +78,7 @@ export default function SubmitPage() {
       fd.append('taskPayment', String(task?.payment ?? ''));
       fd.append('taskCategory', task?.category ?? '');
       fd.append('userId', user.id);
+      fd.append('authToken', getToken() || '');
       fd.append('userEmail', user.email || '');
       fd.append('userName', user.fullName || '');
       fd.append('note', note || '');

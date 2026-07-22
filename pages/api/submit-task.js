@@ -5,6 +5,7 @@ import formidable from "formidable";
 import fs from "fs";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import { verifyToken } from "../../lib/token";
 
 export const config = {
   api: {
@@ -50,11 +51,21 @@ export default async function handler(req, res) {
   const userName  = get("userName");
   const note      = get("note");
 
+  // ── 2a. Authenticate: in production derive the user id from the signed token
+  // so a submission can never be attributed to another user via a spoofed form
+  // field. (Local dev has no token/DB, so this is skipped there.)
+  let effectiveUserId = userId;
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const uid = verifyToken(get("authToken"));
+    if (!uid) return res.status(401).json({ success: false, message: "Please sign in again." });
+    effectiveUserId = uid;
+  }
+
   // ── 2b. Proposal gate, regular tasks require an APPROVED application ──────
   // Offer tasks (offer_…) are exempt. Best-effort: if the DB isn't configured we
   // can't verify, so we don't block (matches the rest of this endpoint).
   const isOfferTask = String(taskId || "").startsWith("offer_");
-  if (!isOfferTask && taskId && taskId !== "N/A" && userId && userId !== "N/A"
+  if (!isOfferTask && taskId && taskId !== "N/A" && effectiveUserId && effectiveUserId !== "N/A"
       && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
       const gate = createClient(
@@ -63,7 +74,7 @@ export default async function handler(req, res) {
         { auth: { persistSession: false } }
       );
       const { data: appRow, error: appErr } = await gate.from("applications")
-        .select("status").eq("user_id", userId).eq("task_id", String(taskId))
+        .select("status").eq("user_id", effectiveUserId).eq("task_id", String(taskId))
         .eq("status", "approved").limit(1).maybeSingle();
       // Only block when we can positively confirm there is no approved proposal.
       if (!appErr && !appRow) {
@@ -209,7 +220,7 @@ export default async function handler(req, res) {
         { auth: { persistSession: false } }
       );
       await db.from("submissions").insert({
-        user_id:    userId    !== "N/A" ? userId    : null,
+        user_id:    effectiveUserId !== "N/A" ? effectiveUserId : null,
         user_email: userEmail !== "N/A" ? userEmail : null,
         user_name:  userName  !== "N/A" ? userName  : null,
         task_id:    taskId    !== "N/A" ? taskId    : null,

@@ -12,7 +12,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { getCurrentUser, logout, awardQuizBonus } from '../lib/auth';
+import { getCurrentUser, logout, awardQuizBonus, getToken } from '../lib/auth';
 import { applyForTask, listMyApplications, applicationsByTask } from '../lib/applications';
 import { TASKS } from '../lib/tasks';
 import Icon from '../components/Icon';
@@ -157,15 +157,15 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
         <div className="modal-body">
           <div className="modal-meta">
             {[
-              ['Posted By',   `👤 ${task.poster}`],
-              ['Location',    `📍 ${task.location}`],
-              ['Date Posted', `📅 ${task.datePosted}`],
-              ['Category',    `🏷️ ${task.category}`],
-              ...(task.dueDate ? [['Due Date', `⏰ ${task.dueDate}`]] : []),
-            ].map(([label, value]) => (
+              ['Posted By',   'user',     task.poster],
+              ['Location',    'mapPin',   task.location],
+              ['Date Posted', 'calendar', task.datePosted],
+              ['Category',    'folder',   task.category],
+              ...(task.dueDate ? [['Due Date', 'clock', task.dueDate]] : []),
+            ].map(([label, icon, value]) => (
               <div key={label} className="modal-meta-item">
                 <div className="modal-meta-label">{label}</div>
-                <div className="modal-meta-value">{value}</div>
+                <div className="modal-meta-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name={icon} size={14} /> {value}</div>
               </div>
             ))}
           </div>
@@ -187,12 +187,12 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
           )}
           {/* Not signed-in / not activated yet */}
           {!isActivated && (
-            <button className="bid-btn" onClick={() => onBidClick(task)}>💼 Bid on This Task</button>
+            <button className="bid-btn" onClick={() => onBidClick(task)}><Icon name="briefcase" size={16} /> Bid on This Task</button>
           )}
 
           {/* Offers skip the proposal step entirely */}
           {isActivated && offer && (
-            <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task (Offer, No Premium)</button>
+            <button className="submit-btn" onClick={handleSubmit}><Icon name="upload" size={16} /> Submit This Task (Offer, No Premium)</button>
           )}
 
           {/* Regular tasks: proposal required before work can be submitted */}
@@ -207,32 +207,32 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
 
               {(!appStatus || appStatus === 'rejected' || appStatus === 'correction') && (
                 <button className="submit-btn" onClick={() => onApply(task)}
-                  style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }}>
-                  {appStatus ? '🔄 Update & Resubmit Proposal' : '📝 Apply, Submit a Proposal'}
+                  style={{ background: '#000000' }}>
+                  <Icon name={appStatus ? 'refresh' : 'edit'} size={16} /> {appStatus ? 'Update & Resubmit Proposal' : 'Apply, Submit a Proposal'}
                 </button>
               )}
 
               {appStatus === 'pending' && (
-                <div style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#374151', textAlign: 'center', fontWeight: 600 }}>
-                  ⏳ Your proposal is under review. You&apos;ll be able to start this task once it&apos;s approved.
+                <div style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#374151', textAlign: 'center', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Icon name="clock" size={15} /> Your proposal is under review. You&apos;ll be able to start this task once it&apos;s approved.
                 </div>
               )}
 
               {approved && !isPremium && (
                 <>
-                  <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600 }}>
-                    ✅ Proposal approved, this task is unlocked for you.
+                  <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="check" size={15} /> Proposal approved, this task is unlocked for you.
                   </div>
-                  <button className="submit-btn" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #1f2937, #374151)' }}>⭐ Upgrade to Premium to Submit</button>
+                  <button className="submit-btn" onClick={handleSubmit} style={{ background: '#000000' }}><Icon name="star" size={16} /> Upgrade to Premium to Submit</button>
                 </>
               )}
 
               {approved && isPremium && (
                 <>
-                  <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600 }}>
-                    ✅ Proposal approved, this task is unlocked for you.
+                  <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="check" size={15} /> Proposal approved, this task is unlocked for you.
                   </div>
-                  <button className="submit-btn" onClick={handleSubmit}>📤 Submit This Task</button>
+                  <button className="submit-btn" onClick={handleSubmit}><Icon name="upload" size={16} /> Submit This Task</button>
                 </>
               )}
             </>
@@ -285,7 +285,7 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
         <div className="modal-body">
           {done ? (
             <div style={{ textAlign: 'center', padding: '8px 0' }}>
-              <div style={{ fontSize: 52, marginBottom: 8 }}>📨</div>
+              <div style={{ marginBottom: 8, color: '#000', display: 'flex', justifyContent: 'center' }}><Icon name="mail" size={48} /></div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: '#374151', marginBottom: 6 }}>Proposal sent for review</div>
               <p style={{ fontSize: 14, color: 'var(--gray)', lineHeight: 1.6 }}>
                 Your proposal for <strong>{task.title}</strong> has been submitted. Our team will review it, and once it&apos;s
@@ -325,9 +325,9 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
               />
               {error && <div style={{ color: '#4b5563', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
               <button className="submit-btn" style={{ marginTop: 16, opacity: busy ? 0.7 : 1 }} onClick={submit} disabled={busy}>
-                {busy ? <><span className="spinner" /> Submitting…</> : '📤 Submit Proposal'}
+                {busy ? <><span className="spinner" /> Submitting…</> : <><Icon name="upload" size={16} /> Submit Proposal</>}
               </button>
-              <div className="pay-secure" style={{ marginTop: 10 }}>🔒 Reviewed by our team before the task unlocks</div>
+              <div className="pay-secure" style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Reviewed by our team before the task unlocks</div>
             </>
           )}
         </div>
@@ -353,21 +353,21 @@ function ApplicationNotices({ apps, subs, onStart }) {
       {approved.map(a => (
         <div key={`ap-${a.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
           background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 12, padding: '12px 16px', marginBottom: 8 }}>
-          <div style={{ fontSize: 13.5, color: '#1f2937' }}>
-            ✅ <strong>Approved!</strong> Your proposal for <strong>{a.taskTitle}</strong> was accepted, you can start it now.
+          <div style={{ fontSize: 13.5, color: '#1f2937', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="check" size={15} /> <span><strong>Approved!</strong> Your proposal for <strong>{a.taskTitle}</strong> was accepted, you can start it now.</span>
           </div>
-          <button className="task-view-btn" style={{ padding: '8px 14px', whiteSpace: 'nowrap' }} onClick={() => onStart(a.taskId)}>Start task →</button>
+          <button className="task-view-btn" style={{ padding: '8px 14px', whiteSpace: 'nowrap' }} onClick={() => onStart(a.taskId)}>Start task</button>
         </div>
       ))}
       {attention.map(a => (
         <div key={`at-${a.id}`} style={{ background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 12, padding: '12px 16px', marginBottom: 8, fontSize: 13.5, color: '#374151' }}>
-          {a.status === 'rejected' ? '❌' : '✏️'} Your proposal for <strong>{a.taskTitle}</strong> {a.status === 'rejected' ? 'was not approved' : 'needs corrections'}.
+          <Icon name={a.status === 'rejected' ? 'x' : 'edit'} size={14} /> Your proposal for <strong>{a.taskTitle}</strong> {a.status === 'rejected' ? 'was not approved' : 'needs corrections'}.
           {a.reason ? <span>, {a.reason}</span> : null} <button onClick={() => onStart(a.taskId)} style={{ background: 'none', border: 'none', color: '#374151', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13.5 }}>Open</button>
         </div>
       ))}
       {pending.length > 0 && (
-        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '10px 16px', fontSize: 13, color: '#475569' }}>
-          ⏳ {pending.length} proposal{pending.length === 1 ? '' : 's'} awaiting review.
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '10px 16px', fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="clock" size={14} /> {pending.length} proposal{pending.length === 1 ? '' : 's'} awaiting review.
         </div>
       )}
     </div>
@@ -434,9 +434,9 @@ function QuizModal({ user, onComplete }) {
   return (
     <div className="modal-overlay" style={{ zIndex: 1000 }}>
       <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #374151, #374151)' }}>
+        <div className="pay-modal-header" style={{ background: '#000000' }}>
           <div>
-            <div className="pay-modal-title">🎁 Your KES 50 Joining Gift</div>
+            <div className="pay-modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="star" size={20} /> Your KES 50 Joining Gift</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
               {isResult ? 'Quiz complete' : `Answer 5 quick questions • Question ${step + 1} of ${total}`}
             </div>
@@ -481,7 +481,7 @@ function QuizModal({ user, onComplete }) {
                         background: active ? '#374151' : '#fff',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: '#fff', fontSize: 12,
-                      }}>{active ? '✓' : ''}</span>
+                      }}>{active ? <Icon name="check" size={12} /> : ''}</span>
                       {opt}
                     </button>
                   );
@@ -842,15 +842,16 @@ function ActivityFeed({ withdrawals, pending }) {
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onLogout }) {
+function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onLogout }) {
   const items = [
-    { icon: '🏠', label: 'Dashboard',            action: () => { onClose(); } },
-    { icon: '⭐', label: 'Upgrade to Premium',   action: () => { onClose(); onUpgrade(); } },
-    { icon: '✅', label: 'Awarded Tasks',         action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
-    { icon: '📲', label: 'Withdraw with M-Pesa', action: () => { onClose(); onMpesaWithdraw(); } },
-    { icon: '🌍', label: 'Withdraw from Other Countries', action: () => { onClose(); onOtherWithdraw(); } },
-    { icon: '🎓', label: 'Apply for Training',    action: () => { onClose(); onTraining(); } },
-    { icon: '🔗', label: 'My Referral Link',      action: () => { onClose(); onReferral(); } },
+    { icon: 'home',       label: 'Dashboard',                    action: () => { onClose(); } },
+    { icon: 'user',       label: 'My Profile',                   action: () => { onClose(); onProfile(); } },
+    { icon: 'star',       label: 'Upgrade to Premium',           action: () => { onClose(); onUpgrade(); } },
+    { icon: 'check',      label: 'Awarded Tasks',                action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
+    { icon: 'smartphone', label: 'Withdraw with M-Pesa', mpesa: true, action: () => { onClose(); onMpesaWithdraw(); } },
+    { icon: 'globe',      label: 'Withdraw from Other Countries', action: () => { onClose(); onOtherWithdraw(); } },
+    { icon: 'graduation', label: 'Apply for Training',           action: () => { onClose(); onTraining(); } },
+    { icon: 'link',       label: 'My Referral Link',             action: () => { onClose(); onReferral(); } },
   ];
 
   return (
@@ -866,7 +867,7 @@ function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithd
               <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--white)' }}>{user?.fullName}</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{user?.email}</div>
               <span className={`status-badge ${user?.activated ? 'status-active' : 'status-inactive'}`} style={{ marginTop: 4, display: 'inline-flex' }}>
-                {user?.activated ? '✅ Active' : '⚠️ Inactive'}
+                <Icon name={user?.activated ? 'check' : 'warning'} size={12} /> {user?.activated ? 'Active' : 'Inactive'}
               </span>
             </div>
           </div>
@@ -875,9 +876,11 @@ function HamburgerMenu({ user, onClose, onUpgrade, onMpesaWithdraw, onOtherWithd
         <nav className="hamburger-nav">
           {items.map(item => (
             <button key={item.label} className="hamburger-item" onClick={item.action}>
-              <span className="hamburger-item-icon">{item.icon}</span>
+              <span className="hamburger-item-icon" style={item.mpesa ? { color: 'var(--mpesa-green)' } : undefined}>
+                <Icon name={item.icon} size={18} />
+              </span>
               <span>{item.label}</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--gray-light)', fontSize: 18 }}>›</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--gray-light)', display: 'flex' }}><Icon name="chevronRight" size={16} /></span>
             </button>
           ))}
         </nav>
@@ -918,7 +921,7 @@ export default function Dashboard() {
   const [applyTask, setApplyTask] = useState(null); // task the proposal form is open for
 
   const categories = [
-    'All','🔥 Offers','Writing','Research','Data Entry','Design','Marketing',
+    'All','Offers','Writing','Research','Data Entry','Design','Marketing',
     'Transcription','Translation','Survey','Testing','Audio','Education','Admin',
   ];
 
@@ -927,7 +930,7 @@ export default function Dashboard() {
     try {
       const r = await fetch('/api/db', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ op: 'listUserSubmissions', userId: uid }),
+        body: JSON.stringify({ op: 'listUserSubmissions', userId: uid, authToken: getToken() }),
       });
       const { data } = await r.json();
       if (Array.isArray(data)) {
@@ -1056,7 +1059,7 @@ export default function Dashboard() {
   });
 
   const filteredTasks = allTasks.filter(t => {
-    const matchCat    = filter === 'All' ? true : filter === '🔥 Offers' ? isOffer(t) : t.category === filter;
+    const matchCat    = filter === 'All' ? true : filter === 'Offers' ? isOffer(t) : t.category === filter;
     const matchSearch = !search
       || t.title.toLowerCase().includes(search.toLowerCase())
       || t.description.toLowerCase().includes(search.toLowerCase());
@@ -1107,11 +1110,15 @@ export default function Dashboard() {
         <div className="dash-navbar-inner">
           <Link href="/" className="dash-logo">BUSINESS HUB</Link>
           <div className="dash-user">
-            <div className="dash-user-info">
+            <Link href="/profile" className="dash-user-info" style={{ textDecoration: 'none' }}>
               <div className="dash-user-name">{user.fullName}</div>
               <div className="dash-user-email">{user.email}</div>
-            </div>
-            <div className="dash-avatar">{initials}</div>
+            </Link>
+            <Link href="/profile" className="dash-avatar" aria-label="Open profile" title="Profile">
+              {user.avatar
+                ? <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                : initials}
+            </Link>
             <button className="hamburger-btn" onClick={() => setShowMenu(true)} aria-label="Open menu">
               <span /><span /><span />
             </button>
@@ -1123,11 +1130,12 @@ export default function Dashboard() {
         {/* Welcome Banner */}
         <div className="dash-welcome">
           <div className="dash-welcome-text">
-            <h2>Welcome back, {user.fullName.split(' ')[0]}! 👋</h2>
+            <h2>Welcome back, {user.fullName.split(' ')[0]}</h2>
             <p>{user.email} • {user.country}</p>
             <div style={{ marginTop: 12 }}>
               <span className={`status-badge ${user.activated ? 'status-active' : 'status-inactive'}`}>
-                {user.activated ? '✅ Active, Access valid 1 month' : '⚠️ Inactive, Pay KES 50 to Bid'}
+                <Icon name={user.activated ? 'check' : 'warning'} size={13} />
+                {user.activated ? 'Active, Access valid 1 month' : 'Inactive, Pay KES 50 to Bid'}
               </span>
             </div>
           </div>
@@ -1141,7 +1149,7 @@ export default function Dashboard() {
         {/* Referral Banner */}
         <div className="referral-banner" onClick={() => setShowReferral(true)}>
           <div className="referral-banner-left">
-            <span className="referral-banner-icon">🔗</span>
+            <span className="referral-banner-icon" style={{ color: '#fff', display: 'flex' }}><Icon name="link" size={26} /></span>
             <div>
               <div className="referral-banner-title">Refer Friends &amp; Earn KES 70 Each</div>
               <div className="referral-banner-sub">Share your link • Track referrals • Get paid instantly</div>
@@ -1157,7 +1165,7 @@ export default function Dashboard() {
                 alert('Referral link copied!');
               }}
             >
-              Copy Link →
+              Copy Link
             </button>
           </div>
         </div>
@@ -1165,19 +1173,19 @@ export default function Dashboard() {
         {/* Quick Action Tiles */}
         <div className="quick-actions">
           <button className="quick-action-card" onClick={() => router.push('/premium')}>
-            <span className="quick-action-icon">⭐</span>
+            <span className="quick-action-icon"><Icon name="star" size={26} /></span>
             <span className="quick-action-label">{user?.premium ? 'Renew Premium' : 'Upgrade Premium'}</span>
           </button>
           <button className="quick-action-card" onClick={() => document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' })}>
-            <span className="quick-action-icon">✅</span>
+            <span className="quick-action-icon"><Icon name="check" size={26} /></span>
             <span className="quick-action-label">Awarded Tasks</span>
           </button>
           <button className="quick-action-card quick-action-mpesa" onClick={() => router.push('/withdraw?method=mpesa')}>
-            <span className="quick-action-icon">📲</span>
+            <span className="quick-action-icon"><Icon name="smartphone" size={26} /></span>
             <span className="quick-action-label">Withdraw with M-Pesa</span>
           </button>
           <button className="quick-action-card" onClick={() => setShowTraining(true)}>
-            <span className="quick-action-icon">🎓</span>
+            <span className="quick-action-icon"><Icon name="graduation" size={26} /></span>
             <span className="quick-action-label">Apply for Training</span>
           </button>
         </div>
@@ -1185,13 +1193,13 @@ export default function Dashboard() {
         {/* Stats */}
         <div className="dash-stats">
           {[
-            { icon: '📋', num: (TASKS || []).length,                    label: 'Available Tasks' },
-            { icon: '💼', num: user.activeBids || 0,                     label: 'Active Bids' },
-            { icon: '✅', num: user.completedTasks || 0,                 label: 'Completed Tasks' },
-            { icon: '💰', num: `KES ${(user.balance || 0).toLocaleString()}`, label: 'Total Earned' },
+            { icon: 'clipboard', num: (TASKS || []).length,                    label: 'Available Tasks' },
+            { icon: 'briefcase', num: user.activeBids || 0,                     label: 'Active Bids' },
+            { icon: 'check',     num: user.completedTasks || 0,                 label: 'Completed Tasks' },
+            { icon: 'cash',      num: `KES ${(user.balance || 0).toLocaleString()}`, label: 'Total Earned' },
           ].map(({ icon, num, label }) => (
             <div key={label} className="dash-stat-card">
-              <div className="dash-stat-icon">{icon}</div>
+              <div className="dash-stat-icon"><Icon name={icon} size={26} /></div>
               <div>
                 <div className="dash-stat-num">{num}</div>
                 <div className="dash-stat-label">{label}</div>
@@ -1211,7 +1219,7 @@ export default function Dashboard() {
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             <input
               type="text"
-              placeholder="🔍 Search tasks..."
+              placeholder="Search tasks..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{ flex: 1, minWidth: 200, padding: '10px 16px', border: '1.5px solid var(--gray-light)', borderRadius: 8, fontSize: 14, fontFamily: 'var(--font-body)', color: 'var(--black)', background: 'var(--white)' }}
@@ -1235,7 +1243,9 @@ export default function Dashboard() {
           <div style={{ marginBottom: 16, fontSize: 14, color: 'var(--gray)' }}>
             Showing <strong>{filteredTasks.length}</strong> tasks
             {user.activated && (
-              <span style={{ marginLeft: 10, color: '#111827', fontWeight: 600 }}>📝 Apply with a proposal to unlock a task</span>
+              <span style={{ marginLeft: 10, color: '#111827', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="edit" size={14} /> Apply with a proposal to unlock a task
+              </span>
             )}
           </div>
 
@@ -1267,41 +1277,42 @@ export default function Dashboard() {
                     <div className="task-payment">KES {task.payment.toLocaleString()}</div>
                   </div>
                   {offer && (
-                    <div style={{ display: 'inline-block', background: '#f3f4f6', color: '#374151', fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 999, marginBottom: 6 }}>
-                      🔥 OFFER · No premium needed
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f3f4f6', color: '#111827', fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 999, marginBottom: 6 }}>
+                      <Icon name="star" size={12} /> OFFER · No premium needed
                     </div>
                   )}
                   <div className="task-category">{task.category}</div>
                   <div className="task-title">{task.title}</div>
                   {task.dueDate && (
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#4b5563', margin: '2px 0 6px' }}>
-                      ⏰ Due {task.dueDate}
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#4b5563', margin: '2px 0 6px', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Icon name="clock" size={13} /> Due {task.dueDate}
                     </div>
                   )}
                   {appStatus && (
-                    <div style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, marginBottom: 6,
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, marginBottom: 6,
                       background: appStatus === 'approved' ? '#e5e7eb' : appStatus === 'pending' ? '#f3f4f6' : '#e5e7eb',
                       color:      appStatus === 'approved' ? '#1f2937' : appStatus === 'pending' ? '#374151' : '#1f2937' }}>
-                      {appStatus === 'approved' ? '✅ Proposal approved' : appStatus === 'pending' ? '⏳ Proposal under review' : appStatus === 'correction' ? '✏️ Corrections requested' : '❌ Proposal rejected'}
+                      <Icon name={appStatus === 'approved' ? 'check' : appStatus === 'pending' ? 'clock' : appStatus === 'correction' ? 'edit' : 'x'} size={12} />
+                      {appStatus === 'approved' ? 'Proposal approved' : appStatus === 'pending' ? 'Proposal under review' : appStatus === 'correction' ? 'Corrections requested' : 'Proposal rejected'}
                     </div>
                   )}
                   <div className="task-desc">{task.description}</div>
                   <div className="task-actions">
                     {sub ? (
-                      <div style={{ flex: 1, textAlign: 'center', padding: '10px 12px', borderRadius: 8, fontWeight: 700, fontSize: 14,
-                        background: sub.status === 'approved' ? '#e5e7eb' : '#e5e7eb',
+                      <div style={{ flex: 1, textAlign: 'center', padding: '10px 12px', borderRadius: 8, fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        background: '#e5e7eb',
                         color:      sub.status === 'approved' ? '#1f2937' : '#111827' }}>
-                        {sub.status === 'approved' ? '✅ Already done' : '✅ Already submitted'}
+                        <Icon name="check" size={15} /> {sub.status === 'approved' ? 'Already done' : 'Already submitted'}
                       </div>
                     ) : (
                       <>
-                        <button className="task-view-btn" onClick={() => handleViewTask(task)}>👁️ View / Bid</button>
+                        <button className="task-view-btn" onClick={() => handleViewTask(task)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="eye" size={15} /> View / Bid</button>
                         {offer || appStatus === 'approved' ? (
-                          <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Attach your work & submit">📤 Submit</button>
+                          <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Attach your work & submit" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="upload" size={15} /> Submit</button>
                         ) : appStatus === 'pending' ? (
-                          <button className="task-submit-btn" onClick={() => handleViewTask(task)} style={{ opacity: 0.7 }} title="Awaiting review">⏳ Pending</button>
+                          <button className="task-submit-btn" onClick={() => handleViewTask(task)} style={{ opacity: 0.7, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} title="Awaiting review"><Icon name="clock" size={15} /> Pending</button>
                         ) : (
-                          <button className="task-submit-btn" onClick={() => handleApplyClick(task)} title="Submit a proposal to unlock">📝 Apply</button>
+                          <button className="task-submit-btn" onClick={() => handleApplyClick(task)} title="Submit a proposal to unlock" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="edit" size={15} /> Apply</button>
                         )}
                       </>
                     )}
@@ -1335,6 +1346,7 @@ export default function Dashboard() {
         <HamburgerMenu
           user={user}
           onClose={() => setShowMenu(false)}
+          onProfile={() => router.push('/profile')}
           onUpgrade={() => router.push('/premium')}
           onMpesaWithdraw={() => router.push('/withdraw?method=mpesa')}
           onOtherWithdraw={() => router.push('/withdraw?method=international')}
