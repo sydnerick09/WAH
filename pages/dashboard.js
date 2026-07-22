@@ -16,6 +16,7 @@ import { getCurrentUser, logout, awardQuizBonus } from '../lib/auth';
 import { applyForTask, listMyApplications, applicationsByTask } from '../lib/applications';
 import { TASKS } from '../lib/tasks';
 import Icon from '../components/Icon';
+import EmptyState from '../components/EmptyState';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1005,14 +1006,19 @@ export default function Dashboard() {
   }, [user, router]);
 
   // Submit a proposal; returns { ok, message } so the modal can show feedback.
+  // Network/server failures are caught so the form never hangs.
   async function submitProposal(message, extra) {
     if (!applyTask || !user) return { ok: false, message: 'Something went wrong.' };
-    const res = await applyForTask({ user, task: applyTask, message, extra });
-    if (res.success) {
-      await loadUserApps(user);
-      return { ok: true };
+    try {
+      const res = await applyForTask({ user, task: applyTask, message, extra });
+      if (res.success) {
+        await loadUserApps(user);
+        return { ok: true };
+      }
+      return { ok: false, message: res.message || 'Could not submit your proposal.' };
+    } catch {
+      return { ok: false, message: 'Network error. Please check your connection and try again.' };
     }
-    return { ok: false, message: res.message || 'Could not submit your proposal.' };
   }
 
   // Jump straight to a task's modal from the notices banner.
@@ -1233,6 +1239,15 @@ export default function Dashboard() {
             )}
           </div>
 
+          {filteredTasks.length === 0 ? (
+            <EmptyState
+              icon="search"
+              title="No tasks found"
+              message={(search || filter !== 'All')
+                ? 'No tasks match your search or filter. Try clearing them to see everything.'
+                : 'There are no tasks to show right now. Please check back soon.'}
+            />
+          ) : (
           <div className="tasks-grid">
             {filteredTasks.map(task => {
               const sub   = userSubs[String(task.id)];
@@ -1295,6 +1310,7 @@ export default function Dashboard() {
               );
             })}
           </div>
+          )}
         </div>
       </main>
 
