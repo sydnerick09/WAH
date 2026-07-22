@@ -210,6 +210,43 @@ async function logAction(db, { action, entity, entityId, detail }) {
   } catch (_) { /* audit is best-effort */ }
 }
 
+// ── Rate limiting (Supabase-backed fixed window; no external service) ─────────
+// Fails OPEN: if the `rate_limits` table is missing or any query errors, we
+// never block, so this can't lock legitimate users out.
+function clientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  return req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
+}
+function tooManyMsg(retryAfter) {
+  const mins = Math.max(1, Math.ceil((retryAfter || 60) / 60));
+  return `Too many attempts. Please try again in about ${mins} minute${mins === 1 ? '' : 's'}.`;
+}
+async function rlCheck(db, bucket, limit, windowMs) {
+  try {
+    const { data: row } = await db.from('rate_limits').select('count,window_start').eq('bucket', bucket).maybeSingle();
+    if (!row) return { blocked: false };
+    const elapsed = Date.now() - new Date(row.window_start).getTime();
+    if (elapsed > windowMs) return { blocked: false };
+    if (row.count >= limit) return { blocked: true, retryAfter: Math.ceil((windowMs - elapsed) / 1000) };
+    return { blocked: false };
+  } catch (_) { return { blocked: false }; }
+}
+async function rlHit(db, bucket, windowMs) {
+  try {
+    const now = Date.now();
+    const { data: row } = await db.from('rate_limits').select('count,window_start').eq('bucket', bucket).maybeSingle();
+    if (!row || now - new Date(row.window_start).getTime() > windowMs) {
+      await db.from('rate_limits').upsert({ bucket, count: 1, window_start: new Date(now).toISOString() });
+    } else {
+      await db.from('rate_limits').update({ count: row.count + 1 }).eq('bucket', bucket);
+    }
+  } catch (_) { /* best-effort */ }
+}
+async function rlClear(db, bucket) {
+  try { await db.from('rate_limits').delete().eq('bucket', bucket); } catch (_) {}
+}
+
 // Ops that act on a single user's own data. For these we IGNORE any user id in
 // the request body and derive the authenticated user id from the signed session
 // token, so a caller can never read or modify another user's data.
@@ -241,6 +278,14 @@ export default async function handler(req, res) {
     switch (op) {
 
       case 'registerUser': {
+        // Rate-limit mass sign-ups per IP (lenient — abuse only). Fails open.
+        {
+          const bucket = `register:${clientIp(req)}`;
+          const chk = await rlCheck(db, bucket, 30, 60 * 60 * 1000); // 30 / hour
+          if (chk.blocked) return res.json({ success: false, message: tooManyMsg(chk.retryAfter) });
+          await rlHit(db, bucket, 60 * 60 * 1000);
+        }
+
         const { activated, premium, premiumPaidAt, balance,
                 referralCount, referredBy } = p;
 
@@ -323,16 +368,26 @@ export default async function handler(req, res) {
         const password = String(p.password ?? '');
         if (!isEmail(email) || !password) return res.json({ success: false, message: 'Invalid email or password.' });
 
+        // Brute-force protection per account: block after too many FAILED
+        // attempts in the window (keyed by email, not IP, to avoid punishing
+        // users behind shared/carrier IPs). Successful logins reset the counter.
+        const WINDOW = 15 * 60 * 1000;
+        const rlBucket = `login:${email}`;
+        const chk = await rlCheck(db, rlBucket, 10, WINDOW); // 10 failures / 15 min
+        if (chk.blocked) return res.json({ success: false, message: tooManyMsg(chk.retryAfter) });
+
         // Look up by email (case-insensitive), then verify the password against
         // its hash. Never query by password directly.
         const { data: rows } = await db.from('users').select('*').ilike('email', email).limit(5);
         const data = (rows || []).find(r => String(r.email).toLowerCase() === email);
-        if (!data) return res.json({ success: false, message: 'Invalid email or password.' });
+        if (!data) { await rlHit(db, rlBucket, WINDOW); return res.json({ success: false, message: 'Invalid email or password.' }); }
 
         const { ok, legacy } = verifyPassword(password, data.password);
-        if (!ok) return res.json({ success: false, message: 'Invalid email or password.' });
+        if (!ok) { await rlHit(db, rlBucket, WINDOW); return res.json({ success: false, message: 'Invalid email or password.' }); }
 
-        // Upgrade any legacy plaintext password to a hash on successful login.
+        // Success — clear the failure counter, then upgrade any legacy plaintext
+        // password to a hash.
+        await rlClear(db, rlBucket);
         if (legacy) {
           try { await db.from('users').update({ password: hashPassword(password) }).eq('id', data.id); } catch (_) {}
         }

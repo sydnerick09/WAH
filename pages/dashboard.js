@@ -42,8 +42,8 @@ function getOrGenerateWithdrawals() {
     if (stored) return JSON.parse(stored);
   } catch (_) {}
 
-  const kenyaSrc   = { flag: '🇰🇪', country: 'Kenya',   prefixes: ['+25471','+25472','+25473','+25474','+25475','+25476','+25477','+25478','+25479','+25470'] };
-  const jamaicaSrc = { flag: '🇯🇲', country: 'Jamaica', prefixes: ['+1876','+1658'] };
+  const kenyaSrc   = { country: 'Kenya',   prefixes: ['+25471','+25472','+25473','+25474','+25475','+25476','+25477','+25478','+25479','+25470'] };
+  const jamaicaSrc = { country: 'Jamaica', prefixes: ['+1876','+1658'] };
 
   const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const mask = p => `${p}*****${String(rand(10, 99))}`;
@@ -52,11 +52,11 @@ function getOrGenerateWithdrawals() {
   const records = [
     ...Array.from({ length: 63 }, () => {
       const prefix = kenyaSrc.prefixes[rand(0, kenyaSrc.prefixes.length - 1)];
-      return { flag: kenyaSrc.flag, country: kenyaSrc.country, phone: mask(prefix), amount: rand(2100, 9300) };
+      return { country: kenyaSrc.country, phone: mask(prefix), amount: rand(2100, 9300) };
     }),
     ...Array.from({ length: 7 }, () => {
       const prefix = jamaicaSrc.prefixes[rand(0, jamaicaSrc.prefixes.length - 1)];
-      return { flag: jamaicaSrc.flag, country: jamaicaSrc.country, phone: mask(prefix), amount: rand(2100, 7200) };
+      return { country: jamaicaSrc.country, phone: mask(prefix), amount: rand(2100, 7200) };
     }),
   ];
 
@@ -70,7 +70,7 @@ function getOrGenerateWithdrawals() {
   // in the same +254 style as the others; seeded frequently so it recurs in the
   // ticker and the rotating list for strong social proof.
   const featured = {
-    flag: '🇰🇪', country: 'Kenya', name: 'Erick Omondi Ouma',
+    country: 'Kenya', name: 'Erick Omondi Ouma',
     phone: '+25411*****12', amount: 6708, featured: true,
   };
   const withFeatured = [];
@@ -93,11 +93,11 @@ function getOrGeneratePending() {
 
   const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const people = [
-    { flag: '🇰🇪', country: 'Kenya',    name: 'Brian K.'   }, { flag: '🇰🇪', country: 'Kenya',    name: 'Mercy A.'  },
-    { flag: '🇰🇪', country: 'Kenya',    name: 'Dennis O.'  }, { flag: '🇰🇪', country: 'Kenya',    name: 'Faith W.'  },
-    { flag: '🇰🇪', country: 'Kenya',    name: 'Kevin M.'   }, { flag: '🇳🇬', country: 'Nigeria',  name: 'Chidi E.'  },
-    { flag: '🇯🇲', country: 'Jamaica',  name: 'Andre C.'   }, { flag: '🇬🇭', country: 'Ghana',    name: 'Kwame A.'  },
-    { flag: '🇺🇬', country: 'Uganda',   name: 'Sarah N.'   }, { flag: '🇰🇪', country: 'Kenya',    name: 'Purity W.' },
+    { country: 'Kenya',    name: 'Brian K.'   }, { country: 'Kenya',    name: 'Mercy A.'  },
+    { country: 'Kenya',    name: 'Dennis O.'  }, { country: 'Kenya',    name: 'Faith W.'  },
+    { country: 'Kenya',    name: 'Kevin M.'   }, { country: 'Nigeria',  name: 'Chidi E.'  },
+    { country: 'Jamaica',  name: 'Andre C.'   }, { country: 'Ghana',    name: 'Kwame A.'  },
+    { country: 'Uganda',   name: 'Sarah N.'   }, { country: 'Kenya',    name: 'Purity W.' },
   ];
 
   const records = people.map(p => ({
@@ -113,21 +113,21 @@ function getOrGeneratePending() {
 
 // Member reviews, includes the two client-supplied testimonials verbatim.
 const REVIEWS = [
-  { name: 'James Otieno',      country: 'Nairobi, Kenya',    flag: '🇰🇪', rating: 4,
+  { name: 'James Otieno',      country: 'Nairobi, Kenya',    rating: 4,
     text: 'I tried withdrawing once, but it failed, but I tried twice, then it went through.' },
-  { name: 'Wanjiku Maina',     country: 'Nakuru, Kenya',     flag: '🇰🇪', rating: 5,
+  { name: 'Wanjiku Maina',     country: 'Nakuru, Kenya',     rating: 5,
     text: 'Guys, you need to have correct details before you withdraw so that you avoid the inconveniences of paying the withdrawal fee twice or thrice.' },
-  { name: 'Grace Achieng',     country: 'Kisumu, Kenya',     flag: '🇰🇪', rating: 5,
+  { name: 'Grace Achieng',     country: 'Kisumu, Kenya',     rating: 5,
     text: 'The M-Pesa payout hit my phone in under two minutes. Double-checking my number first made it smooth. Business Hub is legit.' },
-  { name: 'Chinedu Okafor',    country: 'Lagos, Nigeria',    flag: '🇳🇬', rating: 5,
+  { name: 'Chinedu Okafor',    country: 'Lagos, Nigeria',    rating: 5,
     text: 'I was skeptical at first, but after my very first successful withdrawal I upgraded to premium. Worth every naira.' },
-  { name: 'Ama Mensah',        country: 'Accra, Ghana',      flag: '🇬🇭', rating: 4,
+  { name: 'Ama Mensah',        country: 'Accra, Ghana',      rating: 4,
     text: 'Accuracy is everything here, confirm your account details and the payment goes through the first time, no repeat fees.' },
-  { name: 'Andre Campbell',    country: 'Kingston, Jamaica', flag: '🇯🇲', rating: 5,
+  { name: 'Andre Campbell',    country: 'Kingston, Jamaica', rating: 5,
     text: 'From Kingston with love. Once my bank details were correct, the transfer came through clean. Professional platform.' },
-  { name: 'Sarah Nakato',      country: 'Kampala, Uganda',   flag: '🇺🇬', rating: 5,
+  { name: 'Sarah Nakato',      country: 'Kampala, Uganda',   rating: 5,
     text: 'Consistent tasks and honest payouts. I now earn a steady side income every single week.' },
-  { name: 'Brian Kiptoo',      country: 'Eldoret, Kenya',    flag: '🇰🇪', rating: 4,
+  { name: 'Brian Kiptoo',      country: 'Eldoret, Kenya',    rating: 4,
     text: 'Support helped me fix a failed withdrawal within minutes. Enter the right details and you will have zero problems.' },
 ];
 
@@ -490,18 +490,18 @@ function QuizModal({ user, onComplete }) {
 
               <button
                 className="pay-btn"
-                style={{ background: 'linear-gradient(135deg, #374151, #374151)', marginTop: 22, opacity: selected == null ? 0.5 : 1 }}
+                style={{ background: '#000000', marginTop: 22, opacity: selected == null ? 0.5 : 1 }}
                 onClick={handleNext}
                 disabled={selected == null || saving}
               >
-                {saving ? <><span className="spinner" /> Saving…</> : isLast ? '🎉 Finish & Claim Reward' : 'Next Question →'}
+                {saving ? <><span className="spinner" /> Saving…</> : isLast ? 'Finish & Claim Reward' : 'Next Question'}
               </button>
             </>
           )}
 
           {isResult && result && (
             <div style={{ textAlign: 'center', padding: '10px 0' }}>
-              <div style={{ fontSize: 56, marginBottom: 8 }}>{result.earned === 50 ? '🎉' : result.earned > 0 ? '🎊' : '📝'}</div>
+              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#000' }}><Icon name={result.earned > 0 ? 'star' : 'edit'} size={52} /></div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 800, color: '#374151', marginBottom: 4 }}>
                 KES {result.earned}
               </div>
@@ -510,17 +510,17 @@ function QuizModal({ user, onComplete }) {
               </div>
               <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 16 }}>
                 {result.earned === 50
-                  ? 'Perfect score! Your full KES 50 joining gift has been added to your balance, it fully covers your account activation. 🎁'
+                  ? 'Perfect score! Your full KES 50 joining gift has been added to your balance, it fully covers your account activation.'
                   : result.earned > 0
                   ? `KES ${result.earned} has been added to your balance. When you activate, you can top up the remaining KES ${50 - result.earned} to reach the KES 50 activation fee.`
                   : 'No reward earned this time. You will need to pay the KES 50 activation fee when you choose to start bidding on tasks.'}
               </div>
               <button
                 className="pay-btn"
-                style={{ background: 'linear-gradient(135deg, #374151, #374151)', marginTop: 20 }}
+                style={{ background: '#000000', marginTop: 20 }}
                 onClick={() => onComplete(doneUser)}
               >
-                Continue to Dashboard →
+                Continue to Dashboard
               </button>
             </div>
           )}
@@ -555,25 +555,25 @@ function TrainingModal({ user, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #374151, #374151)' }}>
+        <div className="pay-modal-header" style={{ background: '#000000' }}>
           <div>
-            <div className="pay-modal-title">🎓 TRAINING</div>
+            <div className="pay-modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="graduation" size={20} /> TRAINING</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Apply for professional training</div>
           </div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>×</button>
         </div>
         <div className="pay-modal-body">
           <div className="premium-features">
             {[
-              ['📚', 'Access to all training materials'],
-              ['🎯', 'Hands-on practical assignments'],
-              ['🏆', 'Certificate of completion'],
-              ['👨‍🏫', 'Expert instructor support'],
-              ['💼', 'Job placement assistance'],
-              ['♾️', 'Lifetime access to course content'],
+              ['folder',     'Access to all training materials'],
+              ['check',      'Hands-on practical assignments'],
+              ['star',       'Certificate of completion'],
+              ['user',       'Expert instructor support'],
+              ['briefcase',  'Job placement assistance'],
+              ['refresh',    'Lifetime access to course content'],
             ].map(([icon, text]) => (
               <div key={text} className="premium-feature-item">
-                <span>{icon}</span><span>{text}</span>
+                <span style={{ display: 'flex' }}><Icon name={icon} size={18} /></span><span>{text}</span>
               </div>
             ))}
           </div>
@@ -584,10 +584,10 @@ function TrainingModal({ user, onClose }) {
           </div>
           <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
           <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
-          <button className="pay-btn" style={{ background: 'linear-gradient(135deg, #374151, #374151)' }} onClick={handleTrainingPay} disabled={loading}>
-            {loading ? <><span className="spinner" /> Processing...</> : '🎓 Pay & Apply Now'}
+          <button className="pay-btn" style={{ background: '#000000' }} onClick={handleTrainingPay} disabled={loading}>
+            {loading ? <><span className="spinner" /> Processing...</> : <><Icon name="graduation" size={16} /> Pay & Apply Now</>}
           </button>
-          <div className="pay-secure">🔐 Secured by Paystack • M-Pesa supported</div>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • M-Pesa supported</div>
         </div>
       </div>
     </div>
@@ -612,12 +612,12 @@ function ReferralModal({ user, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="pay-modal-header" style={{ background: 'linear-gradient(135deg, #374151, #374151)' }}>
+        <div className="pay-modal-header" style={{ background: '#000000' }}>
           <div>
-            <div className="pay-modal-title">🔗 Your Referral Link</div>
+            <div className="pay-modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="link" size={20} /> Your Referral Link</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Earn KES 132 per referral</div>
           </div>
-          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)' }}>×</button>
+          <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>×</button>
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb' }}>
@@ -636,7 +636,7 @@ function ReferralModal({ user, onClose }) {
                 onClick={copyLink}
                 style={{ padding: '0 20px', background: copied ? '#374151' : 'var(--green)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, border: 'none', cursor: 'pointer', transition: 'background 0.2s', whiteSpace: 'nowrap' }}
               >
-                {copied ? '✓ Copied!' : 'Copy'}
+                {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
           </div>
@@ -656,12 +656,12 @@ function ReferralModal({ user, onClose }) {
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
             {[
-              { label: '📱 WhatsApp', color: '#4b5563', url: `https://wa.me/?text=Join%20Business%20Hub%20and%20earn%20online!%20${encodeURIComponent(referralLink)}` },
-              { label: '✉️ Email',    color: '#4b5563', url: `mailto:?subject=Join%20Business%20Hub&body=Hey!%20Join%20me%20on%20Business%20Hub.%20Use%20my%20link:%20${encodeURIComponent(referralLink)}` },
+              { label: 'WhatsApp', icon: 'share', url: `https://wa.me/?text=Join%20Business%20Hub%20and%20earn%20online!%20${encodeURIComponent(referralLink)}` },
+              { label: 'Email',    icon: 'mail',  url: `mailto:?subject=Join%20Business%20Hub&body=Hey!%20Join%20me%20on%20Business%20Hub.%20Use%20my%20link:%20${encodeURIComponent(referralLink)}` },
             ].map(btn => (
               <a key={btn.label} href={user?.activated ? btn.url : '#'} target="_blank" rel="noopener noreferrer"
-                style={{ flex: 1, padding: 12, background: btn.color, color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, textAlign: 'center', display: 'block', opacity: user?.activated ? 1 : 0.5, pointerEvents: user?.activated ? 'auto' : 'none' }}>
-                {btn.label}
+                style={{ flex: 1, padding: 12, background: '#000000', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, textAlign: 'center', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: user?.activated ? 1 : 0.5, pointerEvents: user?.activated ? 'auto' : 'none' }}>
+                <Icon name={btn.icon} size={16} /> {btn.label}
               </a>
             ))}
           </div>
@@ -677,6 +677,19 @@ function Stars({ n }) {
     <span style={{ color: '#9ca3af', fontSize: 12, letterSpacing: 1 }}>
       {'★'.repeat(n)}<span style={{ color: '#E5E7EB' }}>{'★'.repeat(5 - n)}</span>
     </span>
+  );
+}
+
+// Monochrome country badge (replaces flag emojis in the social-proof feed).
+function CountryBadge({ country, size = 20 }) {
+  const code = String(country || '').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || '··';
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: size, height: size, borderRadius: '50%',
+      background: '#111827', color: '#fff',
+      fontSize: Math.round(size * 0.42), fontWeight: 700, letterSpacing: 0.3, flexShrink: 0,
+    }}>{code}</span>
   );
 }
 
@@ -705,9 +718,9 @@ function ActivityFeed({ withdrawals, pending }) {
   const review = REVIEWS[reviewIdx % REVIEWS.length];
 
   const TABS = [
-    { id: 'live',    label: 'Live',    icon: '💸' },
-    { id: 'pending', label: 'Pending', icon: '⏳' },
-    { id: 'reviews', label: 'Reviews', icon: '⭐' },
+    { id: 'live',    label: 'Live',    icon: 'cash' },
+    { id: 'pending', label: 'Pending', icon: 'clock' },
+    { id: 'reviews', label: 'Reviews', icon: 'star' },
   ];
 
   const row = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 10, background: '#F9FAFB', border: '1px solid #F1F5F9' };
@@ -733,7 +746,7 @@ function ActivityFeed({ withdrawals, pending }) {
                 boxShadow: tab === t.id ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
               }}
             >
-              <span>{t.icon}</span>{t.label}
+              <Icon name={t.icon} size={13} />{t.label}
             </button>
           ))}
         </div>
@@ -745,10 +758,10 @@ function ActivityFeed({ withdrawals, pending }) {
           <div className="ticker-track">
             {[...withdrawals.slice(0, 20), ...withdrawals.slice(0, 20)].map((item, i) => (
               <div key={i} className="ticker-pill">
-                <span className="ticker-flag">{item.flag}</span>
+                <CountryBadge country={item.country} size={16} />
                 <span className="ticker-phone">{item.name || item.phone}</span>
                 <span className="ticker-amount">KES {item.amount.toLocaleString()}</span>
-                <span className="ticker-success">✓</span>
+                <span className="ticker-success" style={{ display: 'inline-flex' }}><Icon name="check" size={11} /></span>
               </div>
             ))}
           </div>
@@ -762,7 +775,7 @@ function ActivityFeed({ withdrawals, pending }) {
             {liveShown.map((item, i) => (
               <div key={`${item.phone}-${i}`} style={item.featured ? { ...row, background: '#f9fafb', border: '1px solid #e5e7eb' } : row}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                  <span style={{ fontSize: 18 }}>{item.flag}</span>
+                  <CountryBadge country={item.country} size={28} />
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{item.name || item.phone}</div>
                     <div style={{ fontSize: 11, color: '#9CA3AF' }}>{item.name ? `${item.phone} · ${item.country}` : item.country}</div>
@@ -770,7 +783,7 @@ function ActivityFeed({ withdrawals, pending }) {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: 800, fontSize: 13, color: '#374151' }}>KES {item.amount.toLocaleString()}</div>
-                  <div style={{ fontSize: 10.5, color: '#374151', fontWeight: 600 }}>✓ Successful</div>
+                  <div style={{ fontSize: 10.5, color: '#374151', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}><Icon name="check" size={11} /> Successful</div>
                 </div>
               </div>
             ))}
@@ -783,7 +796,7 @@ function ActivityFeed({ withdrawals, pending }) {
               <div key={i} style={{ ...row, flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                    <span style={{ fontSize: 18 }}>{p.flag}</span>
+                    <CountryBadge country={p.country} size={28} />
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{p.name}</div>
                       <div style={{ fontSize: 11, color: '#9CA3AF' }}>{p.country}</div>
@@ -791,11 +804,11 @@ function ActivityFeed({ withdrawals, pending }) {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 800, fontSize: 13, color: '#111827' }}>KES {p.amount.toLocaleString()}</div>
-                    <div style={{ fontSize: 10.5, color: '#6b7280', fontWeight: 700 }}>⏳ Processing • ~{p.etaMin} min</div>
+                    <div style={{ fontSize: 10.5, color: '#6b7280', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}><Icon name="clock" size={11} /> Processing • ~{p.etaMin} min</div>
                   </div>
                 </div>
                 <div style={{ height: 5, borderRadius: 3, background: '#e5e7eb', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${p.progress}%`, background: 'linear-gradient(90deg,#9ca3af,#6b7280)' }} />
+                  <div style={{ height: '100%', width: `${p.progress}%`, background: '#111827' }} />
                 </div>
               </div>
             ))}
@@ -810,7 +823,7 @@ function ActivityFeed({ withdrawals, pending }) {
                   {review.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                 </span>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{review.name} <span style={{ fontWeight: 400 }}>{review.flag}</span></div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>{review.name} <CountryBadge country={review.country} size={15} /></div>
                   <div style={{ fontSize: 11, color: '#9CA3AF' }}>{review.country}</div>
                 </div>
               </div>
@@ -828,7 +841,7 @@ function ActivityFeed({ withdrawals, pending }) {
 
       {/* Footer */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '1px solid #F1F5F9', fontSize: 11.5, color: '#9CA3AF' }}>
-        <span>🔒 All payouts verified & secured</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="lock" size={12} /> All payouts verified & secured</span>
         <span>
           {tab === 'pending'
             ? `${pending.length} processing now`
@@ -1081,7 +1094,7 @@ export default function Dashboard() {
     return (
       <div style={{ minHeight: '100vh', background: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Manrope, sans-serif', padding: 24 }}>
         <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '48px 36px', maxWidth: 440, width: '100%', textAlign: 'center' }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>🚫</div>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="lock" size={52} /></div>
           <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 22, color: '#1f2937', marginBottom: 8 }}>
             Account Suspended
           </h2>

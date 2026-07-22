@@ -94,3 +94,13 @@ create index if not exists submissions_created_idx      on submissions (created_
 create index if not exists withdrawals_user_idx         on withdrawal_requests (user_id);
 create index if not exists withdrawals_status_idx       on withdrawal_requests (status);
 create index if not exists tasks_created_idx            on tasks (created_at desc);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Rate limiting (fixed-window counters for login/register). Fails open in code,
+-- so this is optional but recommended for brute-force protection.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists rate_limits (
+  bucket       text primary key,
+  count        integer not null default 0,
+  window_start timestamptz not null default now()
+);
