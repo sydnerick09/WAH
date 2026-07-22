@@ -137,8 +137,12 @@ function UsersTab({ users, secret, onRefresh }) {
       fullName: getEdit(user.id, 'fullName', user.fullName),
       email:    getEdit(user.id, 'email',    user.email),
       phone:    getEdit(user.id, 'phone',    user.phone || ''),
-      password: getEdit(user.id, 'password', user.password || ''),
     };
+
+    // Only send a password when the admin actually typed a new one (write-only
+    // reset; stored hashes are never fetched or displayed).
+    const newPassword = getEdit(user.id, 'password', '').trim();
+    if (newPassword) params.password = newPassword;
 
     if (premiumDays !== null && premium) {
       params.premiumPaidAt = Date.now() - (ONE_MONTH_MS - premiumDays * 24 * 60 * 60 * 1000);
@@ -277,14 +281,16 @@ function UsersTab({ users, secret, onRefresh }) {
                       onChange={e => setEdit(user.id, 'phone', e.target.value)}
                       placeholder="Phone"
                     />
-                    <div style={{ fontSize: 11, color: '#64748B', margin: '6px 0 2px' }}>🔑 Password</div>
+                    <div style={{ fontSize: 11, color: '#64748B', margin: '6px 0 2px' }}>🔑 Reset password</div>
                     <input
+                      type="password"
+                      autoComplete="new-password"
                       style={{ ...styles.numInput, width: '100%', fontFamily: 'monospace', color: '#111827', fontWeight: 600 }}
-                      value={getEdit(user.id, 'password', user.password || '')}
+                      value={getEdit(user.id, 'password', '')}
                       onChange={e => setEdit(user.id, 'password', e.target.value)}
-                      placeholder="(no password on file)"
+                      placeholder="Leave blank to keep"
                     />
-                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Type a new password here, then Save to change it.</div>
+                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Passwords are hashed and can&apos;t be viewed. Type a new one to reset it.</div>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{user.country || '—'}</div>
                     {isSusp && user.suspendReason && (
                       <div style={{ fontSize: 11, color: '#1f2937', marginTop: 2 }}>Reason: {user.suspendReason}</div>

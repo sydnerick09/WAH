@@ -3,6 +3,7 @@ import { TASKS } from '../../lib/tasks';
 import { verifyUnsubToken } from '../../lib/unsubToken';
 import { sendApprovalEmail } from '../../lib/approvalEmail';
 import { isEmail, isPhone, nonEmpty, isPositiveNumber, clean } from '../../lib/validate';
+import { hashPassword, verifyPassword } from '../../lib/password';
 
 function getAdmin() {
   return createClient(
@@ -14,10 +15,10 @@ function getAdmin() {
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
-// `includePassword` is only ever true for the admin-gated listUsers op. Every
-// client-facing response omits the password so one user can never read another
-// user's credentials (defence in depth over the plaintext-storage limitation).
-function norm(row, includePassword = false) {
+// The password hash is never returned in any response (not even to the admin
+// panel) so it can't leak or be accidentally re-submitted. Admins reset
+// passwords via a write-only "new password" field.
+function norm(row) {
   if (!row) return null;
   const subs = row.task_submissions ?? {};
 
@@ -42,7 +43,7 @@ function norm(row, includePassword = false) {
     email:            row.email            ?? '',
     phone:            row.phone            ?? '',
     country:          row.country          ?? '',
-    password:         includePassword ? (row.password ?? '') : '',
+    password:         '',
     activated,
     activatedAt:      actAt,
     activatedExpiresAt: actExpires,
@@ -231,7 +232,7 @@ export default async function handler(req, res) {
 
         const id = Date.now().toString();
         const { data, error } = await db.from('users').insert({
-          id, full_name: fullName, email, phone, country, password,
+          id, full_name: fullName, email, phone, country, password: hashPassword(password),
           activated, premium, premium_paid_at: premiumPaidAt,
           balance, referral_count: referralCount, referred_by: referredBy,
           completed_tasks: 0, active_bids: 0, task_submissions: {},
@@ -287,10 +288,23 @@ export default async function handler(req, res) {
       }
 
       case 'loginUser': {
-        const { email, password } = p;
-        const { data } = await db.from('users')
-          .select('*').eq('email', email).eq('password', password).maybeSingle();
+        const email    = clean(p.email, 120).toLowerCase();
+        const password = String(p.password ?? '');
+        if (!isEmail(email) || !password) return res.json({ success: false, message: 'Invalid email or password.' });
+
+        // Look up by email (case-insensitive), then verify the password against
+        // its hash. Never query by password directly.
+        const { data: rows } = await db.from('users').select('*').ilike('email', email).limit(5);
+        const data = (rows || []).find(r => String(r.email).toLowerCase() === email);
         if (!data) return res.json({ success: false, message: 'Invalid email or password.' });
+
+        const { ok, legacy } = verifyPassword(password, data.password);
+        if (!ok) return res.json({ success: false, message: 'Invalid email or password.' });
+
+        // Upgrade any legacy plaintext password to a hash on successful login.
+        if (legacy) {
+          try { await db.from('users').update({ password: hashPassword(password) }).eq('id', data.id); } catch (_) {}
+        }
         return res.json({ success: true, user: norm(data) });
       }
 
@@ -501,7 +515,7 @@ export default async function handler(req, res) {
         const { data: rows, error: listErr } = await db.from('users')
           .select('*').order('created_at', { ascending: false });
         if (listErr) return res.json({ data: [], error: listErr.message });
-        return res.json({ data: (rows || []).map(r => norm(r, true)) });
+        return res.json({ data: (rows || []).map(norm) });
       }
 
       case 'adminUpdateUser': {
@@ -517,7 +531,7 @@ export default async function handler(req, res) {
         if (p.fullName !== undefined && p.fullName.trim()) updates.full_name = p.fullName.trim();
         if (p.email    !== undefined && p.email.trim())    updates.email     = p.email.trim();
         if (p.phone    !== undefined)                      updates.phone     = p.phone.trim();
-        if (p.password !== undefined && String(p.password).trim()) updates.password = String(p.password);
+        if (p.password !== undefined && String(p.password).trim()) updates.password = hashPassword(String(p.password).trim());
 
         if (clearActivation || activatedAt !== undefined || p.suspended !== undefined) {
           const { data: cur } = await db.from('users')
