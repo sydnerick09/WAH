@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getCurrentUser } from '../lib/auth';
+import StatsPanel from '../components/StatsPanel';
 
 const HOW_ITEMS = [
   {
@@ -293,6 +294,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Community statistics — auto-growing 20% every 24h */}
+      <StatsPanel />
 
       {/* Quick Nav Buttons */}
       <section style={{ background: 'var(--blue)', padding: '0' }}>
