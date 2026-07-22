@@ -14,7 +14,10 @@ function getAdmin() {
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
-function norm(row) {
+// `includePassword` is only ever true for the admin-gated listUsers op. Every
+// client-facing response omits the password so one user can never read another
+// user's credentials (defence in depth over the plaintext-storage limitation).
+function norm(row, includePassword = false) {
   if (!row) return null;
   const subs = row.task_submissions ?? {};
 
@@ -39,7 +42,7 @@ function norm(row) {
     email:            row.email            ?? '',
     phone:            row.phone            ?? '',
     country:          row.country          ?? '',
-    password:         row.password         ?? '',
+    password:         includePassword ? (row.password ?? '') : '',
     activated,
     activatedAt:      actAt,
     activatedExpiresAt: actExpires,
@@ -498,7 +501,7 @@ export default async function handler(req, res) {
         const { data: rows, error: listErr } = await db.from('users')
           .select('*').order('created_at', { ascending: false });
         if (listErr) return res.json({ data: [], error: listErr.message });
-        return res.json({ data: (rows || []).map(norm) });
+        return res.json({ data: (rows || []).map(r => norm(r, true)) });
       }
 
       case 'adminUpdateUser': {

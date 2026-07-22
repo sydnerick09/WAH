@@ -82,3 +82,15 @@ create index if not exists admin_actions_created_idx on admin_actions (created_a
 
 -- Email opt-out. When true, the user has unsubscribed from all account emails.
 alter table users add column if not exists unsubscribed boolean default false;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Performance indexes on high-traffic / frequently-queried columns.
+-- Safe to re-run.
+-- ─────────────────────────────────────────────────────────────────────────────
+create index if not exists users_email_idx            on users (lower(email));
+create index if not exists users_referred_by_idx       on users (referred_by);
+create index if not exists submissions_user_idx        on submissions (user_id);
+create index if not exists submissions_created_idx      on submissions (created_at desc);
+create index if not exists withdrawals_user_idx         on withdrawal_requests (user_id);
+create index if not exists withdrawals_status_idx       on withdrawal_requests (status);
+create index if not exists tasks_created_idx            on tasks (created_at desc);
