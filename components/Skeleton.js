@@ -97,6 +97,34 @@ export function DashboardSkeleton() {
   );
 }
 
+// Flow-page skeleton (mirrors FlowShell: dark header bar + a form column).
+// `rows` = number of input-field placeholders. Used by premium/activate/submit/withdraw.
+export function FlowSkeleton({ rows = 3, maxWidth = 560 }) {
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--white-off)' }}>
+      <header style={{ background: '#000', padding: '16px 20px' }}>
+        <div style={{ maxWidth, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <Skeleton className="on-dark" w={62} h={34} r={10} />
+          <div style={{ flex: 1 }}>
+            <Skeleton className="on-dark" w={150} h={16} r={6} style={{ marginBottom: 6 }} />
+            <Skeleton className="on-dark" w={210} h={11} r={5} />
+          </div>
+        </div>
+      </header>
+      <main style={{ maxWidth, margin: '0 auto', padding: '24px 20px 48px' }}>
+        <Skeleton w="100%" h={90} r={12} style={{ marginBottom: 22 }} />
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} style={{ marginBottom: 18 }}>
+            <Skeleton w={120} h={11} r={4} style={{ marginBottom: 8 }} />
+            <Skeleton w="100%" h={46} r={10} />
+          </div>
+        ))}
+        <Skeleton w="100%" h={50} r={50} style={{ marginTop: 8 }} />
+      </main>
+    </div>
+  );
+}
+
 // Profile page skeleton (header + centered avatar + info cards).
 export function ProfileSkeleton() {
   return (

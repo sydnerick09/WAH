@@ -948,12 +948,16 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 .stat-card-label { font-family: var(--font-utility); font-size: 13px; font-weight: 600; color: var(--gray); margin-top: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   SKELETON LOADING (YouTube-style monochrome shimmer)
+   SKELETON LOADING (unified, subtle monochrome shimmer)
+   One shared primitive drives every page's skeleton — same colour, radius and
+   animation everywhere. Faded neutral fill + a slow, soft sweep so it blends
+   into the black & white theme rather than drawing attention.
    ══════════════════════════════════════════════════════════════════════════════ */
 .skeleton {
   position: relative;
-  display: inline-block;
-  background: #e6e6ea;
+  display: block;
+  background: #ececef;
+  opacity: 0.7;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -961,10 +965,15 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   content: '';
   position: absolute; inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent);
-  animation: skeletonSweep 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: skeletonSweep 2.2s ease-in-out infinite;
 }
 @keyframes skeletonSweep { 100% { transform: translateX(100%); } }
+
+/* Variant for skeletons sitting on a dark surface (e.g. flow-page headers) */
+.skeleton.on-dark { background: rgba(255,255,255,0.14); opacity: 1; }
+.skeleton.on-dark::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); }
+
 .skeleton-card { pointer-events: none; }
 .skeleton-row  { display: flex; align-items: center; gap: 10px; }
 

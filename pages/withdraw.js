@@ -7,6 +7,7 @@ import { useUser } from '../lib/useUser';
 import { sendNotify } from '../lib/notify';
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
+import { FlowSkeleton } from '../components/Skeleton';
 
 // Small monochrome country-code badge (replaces flag emojis in the bank picker).
 function CodeBadge({ code, size = 20 }) {
@@ -706,9 +707,7 @@ export default function WithdrawPage() {
   const stepQ  = router.query.step;
 
   if (!ready || !user) {
-    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white-off)' }}>
-      <div className="spinner" style={{ width: 40, height: 40, borderTopColor: 'var(--green)', borderColor: 'var(--gray-light)', borderWidth: 3 }} />
-    </div>;
+    return <FlowSkeleton rows={3} />;
   }
 
   if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'fee'} />;

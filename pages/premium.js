@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
+import { FlowSkeleton } from '../components/Skeleton';
 
 const PREMIUM_FEE = 480;
 
@@ -37,9 +38,7 @@ export default function PremiumPage() {
   }
 
   if (!ready || !user) {
-    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white-off)' }}>
-      <div className="spinner" style={{ width: 40, height: 40, borderTopColor: 'var(--green)', borderColor: 'var(--gray-light)', borderWidth: 3 }} />
-    </div>;
+    return <FlowSkeleton rows={2} />;
   }
 
   return (

@@ -8,6 +8,7 @@ import { getToken } from '../lib/auth';
 import { TASKS } from '../lib/tasks';
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
+import { FlowSkeleton } from '../components/Skeleton';
 
 const MAX_MB = 5;
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.mp3,.mp4,image/*';
@@ -98,9 +99,7 @@ export default function SubmitPage() {
   }
 
   if (!ready || !user || !tasksLoaded || appStatus === undefined) {
-    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white-off)' }}>
-      <div className="spinner" style={{ width: 40, height: 40, borderTopColor: 'var(--green)', borderColor: 'var(--gray-light)', borderWidth: 3 }} />
-    </div>;
+    return <FlowSkeleton rows={3} />;
   }
 
   // An active account is required before submitting any task
