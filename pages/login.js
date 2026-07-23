@@ -43,15 +43,18 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-grid-bg" />
-      <div className="auth-card">
-        <Link href="/" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
-          <div className="auth-logo">BUSINESS HUB</div>
+    <div className="auth-page auth-page--top">
+      <header className="auth-header">
+        <Link href="/" style={{ textDecoration: 'none' }}>
+          <div className="auth-brand">BUSINESS HUB</div>
         </Link>
-        <p className="auth-tagline">Work. Earn. Grow.</p>
-        <h1 className="auth-title">Welcome Back</h1>
-        <p className="auth-subtitle">Log in to access your tasks and earnings</p>
+      </header>
+
+      <div className="auth-card">
+        <div className="auth-lead">
+          <h1 className="auth-title">Welcome Back</h1>
+          <p className="auth-subtitle">Log in to access your tasks and earnings.</p>
+        </div>
 
         {error && <div className="error-msg">{error}</div>}
 
@@ -63,7 +66,7 @@ export default function Login() {
               name="email"
               type="email"
               className="form-input"
-              placeholder="you@email.com"
+              placeholder="Enter your email address"
               value={form.email}
               onChange={handleChange}
               required
@@ -77,7 +80,7 @@ export default function Login() {
               name="password"
               type="password"
               className="form-input"
-              placeholder="Your password"
+              placeholder="Enter your password"
               value={form.password}
               onChange={handleChange}
               required
@@ -104,12 +107,6 @@ export default function Login() {
         <div className="auth-link" style={{ marginTop: 20 }}>
           Don&apos;t have an account?{' '}
           <Link href="/register">Create one for free →</Link>
-        </div>
-
-        <div style={{ marginTop: 32, padding: '16px', background: 'var(--green-pale)', borderRadius: 8, fontSize: 13, color: 'var(--gray)', lineHeight: 1.6 }}>
-          <strong style={{ color: 'var(--green)' }}>New to Business Hub?</strong>
-          <br />
-          Join now for free. A one-time activation fee of KES 50 gives you full access to all tasks and bidding features.
         </div>
       </div>
     </div>

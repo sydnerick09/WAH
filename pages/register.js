@@ -34,6 +34,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [referrerId, setReferrerId] = useState(null);
+  const [fromReferralLink, setFromReferralLink] = useState(false);  // true only when opened via ?ref=
   const [cv, setCv] = useState(null);
   const [deviceUsed, setDeviceUsed] = useState(false);
 
@@ -61,6 +62,7 @@ export default function Register() {
     if (urlReferrer) {
       localStorage.setItem('referrerId', urlReferrer);
       setReferrerId(urlReferrer);
+      setFromReferralLink(true);   // notice shows only for real referral-link visits
     } else if (savedReferrer) {
       setReferrerId(savedReferrer);
     }
@@ -142,38 +144,22 @@ export default function Register() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-grid-bg" />
+    <div className="auth-page auth-page--top">
+      <header className="auth-header">
+        <Link href="/" style={{ textDecoration: 'none' }}>
+          <div className="auth-brand">BUSINESS HUB</div>
+        </Link>
+      </header>
 
       <div className="auth-card">
 
-        <Link
-          href="/"
-          style={{
-            display: 'block',
-            textAlign: 'center',
-            textDecoration: 'none',
-          }}
-        >
-          <div className="auth-logo">
-            BUSINESS HUB
-          </div>
-        </Link>
+        <div className="auth-lead">
+          <h1 className="auth-title">Create Your Account</h1>
+          <p className="auth-subtitle">Join thousands of earners on Business Hub.</p>
+        </div>
 
-        <p className="auth-tagline">
-          Work. Earn. Grow.
-        </p>
-
-        <h1 className="auth-title">
-          Create Your Account
-        </h1>
-
-        <p className="auth-subtitle">
-          Join thousands of earners on Business Hub
-        </p>
-
-        {/* Referral Notice */}
-        {referrerId && (
+        {/* Referral notice — only when the page was opened via a valid referral link */}
+        {fromReferralLink && (
           <div
             style={{
               background: '#f3f4f6',
@@ -214,7 +200,7 @@ export default function Register() {
               name="fullName"
               type="text"
               className="form-input"
-              placeholder="Write your username"
+              placeholder="Enter your full name"
               value={form.fullName}
               onChange={handleChange}
               required
@@ -230,7 +216,7 @@ export default function Register() {
               name="email"
               type="email"
               className="form-input"
-              placeholder="you@email.com"
+              placeholder="Enter your email address"
               value={form.email}
               onChange={handleChange}
               required
@@ -312,7 +298,7 @@ export default function Register() {
               name="password"
               type="password"
               className="form-input"
-              placeholder="Minimum 8 characters"
+              placeholder="Create a password (min. 8 characters)"
               value={form.password}
               onChange={handleChange}
               required
@@ -328,7 +314,7 @@ export default function Register() {
               name="confirmPassword"
               type="password"
               className="form-input"
-              placeholder="Re-enter password"
+              placeholder="Re-enter your password"
               value={form.confirmPassword}
               onChange={handleChange}
               required

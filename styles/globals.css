@@ -300,13 +300,26 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   padding: 56px 20px 76px;
 }
 .auth-page::after {
-  content: '© 2026 Online Business Hub. All Rights Reserved.';
+  content: '© 2026 Business Hub. All rights reserved.';
   position: absolute; left: 0; right: 0; bottom: 24px;
   text-align: center; font-family: var(--font-sub); font-size: 12.5px;
   color: var(--gray); padding: 0 20px;
 }
 .auth-grid-bg { display: none; }
 .auth-card { background: transparent; border: none; box-shadow: none; border-radius: 0; padding: 0; width: 100%; max-width: 400px; position: relative; z-index: 2; }
+
+/* Top-aligned variant with a left-aligned brand header (Sign In / Sign Up) */
+.auth-page--top { justify-content: flex-start; padding: 0 0 88px; }
+.auth-header { align-self: stretch; padding: 20px 24px; border-bottom: 1px solid var(--gray-light); margin-bottom: 30px; }
+.auth-brand { font-family: var(--font-display); font-size: 20px; font-weight: 800; color: var(--black); letter-spacing: 0.5px; }
+.auth-page--top .auth-card { padding: 0 20px; }
+.auth-lead { margin-bottom: 26px; }
+.auth-lead .auth-title { text-align: left; margin-bottom: 6px; }
+.auth-lead .auth-subtitle { text-align: left; margin-bottom: 0; }
+
+@media (max-width: 480px) {
+  .auth-header { padding: 16px 18px; margin-bottom: 22px; }
+}
 .auth-logo    { font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--green); text-align: center; margin-bottom: 8px; letter-spacing: 0.5px; }
 .auth-tagline { font-family: var(--font-accent);  text-align: center; font-size: 14px; color: var(--gray); margin-bottom: 32px; }
 .auth-title   { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--black); margin-bottom: 8px; text-align: center; }
