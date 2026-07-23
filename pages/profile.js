@@ -19,6 +19,7 @@ import {
   logout, updateProfile, updateAvatar, changeContact, deleteAccount,
 } from '../lib/auth';
 import Icon from '../components/Icon';
+import { ProfileSkeleton } from '../components/Skeleton';
 
 // Validate a chosen image file and return a data URL (cropping happens later,
 // in the interactive AvatarCropper).
@@ -171,11 +172,7 @@ export default function ProfilePage() {
   }, [toast]);
 
   if (!ready || !user) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
-        <div className="spinner" style={{ width: 36, height: 36, borderTopColor: '#000', borderColor: '#e5e7eb', borderWidth: 3 }} />
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER'}`;

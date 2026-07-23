@@ -17,6 +17,7 @@ import { applyForTask, listMyApplications, applicationsByTask } from '../lib/app
 import { TASKS } from '../lib/tasks';
 import Icon from '../components/Icon';
 import EmptyState from '../components/EmptyState';
+import { DashboardSkeleton } from '../components/Skeleton';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1080,11 +1081,7 @@ export default function Dashboard() {
   });
 
   if (!mounted || !user) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white-off)' }}>
-        <div className="spinner" style={{ width: 40, height: 40, borderTopColor: 'var(--green)', borderColor: 'var(--gray-light)', borderWidth: 3 }} />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const initials     = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';

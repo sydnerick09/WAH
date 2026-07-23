@@ -947,6 +947,27 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 .stat-card-num   { font-family: var(--font-display); font-size: clamp(28px, 4vw, 38px); font-weight: 800; color: var(--green); line-height: 1; letter-spacing: -0.5px; }
 .stat-card-label { font-family: var(--font-utility); font-size: 13px; font-weight: 600; color: var(--gray); margin-top: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   SKELETON LOADING (YouTube-style monochrome shimmer)
+   ══════════════════════════════════════════════════════════════════════════════ */
+.skeleton {
+  position: relative;
+  display: inline-block;
+  background: #e6e6ea;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.skeleton::after {
+  content: '';
+  position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent);
+  animation: skeletonSweep 1.5s ease-in-out infinite;
+}
+@keyframes skeletonSweep { 100% { transform: translateX(100%); } }
+.skeleton-card { pointer-events: none; }
+.skeleton-row  { display: flex; align-items: center; gap: 10px; }
+
 @media (max-width: 1200px) {
   .quick-actions { grid-template-columns: repeat(3, 1fr); }
 }
