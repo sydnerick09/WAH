@@ -1,19 +1,26 @@
 // pages/forgot-password.js — request a password-reset email.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { isEmail } from '../lib/validate';
+
+const RESEND_SECONDS = 60;
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [cooldown, setCooldown] = useState(0);   // seconds until "Resend" re-enables
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  // Tick the resend countdown down to zero.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown(c => (c <= 1 ? 0 : c - 1)), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
+
+  async function sendReset() {
     setError('');
-    if (!isEmail(email)) { setError('Please enter a valid email address.'); return; }
-    setLoading(true);
     try {
       await fetch('/api/db', {
         method: 'POST',
@@ -22,9 +29,27 @@ export default function ForgotPassword() {
       });
       // Always show success — we never reveal whether the account exists.
       setSent(true);
+      setCooldown(RESEND_SECONDS);
+      return true;
     } catch {
       setError('Network error. Please try again.');
+      return false;
     }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    if (!isEmail(email)) { setError('Please enter a valid email address.'); return; }
+    setLoading(true);
+    await sendReset();
+    setLoading(false);
+  }
+
+  async function handleResend() {
+    if (cooldown > 0) return;
+    setLoading(true);
+    await sendReset();
     setLoading(false);
   }
 
@@ -45,9 +70,23 @@ export default function ForgotPassword() {
               link to that email. It expires in 30 minutes.
             </p>
             <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', color: '#374151', padding: '12px 16px', borderRadius: 10, margin: '18px 0', fontSize: 13.5, lineHeight: 1.6 }}>
-              Check your inbox (and spam folder). Didn&apos;t get it? Wait a minute, then try again.
+              Check your inbox (and spam folder). Didn&apos;t get it? You can resend once the timer ends.
             </div>
-            <Link href="/login" className="auth-btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
+            {error && <div className="error-msg">{error}</div>}
+            <button
+              type="button"
+              className="auth-btn"
+              onClick={handleResend}
+              disabled={cooldown > 0 || loading}
+              style={cooldown > 0 ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+            >
+              {loading
+                ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}><span className="spinner" /> Sending...</span>
+                : cooldown > 0
+                  ? `Resend Email in 0:${String(cooldown).padStart(2, '0')}`
+                  : 'Resend Email'}
+            </button>
+            <Link href="/login" className="auth-link" style={{ display: 'block', textAlign: 'center', marginTop: 18 }}>
               Back to Login
             </Link>
           </>

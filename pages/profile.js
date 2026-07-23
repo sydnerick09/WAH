@@ -12,7 +12,7 @@
 //   • Sessions: Sign Out
 //   • Danger Zone: Delete Account (multiple confirmations)
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import {
@@ -20,8 +20,9 @@ import {
 } from '../lib/auth';
 import Icon from '../components/Icon';
 
-// Center-crop + downscale an image file to a compact square JPEG data URL.
-function processImageFile(file) {
+// Validate a chosen image file and return a data URL (cropping happens later,
+// in the interactive AvatarCropper).
+function readImageFile(file) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error('No file selected.'));
     if (!/^image\/(png|jpeg|jpg|webp)$/.test(file.type)) {
@@ -31,22 +32,7 @@ function processImageFile(file) {
       return reject(new Error('Image must be 5 MB or smaller.'));
     }
     const reader = new FileReader();
-    reader.onload = () => {
-      const img = new window.Image();
-      img.onload = () => {
-        const SIZE = 512;
-        const canvas = document.createElement('canvas');
-        canvas.width = SIZE; canvas.height = SIZE;
-        const ctx = canvas.getContext('2d');
-        const min = Math.min(img.width, img.height);
-        const sx = (img.width - min) / 2;
-        const sy = (img.height - min) / 2;
-        ctx.drawImage(img, sx, sy, min, min, 0, 0, SIZE, SIZE);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
-      };
-      img.onerror = () => reject(new Error('That image could not be read.'));
-      img.src = reader.result;
-    };
+    reader.onload = () => resolve(reader.result);
     reader.onerror = () => reject(new Error('That file could not be read.'));
     reader.readAsDataURL(file);
   });
@@ -54,6 +40,109 @@ function processImageFile(file) {
 
 const initialsOf = name =>
   (name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
+// ── Interactive circular cropper ─────────────────────────────────────────────
+// Pan by dragging, zoom with the slider; exports a centered 512² JPEG data URL.
+const CROP_VIEW = 264;   // on-screen crop viewport (square, px)
+const CROP_OUT  = 512;   // exported image size (px)
+
+function AvatarCropper({ src, onCancel, onSave }) {
+  const imgRef = useRef(null);
+  const drag   = useRef(null);
+  const [nat,   setNat]   = useState(null);          // natural { w, h }
+  const [scale, setScale] = useState(1);
+  const [off,   setOff]   = useState({ x: 0, y: 0 }); // image top-left within viewport
+  const [busy,  setBusy]  = useState(false);
+
+  const baseScale = nat ? CROP_VIEW / Math.min(nat.w, nat.h) : 1;
+  const dispW = nat ? nat.w * baseScale * scale : CROP_VIEW;
+  const dispH = nat ? nat.h * baseScale * scale : CROP_VIEW;
+
+  // Keep the image always covering the circular viewport.
+  const clamp = useCallback((o) => ({
+    x: Math.min(0, Math.max(CROP_VIEW - dispW, o.x)),
+    y: Math.min(0, Math.max(CROP_VIEW - dispH, o.y)),
+  }), [dispW, dispH]);
+
+  function onImgLoad(e) {
+    const w = e.target.naturalWidth, h = e.target.naturalHeight;
+    const bs = CROP_VIEW / Math.min(w, h);
+    setNat({ w, h });
+    setScale(1);
+    setOff({ x: (CROP_VIEW - w * bs) / 2, y: (CROP_VIEW - h * bs) / 2 });
+  }
+
+  useEffect(() => { setOff(o => clamp(o)); }, [scale, clamp]);
+
+  function onPointerDown(e) {
+    drag.current = { sx: e.clientX, sy: e.clientY, ox: off.x, oy: off.y };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function onPointerMove(e) {
+    if (!drag.current) return;
+    setOff(clamp({ x: drag.current.ox + (e.clientX - drag.current.sx), y: drag.current.oy + (e.clientY - drag.current.sy) }));
+  }
+  function onPointerUp() { drag.current = null; }
+
+  async function save() {
+    if (!nat || busy) return;
+    setBusy(true);
+    const canvas = document.createElement('canvas');
+    canvas.width = CROP_OUT; canvas.height = CROP_OUT;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CROP_OUT, CROP_OUT);
+    const s = baseScale * scale;
+    const srcX = -off.x / s, srcY = -off.y / s, srcSize = CROP_VIEW / s;
+    ctx.drawImage(imgRef.current, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUT, CROP_OUT);
+    try { await onSave(canvas.toDataURL('image/jpeg', 0.9)); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="profile-dialog-overlay" onClick={onCancel}>
+      <div className="profile-dialog cropper" onClick={e => e.stopPropagation()}>
+        <div className="profile-dialog-head">
+          <span className="profile-dialog-ico"><Icon name="camera" size={20} /></span>
+          <span className="profile-dialog-title">Position &amp; Crop</span>
+        </div>
+        <div
+          className="cropper-stage"
+          style={{ width: CROP_VIEW, height: CROP_VIEW }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            ref={imgRef}
+            src={src}
+            alt=""
+            draggable={false}
+            onLoad={onImgLoad}
+            style={{ position: 'absolute', left: off.x, top: off.y, width: dispW, height: dispH, maxWidth: 'none', userSelect: 'none' }}
+          />
+          <div className="cropper-mask" />
+        </div>
+        <div className="cropper-controls">
+          <Icon name="search" size={16} />
+          <input
+            type="range" min="1" max="3" step="0.01" value={scale}
+            className="cropper-range" aria-label="Zoom"
+            onChange={e => setScale(Number(e.target.value))}
+          />
+        </div>
+        <div className="cropper-hint">Drag to reposition · slide to zoom</div>
+        <div className="profile-dialog-actions">
+          <button className="btn-mono" onClick={save} disabled={busy || !nat}>
+            {busy ? <span className="spinner" /> : 'Save Photo'}
+          </button>
+          <button className="btn-mono ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -67,7 +156,9 @@ export default function ProfilePage() {
   const [showSearch,  setShowSearch]= useState(false);
   const [query,       setQuery]     = useState('');
 
-  const [noticeOpen,  setNoticeOpen]  = useState(false);  // community notice before upload
+  const [noticeOpen,  setNoticeOpen]  = useState(false);  // community notice before a NEW upload
+  const [viewerOpen,  setViewerOpen]  = useState(false);  // profile photo viewer
+  const [cropSrc,     setCropSrc]     = useState(null);   // image being cropped (data URL)
   const [qrOpen,      setQrOpen]      = useState(false);
   const [contactEdit, setContactEdit] = useState(null);   // { field:'email'|'phone', value }
   const [deleteStep,  setDeleteStep]  = useState(0);       // 0 closed · 1 warning · 2 final
@@ -111,23 +202,46 @@ export default function ProfilePage() {
   }
 
   // ── Profile picture ──────────────────────────────────────────────────────────
-  function openPicker() { setNoticeOpen(true); }
+  // Tapping the avatar opens the photo viewer when a picture exists; otherwise it
+  // starts the add flow. The camera badge always starts a change.
+  function onAvatarClick() {
+    if (user.avatar) setViewerOpen(true);
+    else startChange();
+  }
+  function startChange() {                    // choose a NEW image (community notice first)
+    setViewerOpen(false);
+    setNoticeOpen(true);
+  }
   function agreeAndPick() { setNoticeOpen(false); fileRef.current?.click(); }
+  function editCurrent() {                     // re-crop / reposition the EXISTING photo
+    setViewerOpen(false);
+    if (user.avatar) setCropSrc(user.avatar);
+  }
   async function onFileChosen(e) {
     const file = e.target.files?.[0];
-    e.target.value = '';                     // allow re-selecting the same file
+    e.target.value = '';                       // allow re-selecting the same file
     if (!file) return;
     try {
-      setBusy(true);
-      const dataUrl = await processImageFile(file);
-      const res = await updateAvatar(user.id, dataUrl);
-      if (res.success && res.user) { setUser(res.user); setToast('Profile picture updated'); }
-      else setToast(res.error || res.message || 'Upload failed');
+      const dataUrl = await readImageFile(file);   // validate, then hand off to the cropper
+      setCropSrc(dataUrl);
     } catch (err) {
-      setToast(err.message || 'Upload failed');
-    } finally {
-      setBusy(false);
+      setToast(err.message || 'That image could not be used');
     }
+  }
+  async function saveCropped(dataUrl) {
+    setBusy(true);
+    const res = await updateAvatar(user.id, dataUrl);
+    setBusy(false);
+    if (res.success && res.user) { setUser(res.user); setCropSrc(null); setToast('Profile picture updated'); }
+    else setToast(res.error || res.message || 'Upload failed');
+  }
+  async function removePhoto() {
+    if (!window.confirm('Remove your profile picture?')) return;
+    setBusy(true);
+    const res = await updateAvatar(user.id, '');
+    setBusy(false);
+    if (res.success && res.user) { setUser(res.user); setViewerOpen(false); setToast('Profile picture removed'); }
+    else setToast(res.error || res.message || 'Could not remove picture');
   }
 
   // ── Protected fields (Email, Phone) ──────────────────────────────────────────
@@ -224,11 +338,11 @@ export default function ProfilePage() {
 
         {/* ── Centered avatar ── */}
         <div className="profile-avatar-wrap">
-          <div className="profile-avatar" onClick={openPicker} title="Change profile picture">
+          <div className="profile-avatar" onClick={onAvatarClick} title={user.avatar ? 'View profile photo' : 'Add profile picture'}>
             {user.avatar
               ? <img src={user.avatar} alt="Profile" />
               : <span>{initialsOf(user.fullName)}</span>}
-            <span className="profile-avatar-cam" aria-hidden="true">
+            <span className="profile-avatar-cam" role="button" aria-label="Change profile picture" onClick={e => { e.stopPropagation(); startChange(); }}>
               <Icon name="camera" size={18} />
             </span>
           </div>
@@ -324,6 +438,33 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Profile photo viewer (Edit / Change / Remove) ── */}
+      {viewerOpen && user.avatar && (
+        <div className="profile-dialog-overlay" onClick={() => setViewerOpen(false)}>
+          <div className="profile-dialog" onClick={e => e.stopPropagation()}>
+            <div className="profile-dialog-head">
+              <span className="profile-dialog-ico"><Icon name="user" size={20} /></span>
+              <span className="profile-dialog-title">Profile Photo</span>
+            </div>
+            <div style={{ padding: '10px 24px 0' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="photo-viewer-img" src={user.avatar} alt="Profile" />
+            </div>
+            <div className="photo-viewer-actions">
+              <button className="btn-mono" onClick={editCurrent}><Icon name="edit" size={16} /> Edit Profile Picture</button>
+              <button className="btn-mono ghost" onClick={startChange}><Icon name="camera" size={16} /> Change Profile Picture</button>
+              <button className="btn-mono ghost" onClick={removePhoto} disabled={busy}><Icon name="trash" size={16} /> Remove Profile Picture</button>
+              <button className="btn-mono ghost" onClick={() => setViewerOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Avatar cropper ── */}
+      {cropSrc && (
+        <AvatarCropper src={cropSrc} onCancel={() => setCropSrc(null)} onSave={saveCropped} />
       )}
 
       {/* ── Referral QR ── */}

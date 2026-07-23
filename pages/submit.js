@@ -150,7 +150,7 @@ export default function SubmitPage() {
     return (
       <FlowShell title="Submit Task" icon="upload">
         <div className="pay-message" style={{ marginBottom: 18 }}>That task could not be found.</div>
-        <button className="pay-btn" onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
+        <button className="pay-btn" onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={16} /> Back to Dashboard</button>
       </FlowShell>
     );
   }
@@ -165,7 +165,7 @@ export default function SubmitPage() {
             Your file <strong>{file?.name}</strong> for <strong>{task.title}</strong> has been submitted. We’ve emailed you a confirmation at <strong>{user.email}</strong> and our team will review your work.
           </div>
           {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 8 }}>{error}</div>}
-          <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={16} /> Back to Dashboard</button>
         </div>
       </FlowShell>
     );

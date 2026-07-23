@@ -2,6 +2,7 @@
 // Reached from the {UNSUBSCRIBE_LINK} in account emails.
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Icon from '../components/Icon';
 
 export default function Unsubscribe() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function Unsubscribe() {
         <div style={logo}>BUSINESS HUB</div>
         {state === 'done' ? (
           <>
-            <div style={{ fontSize: 46, marginBottom: 8 }}>✅</div>
+            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={44} /></div>
             <h1 style={title}>You’ve been unsubscribed</h1>
             <p style={text}>
               You will no longer receive account-related emails, including OTPs and important account notifications.
@@ -45,7 +46,7 @@ export default function Unsubscribe() {
           </>
         ) : state === 'error' ? (
           <>
-            <div style={{ fontSize: 46, marginBottom: 8 }}>⚠️</div>
+            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="warning" size={44} /></div>
             <h1 style={title}>Unable to unsubscribe</h1>
             <p style={text}>{message}</p>
           </>

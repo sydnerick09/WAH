@@ -17,9 +17,9 @@ export default function FlowShell({ title, subtitle, icon, accent = '#000000', m
           <button
             onClick={() => router.push('/dashboard')}
             aria-label="Back to dashboard"
-            style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 10, padding: '8px 12px', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 10, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
           >
-            <Icon name="arrowLeft" size={16} /> Back
+            <Icon name="arrowLeft" size={20} />
           </button>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 8 }}>

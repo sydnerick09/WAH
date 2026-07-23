@@ -760,7 +760,7 @@ export default function Home() {
               fontWeight: 600,
             }}
           >
-            📧 businesshub.comke@gmail.com
+            <Icon name="mail" size={18} /> businesshub.comke@gmail.com
           </div>
         </div>
       </section>

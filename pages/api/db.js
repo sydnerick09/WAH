@@ -1170,7 +1170,7 @@ export default async function handler(req, res) {
         const rows = OFFERS.map((o, i) => ({
           id:          `offer_${i + 1}`,
           title:       o.title,
-          description: `${o.title}. 🔥 Limited-time OFFER, no premium needed and first come, first served (only one person can complete each offer). Submit your completed work the same way as any other task before the offer ends.`,
+          description: `${o.title}. Limited-time OFFER, no premium needed and first come, first served (only one person can complete each offer). Submit your completed work the same way as any other task before the offer ends.`,
           category:    o.category,
           poster:      'Business Hub • Offer',
           location:    'Remote',

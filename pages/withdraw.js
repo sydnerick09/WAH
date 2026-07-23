@@ -187,7 +187,7 @@ function MpesaFlow({ user, initialStep }) {
         <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/withdraw?method=international')}>
           <Icon name="cash" size={16} /> Withdraw via Bank
         </button>
-        <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
+        <button className="withdraw-close-btn" style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={14} /> Back to Dashboard</button>
       </FlowShell>
     );
   }
@@ -470,9 +470,9 @@ function PostbankFlow({ user, initialStep }) {
 // ── International flow (bank selector) ─────────────────────────────────────────
 function InternationalFlow({ user, initialStep }) {
   const router = useRouter();
-  // Every "Other Countries" withdrawal pays the $23 USD fee directly, no
-  // M-Pesa detour and no management gate, regardless of the amount withdrawn.
-  const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'fee'); // fee → form
+  // Other Countries flow: recommend M-Pesa first → confirm intent → pay the
+  // $23 USD fee → bank form. (Never jump straight to the fee.)
+  const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'recommend'); // recommend → confirm → fee → form
   const [loading,       setLoading]       = useState(false);
   const [accountName,   setAccountName]   = useState('');
   const [selectedBank,  setSelectedBank]  = useState(null);
@@ -547,55 +547,53 @@ function InternationalFlow({ user, initialStep }) {
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', textAlign: 'left', marginTop: 12 }}>
             We’ve received your withdrawal request and emailed you a confirmation at <strong>{user?.email}</strong>. Our payments team will process it and be in touch.
           </div>
-          <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={16} /> Back to Dashboard</button>
         </div>
       </FlowShell>
     );
   }
 
-  // M-Pesa / management gate, shown before any bank withdrawal (all banks)
+  // Recommendation → confirmation → fee gate, shown before the bank form.
   if (gate !== 'form') {
     const accent = '#000000';
     const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
     return (
       <FlowShell title="Withdraw from Other Countries" subtitle="Choose your method" icon="globe" accent={accent}>
-        {gate === 'mpesa' && overLimit && (
+        {gate === 'recommend' && (
           <>
-            <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
-              Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn <strong>through the bank</strong>, not M-Pesa. Continue with a bank withdrawal below.
+            <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb' }}>
+              We recommend withdrawing using <strong>M-Pesa</strong> because it is <strong>faster, more convenient, and significantly cheaper</strong>.
             </div>
-            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
-              <Icon name="cash" size={16} /> Continue with a bank withdrawal
+            {overLimit ? (
+              <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
+                Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn through a bank.
+              </div>
+            ) : (
+              <button className="pay-btn" style={{ background: 'var(--mpesa-green)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
+                <Icon name="smartphone" size={16} /> Continue with M-Pesa Withdrawal
+              </button>
+            )}
+            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('confirm')}>
+              <Icon name="globe" size={16} /> I Prefer International Withdrawal
             </button>
+            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={14} /> Back to Dashboard</button>
           </>
         )}
-        {gate === 'mpesa' && !overLimit && (
+        {gate === 'confirm' && (
           <>
             <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
-              For faster, check-free payouts we recommend <strong>M-Pesa (Safaricom)</strong> where available, it’s instant and avoids the extra verification checks that bank transfers require. Only use a <strong>bank</strong> if you can’t use M-Pesa, <strong>or if our management specifically asked you to withdraw via the bank.</strong>
+              International withdrawals are intended for <strong>users outside Kenya</strong> or for withdrawals <strong>approved by management</strong>. They are <strong>more expensive</strong> than M-Pesa withdrawals.
             </div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to withdraw using M-Pesa?</div>
-            <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-              ✅ Yes, withdraw with M-Pesa (recommended)
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to continue with an international withdrawal?</div>
+            <button className="pay-btn" style={{ background: accent, marginBottom: 12 }} onClick={() => setGate('fee')}>
+              <Icon name="check" size={16} /> Yes, continue with International Withdrawal
             </button>
-            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('management')}>
-              <Icon name="cash" size={16} /> No, I want a bank withdrawal
-            </button>
-          </>
-        )}
-        {gate === 'management' && (
-          <>
-            <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
-              Bank withdrawals are only for clients who were <strong>specifically asked by our management</strong> to use the bank. If you were not asked, please withdraw with <strong>M-Pesa</strong> instead.
-            </div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Were you asked by our management to withdraw via the bank?</div>
-            <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-              📲 No, take me to M-Pesa
-            </button>
-            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
-              <Icon name="cash" size={16} /> Yes, management asked me, continue
-            </button>
-            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('mpesa')}>← Back</button>
+            {!overLimit && (
+              <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => router.push('/withdraw?method=mpesa')}>
+                <Icon name="smartphone" size={16} /> No, use M-Pesa instead
+              </button>
+            )}
+            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('recommend')}><Icon name="arrowLeft" size={14} /> Back</button>
           </>
         )}
         {gate === 'fee' && (
@@ -611,7 +609,7 @@ function InternationalFlow({ user, initialStep }) {
             <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
               {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay ${BANK_FEE_USD} USD via Paystack</>}
             </button>
-            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>← Back to Dashboard</button>
+            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('confirm')}><Icon name="arrowLeft" size={14} /> Back</button>
             <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • USD → KES conversion included</div>
           </>
         )}
