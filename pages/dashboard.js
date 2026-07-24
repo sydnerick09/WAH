@@ -1093,10 +1093,10 @@ export default function Dashboard() {
         <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '48px 36px', maxWidth: 440, width: '100%', textAlign: 'center' }}>
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="lock" size={52} /></div>
           <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 22, color: '#1f2937', marginBottom: 8 }}>
-            Account Suspended
+            Account On Hold
           </h2>
           <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, marginBottom: 20 }}>
-            Your account has been suspended and you cannot access Business Hub at this time.
+            Your account has been placed on hold and you cannot access Business Hub at this time.
           </p>
           {user.suspendReason && (
             <div style={{ background: '#e5e7eb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>

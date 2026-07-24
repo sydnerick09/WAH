@@ -57,33 +57,52 @@ const STATUS_COLORS = {
   declined: { bg: '#e5e7eb', color: '#1f2937' },
 };
 
-// ─── Suspend Confirmation Modal ───────────────────────────────────────────────
+// Flat monochrome icons for the account Hold / Release control.
+function HoldIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', flexShrink: 0 }}>
+      <rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" />
+    </svg>
+  );
+}
+function ReleaseIcon({ size = 14 }) {   // play glyph = resume / release
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', flexShrink: 0 }}>
+      <polygon points="6 3 20 12 6 21 6 3" />
+    </svg>
+  );
+}
+
+// ─── Hold Confirmation Modal ──────────────────────────────────────────────────
+// Places an account on hold (or releases it) with a reason shown to the client.
 function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
   if (!modal) return null;
-  const isSuspending = modal.action === 'suspend';
+  const isHolding = modal.action === 'suspend';
   return (
     <div style={styles.modalOverlay}>
       <div style={styles.modalCard}>
-        <div style={{ background: isSuspending ? '#374151' : '#374151', borderRadius: '12px 12px 0 0', padding: '20px 24px', color: '#fff' }}>
-          <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17 }}>
-            {isSuspending ? '🚫 Suspend Account' : '✅ Unsuspend Account'}
+        <div style={{ background: '#111827', borderRadius: '12px 12px 0 0', padding: '20px 24px', color: '#fff' }}>
+          <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {isHolding ? <><HoldIcon size={17} /> Hold Account</> : <><ReleaseIcon size={17} /> Release Account</>}
           </div>
           <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
             {modal.user.fullName}, {modal.user.email}
           </div>
         </div>
         <div style={{ padding: 24 }}>
-          {isSuspending ? (
+          {isHolding ? (
             <>
               <p style={{ fontSize: 14, color: '#374151', marginBottom: 14 }}>
-                This will immediately block the client from accessing their account.
+                This immediately places the account on hold and blocks the client from signing in until it is released.
               </p>
               <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
-                Reason (shown to client)
+                Reason for hold (shown to client)
               </label>
-              <input
-                style={{ ...styles.input, marginBottom: 0 }}
-                placeholder="e.g. Violation of terms of service"
+              <textarea
+                style={{ ...styles.input, marginBottom: 0, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }}
+                placeholder="e.g. Verification pending, or violation of terms of service"
                 value={reason}
                 onChange={e => setReason(e.target.value)}
                 autoFocus
@@ -91,12 +110,12 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
             </>
           ) : (
             <p style={{ fontSize: 14, color: '#374151' }}>
-              This will restore full access to <strong>{modal.user.fullName}</strong>&apos;s account immediately.
+              This will release the hold and restore full access to <strong>{modal.user.fullName}</strong>&apos;s account immediately.
             </p>
           )}
           <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-            <button style={{ ...styles.btn, background: isSuspending ? '#374151' : '#374151', flex: 1 }} onClick={onConfirm}>
-              {isSuspending ? 'Yes, Suspend' : 'Yes, Unsuspend'}
+            <button style={{ ...styles.btn, background: '#111827', flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={onConfirm}>
+              {isHolding ? <><HoldIcon size={15} /> Place on Hold</> : <><ReleaseIcon size={15} /> Release</>}
             </button>
             <button style={{ ...styles.btn, background: '#64748B', flex: 1 }} onClick={onCancel}>Cancel</button>
           </div>
@@ -183,7 +202,7 @@ function UsersTab({ users, secret, onRefresh }) {
     setSaving(prev => ({ ...prev, [user.id]: false }));
     setSuspendReason('');
     if (res.success) {
-      setMsg(prev => ({ ...prev, [user.id]: { type: 'ok', text: action === 'suspend' ? 'Suspended!' : 'Unsuspended!' } }));
+      setMsg(prev => ({ ...prev, [user.id]: { type: 'ok', text: action === 'suspend' ? 'Account on hold!' : 'Hold released!' } }));
       await onRefresh();
     } else {
       setMsg(prev => ({ ...prev, [user.id]: { type: 'err', text: res.error || 'Failed.' } }));
@@ -258,7 +277,7 @@ function UsersTab({ users, secret, onRefresh }) {
 
                   {/* Name / Email / Phone */}
                   <td style={styles.td}>
-                    {isSusp && <span style={{ ...styles.badge, background: '#e5e7eb', color: '#1f2937', fontSize: 10, marginBottom: 6, display: 'inline-block' }}>🚫 SUSPENDED</span>}
+                    {isSusp && <span style={{ ...styles.badge, background: '#111827', color: '#fff', fontSize: 10, marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}><HoldIcon size={10} /> ON HOLD</span>}
                     <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Full Name</div>
                     <input
                       style={{ ...styles.numInput, width: '100%', marginBottom: 6 }}
@@ -302,7 +321,7 @@ function UsersTab({ users, secret, onRefresh }) {
                     <div style={styles.dateRow}><span style={styles.dateLabel}>Joined</span><span style={styles.dateVal}>{fmtDate(user.createdAt)}</span></div>
                     <div style={styles.dateRow}><span style={styles.dateLabel}>Activated</span><span style={styles.dateVal}>{fmtDate(user.activatedAt)}</span></div>
                     <div style={styles.dateRow}><span style={styles.dateLabel}>Premium paid</span><span style={styles.dateVal}>{fmtDate(user.premiumPaidAt)}</span></div>
-                    {isSusp && <div style={styles.dateRow}><span style={{ ...styles.dateLabel, color: '#1f2937' }}>Suspended</span><span style={styles.dateVal}>{fmtDate(user.suspendedAt)}</span></div>}
+                    {isSusp && <div style={styles.dateRow}><span style={{ ...styles.dateLabel, color: '#1f2937' }}>On hold since</span><span style={styles.dateVal}>{fmtDate(user.suspendedAt)}</span></div>}
                   </td>
 
                   {/* Balance */}
@@ -344,8 +363,8 @@ function UsersTab({ users, secret, onRefresh }) {
 
                   {/* Status badge */}
                   <td style={styles.td}>
-                    <span style={{ ...styles.badge, background: isSusp ? '#e5e7eb' : isAct ? '#e5e7eb' : '#F1F5F9', color: isSusp ? '#1f2937' : isAct ? '#1f2937' : '#64748B' }}>
-                      {isSusp ? 'Suspended' : isAct ? 'Active' : 'Inactive'}
+                    <span style={{ ...styles.badge, background: isSusp ? '#111827' : isAct ? '#e5e7eb' : '#F1F5F9', color: isSusp ? '#fff' : isAct ? '#1f2937' : '#64748B', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {isSusp ? <><HoldIcon size={11} /> On Hold</> : isAct ? 'Active' : 'Inactive'}
                     </span>
                     {isPrem && !isSusp && (
                       <span style={{ ...styles.badge, background: '#f3f4f6', color: '#1f2937', display: 'block', marginTop: 4 }}>⭐ Premium</span>
@@ -358,10 +377,10 @@ function UsersTab({ users, secret, onRefresh }) {
                       disabled={isSaving} onClick={() => saveUser(user)}>
                       {isSaving ? 'Saving…' : 'Save'}
                     </button>
-                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: isSusp ? '#374151' : '#374151' }}
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#374151', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                       disabled={isSaving}
                       onClick={() => { setSuspendReason(''); setSuspendModal({ user, action: isSusp ? 'unsuspend' : 'suspend' }); }}>
-                      {isSusp ? '✅ Unsuspend' : '🚫 Suspend'}
+                      {isSusp ? <><ReleaseIcon size={13} /> Release</> : <><HoldIcon size={13} /> Hold</>}
                     </button>
                     <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#111827' }}
                       disabled={isSaving}
