@@ -37,7 +37,7 @@ function shuffle(arr) {
 }
 
 function getOrGenerateWithdrawals() {
-  const LS_KEY = 'bh_live_withdrawals_v6';
+  const LS_KEY = 'bh_live_withdrawals_v7';
   try {
     const stored = localStorage.getItem(LS_KEY);
     if (stored) return JSON.parse(stored);
@@ -71,7 +71,7 @@ function getOrGenerateWithdrawals() {
   // in the same +254 style as the others; seeded frequently so it recurs in the
   // ticker and the rotating list for strong social proof.
   const featured = {
-    country: 'Kenya', name: 'Erick Omondi Ouma',
+    country: 'Kenya',
     phone: '+25411*****12', amount: 6708, featured: true,
   };
   const withFeatured = [];
