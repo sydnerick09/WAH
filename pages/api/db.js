@@ -36,21 +36,22 @@ async function fetchUsdToKes() {
   return { rate: 129, live: false };
 }
 
-// Server-authoritative bulk fee breakdown from the user's recorded M-Pesa fee
-// history. `paidBefore` (from the notice modal) gates whether credits apply; the
-// count is always taken from the record and capped at two, so it can't be gamed.
-async function computeBulkQuote(u, paidBefore) {
+// Server-authoritative bulk fee breakdown. The user declares how many M-Pesa
+// withdrawal fees they've paid; the credited count is always clamped to
+// [0, MAX_FEE_DEDUCTIONS] server-side so no one can claim more than two. The
+// recorded history is returned alongside for auditing/transparency.
+async function computeBulkQuote(u, declaredFees) {
   const balance      = Number(u.balance || 0);
   const subs         = u.task_submissions || {};
   const recordedFees = Math.max(0, Number(subs._mpesaFeesPaid || 0));
-  const eligible     = paidBefore ? Math.min(recordedFees, MAX_FEE_DEDUCTIONS) : 0;
+  const eligible     = Math.max(0, Math.min(MAX_FEE_DEDUCTIONS, Math.floor(Number(declaredFees) || 0)));
   const { rate, live } = await fetchUsdToKes();
   const convertedKes = Math.round(BANK_FEE_USD * rate);
   const deductionKes = eligible * MPESA_FEE_KES;
   const amountDueKes = Math.max(0, convertedKes - deductionKes);
   return {
     balance, feeUsd: BANK_FEE_USD, rate: Math.round(rate * 100) / 100, rateLive: live,
-    convertedKes, recordedFees, eligibleDeductions: eligible,
+    convertedKes, recordedFees, declaredFees: eligible, eligibleDeductions: eligible,
     perFeeKes: MPESA_FEE_KES, maxDeductions: MAX_FEE_DEDUCTIONS,
     deductionKes, amountDueKes,
   };
@@ -720,9 +721,9 @@ export default async function handler(req, res) {
         if (Number(u.balance || 0) < BULK_THRESHOLD_KES) {
           return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });
         }
-        const q = await computeBulkQuote(u, !!p.paidBefore);
+        const q = await computeBulkQuote(u, p.declaredFees);
         await logAction(db, { action: 'bulk_withdrawal_quote', entity: 'user', entityId: p.userId,
-          detail: `bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} usd:${q.feeUsd} converted:${q.convertedKes} recorded:${q.recordedFees} deductions:${q.eligibleDeductions} deductionKes:${q.deductionKes} due:${q.amountDueKes}` });
+          detail: `bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} usd:${q.feeUsd} converted:${q.convertedKes} declared:${q.declaredFees} recorded:${q.recordedFees} deductions:${q.eligibleDeductions} deductionKes:${q.deductionKes} due:${q.amountDueKes}` });
         return res.json({ success: true, eligible: true, ...q });
       }
 
@@ -743,9 +744,9 @@ export default async function handler(req, res) {
         if (!nonEmpty(bankName) || !nonEmpty(accountName) || !nonEmpty(accountNumber)) {
           return res.json({ success: false, error: 'Bank name, account name and account number are required.' });
         }
-        const q = await computeBulkQuote(u, !!p.paidBefore);
+        const q = await computeBulkQuote(u, p.declaredFees);
         await logAction(db, { action: 'bulk_withdrawal_request', entity: 'user', entityId: p.userId,
-          detail: `bank:${bankName} acct:${accountName}/${accountNumber}${branch ? ` branch:${branch}` : ''}${swift ? ` swift:${swift}` : ''} | bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} converted:${q.convertedKes} deductions:${q.eligibleDeductions}x${q.perFeeKes} due:${q.amountDueKes}` });
+          detail: `bank:${bankName} acct:${accountName}/${accountNumber}${branch ? ` branch:${branch}` : ''}${swift ? ` swift:${swift}` : ''} | bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} converted:${q.convertedKes} declared:${q.declaredFees} recorded:${q.recordedFees} deductions:${q.eligibleDeductions}x${q.perFeeKes} due:${q.amountDueKes}` });
         return res.json({ success: true, ...q, bank: { bankName, accountName, accountNumber, branch, swift } });
       }
 

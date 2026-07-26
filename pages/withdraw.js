@@ -707,7 +707,7 @@ function InternationalFlow({ user, initialStep }) {
 function BulkWithdrawalFlow({ user }) {
   const router = useRouter();
   const [step,         setStep]         = useState('notice');   // notice | details | success
-  const [paidBefore,   setPaidBefore]   = useState(null);
+  const [declaredFees, setDeclaredFees] = useState(null);       // 0 | 1 | 2 (declared M-Pesa fees)
   const [quote,        setQuote]        = useState(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [submitting,   setSubmitting]   = useState(false);
@@ -720,18 +720,18 @@ function BulkWithdrawalFlow({ user }) {
   const setField = (k, v) => { setBank(b => ({ ...b, [k]: v })); setErrors(e => ({ ...e, [k]: undefined })); };
   const bankValid = bank.bankName.trim() && bank.accountName.trim() && bank.accountNumber.trim();
 
-  async function loadQuote(pb) {
+  async function loadQuote(n) {
     setLoadingQuote(true); setErr('');
-    const q = await bulkWithdrawalQuote(pb);
+    const q = await bulkWithdrawalQuote(n);
     setLoadingQuote(false);
     if (!q?.success) { setErr(q?.error || 'Could not calculate the withdrawal fee. Please try again.'); return false; }
     setQuote(q);
     return true;
   }
 
-  async function chooseNotice(pb) {
-    setPaidBefore(pb);
-    if (await loadQuote(pb)) setStep('details');
+  async function chooseCount(n) {
+    setDeclaredFees(n);
+    if (await loadQuote(n)) setStep('details');
   }
 
   async function submit() {
@@ -743,7 +743,7 @@ function BulkWithdrawalFlow({ user }) {
     if (Object.keys(e).length) return;
 
     setSubmitting(true); setErr('');
-    const res = await submitBulkWithdrawal({ ...bank, paidBefore });
+    const res = await submitBulkWithdrawal({ ...bank, declaredFees });
     if (!res?.success) { setSubmitting(false); setErr(res?.error || 'Submission failed. Please try again.'); return; }
 
     // Email the authoritative request + bank details to the payments team.
@@ -792,16 +792,33 @@ function BulkWithdrawalFlow({ user }) {
             Your available balance of <strong>KES {Number(user.balance).toLocaleString()}</strong> exceeds{' '}
             <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong>, which qualifies as a bulk withdrawal.
             For security and compliance purposes, this amount can only be withdrawn through your registered
-            <strong> bank account</strong>. Before proceeding, please confirm how many successful M-Pesa
-            withdrawal fees you have previously paid.
+            <strong> bank account</strong>.
+          </div>
+
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>
+            How many successful M-Pesa withdrawal fees have you paid before?
+          </div>
+          <div style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
+            Each previous <strong>KES 650</strong> M-Pesa fee is credited against the bank fee (maximum of two).
           </div>
           {err && <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>{err}</div>}
-          <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} disabled={loadingQuote} onClick={() => chooseNotice(true)}>
-            {loadingQuote ? <><span className="spinner" /> Calculating…</> : <><Icon name="check" size={16} /> I Have Paid Before</>}
-          </button>
-          <button className="pay-btn" style={{ background: '#374151' }} disabled={loadingQuote} onClick={() => chooseNotice(false)}>
-            <Icon name="cash" size={16} /> I Have Not Paid Before
-          </button>
+
+          {[
+            [0, 'None — I have not paid before', 'No deduction'],
+            [1, 'Once', 'Credit KES 650'],
+            [2, 'Twice or more', 'Credit KES 1,300 (max)'],
+          ].map(([n, label, sub]) => (
+            <button key={n} className="pay-btn"
+              style={{ background: n === 0 ? '#374151' : '#000000', marginBottom: 12, flexDirection: 'column', gap: 2, alignItems: 'center', height: 'auto', padding: '12px 16px' }}
+              disabled={loadingQuote} onClick={() => chooseCount(n)}>
+              {loadingQuote && declaredFees === n
+                ? <><span className="spinner" /> Calculating…</>
+                : <>
+                    <span style={{ fontWeight: 700 }}>{label}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 500, opacity: 0.8 }}>{sub}</span>
+                  </>}
+            </button>
+          ))}
         </>
       )}
 
@@ -817,7 +834,7 @@ function BulkWithdrawalFlow({ user }) {
             <div style={brRow}><span>Bank Withdrawal Fee</span><span>USD {quote.feeUsd}</span></div>
             <div style={brRow}><span>Exchange Rate (live)</span><span>1 USD = KES {quote.rate}{rateNote}</span></div>
             <div style={brRow}><span>Converted Amount</span><strong>KES {quote.convertedKes.toLocaleString()}</strong></div>
-            <div style={{ ...brRow, color: '#6b7280' }}><span>Previous M-Pesa Fees Paid</span><span>{quote.recordedFees} (eligible: {quote.eligibleDeductions}/{quote.maxDeductions})</span></div>
+            <div style={{ ...brRow, color: '#6b7280' }}><span>Previous M-Pesa Fees Paid</span><span>{quote.declaredFees ?? quote.eligibleDeductions} (max {quote.maxDeductions})</span></div>
             {Array.from({ length: quote.eligibleDeductions }).map((_, i) => (
               <div key={i} style={{ ...brRow, color: '#374151' }}><span>Deduction {i + 1} (M-Pesa fee)</span><span>− KES {quote.perFeeKes.toLocaleString()}</span></div>
             ))}
@@ -828,7 +845,7 @@ function BulkWithdrawalFlow({ user }) {
               <span style={{ fontWeight: 700 }}>Amount Due</span>
               <strong style={{ fontSize: 20 }}>KES {quote.amountDueKes.toLocaleString()}</strong>
             </div>
-            <button onClick={() => loadQuote(paidBefore)} disabled={loadingQuote}
+            <button onClick={() => loadQuote(declaredFees)} disabled={loadingQuote}
               style={{ marginTop: 12, background: 'none', border: 'none', color: '#374151', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}>
               <Icon name="refresh" size={13} /> {loadingQuote ? 'Recalculating…' : 'Recalculate at current rate'}
             </button>
