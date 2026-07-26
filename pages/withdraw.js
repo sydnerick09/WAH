@@ -916,9 +916,12 @@ export default function WithdrawPage() {
     return <FlowSkeleton rows={3} />;
   }
 
-  // Bulk balances (≥ KES 25,000) must use the dedicated bank-transfer workflow.
+  // Bulk balances (≥ KES 25,000) ALWAYS use the dedicated bank-transfer workflow,
+  // regardless of which withdraw button was pressed (e.g. the dashboard's
+  // "Withdraw with M-Pesa" links straight to ?method=mpesa). This is what makes
+  // the "how many M-Pesa fees have you paid?" step reachable for bulk users.
   const isBulk = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
-  if (isBulk && !method) return <BulkWithdrawalFlow user={user} />;
+  if (isBulk) return <BulkWithdrawalFlow user={user} />;
 
   if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'fee'} />;
   if (method === 'postbank')      return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
