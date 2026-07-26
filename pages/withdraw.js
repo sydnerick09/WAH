@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import { sendNotify } from '../lib/notify';
+import { bulkWithdrawalQuote, submitBulkWithdrawal } from '../lib/auth';
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
 import { FlowSkeleton } from '../components/Skeleton';
@@ -179,7 +180,7 @@ function MpesaFlow({ user, initialStep }) {
   const pct   = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
 
   // Bulk amounts (above KES 25,000) must be withdrawn through the bank, not M-Pesa.
-  if (Number(user?.balance || 0) > BULK_THRESHOLD_KES) {
+  if (Number(user?.balance || 0) >= BULK_THRESHOLD_KES) {
     return (
       <FlowShell title="Withdraw with M-Pesa" subtitle="Bank withdrawal required" icon="smartphone" accent="var(--mpesa-green)">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
@@ -335,7 +336,7 @@ function PostbankFlow({ user, initialStep }) {
   const isLow    = remaining < 30 * 1000;
   const pct      = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
   const accent   = '#000000';
-  const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
+  const overLimit = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
 
   return (
     <FlowShell title="Withdraw with Postbank Kenya" subtitle="Postbank payout" icon="cash" accent={accent}>
@@ -557,7 +558,7 @@ function InternationalFlow({ user, initialStep }) {
   // Recommendation → confirmation → fee gate, shown before the bank form.
   if (gate !== 'form') {
     const accent = '#000000';
-    const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
+    const overLimit = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
     return (
       <FlowShell title="Withdraw from Other Countries" subtitle="Choose your method" icon="globe" accent={accent}>
         {gate === 'recommend' && (
@@ -700,6 +701,194 @@ function InternationalFlow({ user, initialStep }) {
   );
 }
 
+// ── Bulk withdrawal flow (balances ≥ KES 25,000 → bank transfer only) ─────────
+// Notice (previous M-Pesa fee?) → server-authoritative quote (live FX + capped
+// deductions) → validated bank details → submit + pay the computed amount due.
+function BulkWithdrawalFlow({ user }) {
+  const router = useRouter();
+  const [step,         setStep]         = useState('notice');   // notice | details | success
+  const [paidBefore,   setPaidBefore]   = useState(null);
+  const [quote,        setQuote]        = useState(null);
+  const [loadingQuote, setLoadingQuote] = useState(false);
+  const [submitting,   setSubmitting]   = useState(false);
+  const [err,          setErr]          = useState('');
+  const [errors,       setErrors]       = useState({});
+  const [bank,         setBank]         = useState({
+    bankName: '', accountName: user?.fullName || '', accountNumber: '', branch: '', swift: '',
+  });
+
+  const setField = (k, v) => { setBank(b => ({ ...b, [k]: v })); setErrors(e => ({ ...e, [k]: undefined })); };
+  const bankValid = bank.bankName.trim() && bank.accountName.trim() && bank.accountNumber.trim();
+
+  async function loadQuote(pb) {
+    setLoadingQuote(true); setErr('');
+    const q = await bulkWithdrawalQuote(pb);
+    setLoadingQuote(false);
+    if (!q?.success) { setErr(q?.error || 'Could not calculate the withdrawal fee. Please try again.'); return false; }
+    setQuote(q);
+    return true;
+  }
+
+  async function chooseNotice(pb) {
+    setPaidBefore(pb);
+    if (await loadQuote(pb)) setStep('details');
+  }
+
+  async function submit() {
+    const e = {};
+    if (!bank.bankName.trim())      e.bankName      = 'Bank name is required';
+    if (!bank.accountName.trim())   e.accountName   = 'Account name is required';
+    if (!bank.accountNumber.trim()) e.accountNumber = 'Account number is required';
+    setErrors(e);
+    if (Object.keys(e).length) return;
+
+    setSubmitting(true); setErr('');
+    const res = await submitBulkWithdrawal({ ...bank, paidBefore });
+    if (!res?.success) { setSubmitting(false); setErr(res?.error || 'Submission failed. Please try again.'); return; }
+
+    // Email the authoritative request + bank details to the payments team.
+    await sendNotify({
+      type: 'Bulk Bank Withdrawal Request',
+      name: bank.accountName.trim(), email: user?.email || '', phone: user?.phone || '',
+      subject: 'Bulk Bank Withdrawal Request (≥ KES 25,000)',
+      details:
+        `Account Holder: ${bank.accountName.trim()}\nBank: ${bank.bankName.trim()}\nAccount Number: ${bank.accountNumber.trim()}\n` +
+        `Branch: ${bank.branch.trim() || '—'}\nBank/SWIFT Code: ${bank.swift.trim() || '—'}\n\n` +
+        `Balance: KES ${Number(res.balance).toLocaleString()}\n` +
+        `Fee: USD ${res.feeUsd} @ ${res.rate} = KES ${res.convertedKes.toLocaleString()}\n` +
+        `Deductions: ${res.eligibleDeductions} × KES ${res.perFeeKes} = KES ${res.deductionKes.toLocaleString()}\n` +
+        `Amount Due: KES ${res.amountDueKes.toLocaleString()}\n\n` +
+        `Requested by: ${user?.fullName || ''} (${user?.email || ''})`,
+    });
+
+    if (res.amountDueKes > 0) {
+      try {
+        const r = await fetch('/api/paystack/initialize', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user.email, amount: res.amountDueKes, phone: user.phone || '', plan: 'bulk_withdrawal_fee' }),
+        });
+        const data = await r.json();
+        if (data.status) { window.location.href = data.data.authorization_url; return; }
+      } catch (_) { /* fall through to recorded-but-unpaid state */ }
+      setSubmitting(false);
+      setErr('Your request was recorded, but the payment could not be started. Our team will contact you.');
+      setStep('success');
+      return;
+    }
+    setSubmitting(false);
+    setStep('success');
+  }
+
+  const rateNote = quote && !quote.rateLive ? ' (approx.)' : '';
+
+  return (
+    <FlowShell title="Bulk Withdrawal" subtitle="Bank transfer required" icon="cash">
+      {step === 'notice' && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#111827', background: '#f9fafb' }}>
+            <div style={{ fontWeight: 800, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="warning" size={16} /> Bulk Withdrawal Notice
+            </div>
+            Your available balance of <strong>KES {Number(user.balance).toLocaleString()}</strong> exceeds{' '}
+            <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong>, which qualifies as a bulk withdrawal.
+            For security and compliance purposes, this amount can only be withdrawn through your registered
+            <strong> bank account</strong>. Before proceeding, please confirm how many successful M-Pesa
+            withdrawal fees you have previously paid.
+          </div>
+          {err && <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>{err}</div>}
+          <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} disabled={loadingQuote} onClick={() => chooseNotice(true)}>
+            {loadingQuote ? <><span className="spinner" /> Calculating…</> : <><Icon name="check" size={16} /> I Have Paid Before</>}
+          </button>
+          <button className="pay-btn" style={{ background: '#374151' }} disabled={loadingQuote} onClick={() => chooseNotice(false)}>
+            <Icon name="cash" size={16} /> I Have Not Paid Before
+          </button>
+        </>
+      )}
+
+      {step === 'details' && quote && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
+            Bank withdrawal is mandatory for balances of <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> or more.
+            The processing fee below is converted from <strong>USD {quote.feeUsd}</strong> at the live exchange rate.
+          </div>
+
+          {/* Fee breakdown */}
+          <div style={{ border: '1px solid var(--gray-light)', borderRadius: 12, padding: 16, marginBottom: 18 }}>
+            <div style={brRow}><span>Bank Withdrawal Fee</span><span>USD {quote.feeUsd}</span></div>
+            <div style={brRow}><span>Exchange Rate (live)</span><span>1 USD = KES {quote.rate}{rateNote}</span></div>
+            <div style={brRow}><span>Converted Amount</span><strong>KES {quote.convertedKes.toLocaleString()}</strong></div>
+            <div style={{ ...brRow, color: '#6b7280' }}><span>Previous M-Pesa Fees Paid</span><span>{quote.recordedFees} (eligible: {quote.eligibleDeductions}/{quote.maxDeductions})</span></div>
+            {Array.from({ length: quote.eligibleDeductions }).map((_, i) => (
+              <div key={i} style={{ ...brRow, color: '#374151' }}><span>Deduction {i + 1} (M-Pesa fee)</span><span>− KES {quote.perFeeKes.toLocaleString()}</span></div>
+            ))}
+            {quote.eligibleDeductions > 0 && (
+              <div style={brRow}><span>Total Deduction</span><strong>− KES {quote.deductionKes.toLocaleString()}</strong></div>
+            )}
+            <div style={{ ...brRow, borderTop: '1px solid var(--gray-light)', marginTop: 8, paddingTop: 12, fontSize: 16 }}>
+              <span style={{ fontWeight: 700 }}>Amount Due</span>
+              <strong style={{ fontSize: 20 }}>KES {quote.amountDueKes.toLocaleString()}</strong>
+            </div>
+            <button onClick={() => loadQuote(paidBefore)} disabled={loadingQuote}
+              style={{ marginTop: 12, background: 'none', border: 'none', color: '#374151', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}>
+              <Icon name="refresh" size={13} /> {loadingQuote ? 'Recalculating…' : 'Recalculate at current rate'}
+            </button>
+          </div>
+
+          {/* Bank details */}
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', marginBottom: 10 }}>Your Bank Account</div>
+          {[
+            ['bankName',      'Bank Name',                 'e.g. Equity Bank',       true],
+            ['accountName',   'Account Name',              'Full name on the account', true],
+            ['accountNumber', 'Account Number',            'e.g. 0123456789',        true],
+            ['branch',        'Branch (optional)',         'e.g. Nairobi CBD',       false],
+            ['swift',         'Bank Code / SWIFT (if any)','e.g. EQBLKENA',          false],
+          ].map(([key, label, ph, req]) => (
+            <div key={key} style={{ marginBottom: 12 }}>
+              <div className="pay-phone-label">{label}{req && <span style={{ color: '#374151' }}> *</span>}</div>
+              <input className="pay-phone-input" value={bank[key]} placeholder={ph}
+                onChange={e => setField(key, e.target.value)}
+                style={{ marginBottom: 0, borderColor: errors[key] ? '#4b5563' : undefined }} />
+              {errors[key] && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors[key]}</div>}
+            </div>
+          ))}
+
+          {err && <div style={{ color: '#4b5563', fontSize: 13, margin: '4px 0 10px' }}>{err}</div>}
+
+          {bankValid ? (
+            <button className="pay-btn" style={{ background: '#000000', marginTop: 8 }} disabled={submitting} onClick={submit}>
+              {submitting ? <><span className="spinner" /> Submitting…</> : <><Icon name="lock" size={16} /> Submit & Pay KES {quote.amountDueKes.toLocaleString()}</>}
+            </button>
+          ) : (
+            <div style={{ marginTop: 8, textAlign: 'center', fontSize: 13, color: '#9ca3af', padding: 12, background: '#f9fafb', borderRadius: 10, border: '1px dashed #e5e7eb' }}>
+              Complete Bank Name, Account Name and Account Number to continue
+            </div>
+          )}
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => { setStep('notice'); setErr(''); }}>
+            <Icon name="arrowLeft" size={14} /> Back
+          </button>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 }}>
+            <Icon name="lock" size={13} /> Verified server-side • fee recalculated at the live rate
+          </div>
+        </>
+      )}
+
+      {step === 'success' && (
+        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={52} /></div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: '#1f2937', marginBottom: 6 }}>Request Received</div>
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', textAlign: 'left', marginTop: 12 }}>
+            We&apos;ve recorded your bulk bank withdrawal request and emailed a copy to our payments team at{' '}
+            <strong>{user?.email}</strong>. They will process the transfer to your bank account.
+          </div>
+          {err && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 8 }}>{err}</div>}
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}>Back to Dashboard</button>
+        </div>
+      )}
+    </FlowShell>
+  );
+}
+const brRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5, color: '#111827', padding: '5px 0' };
+
 export default function WithdrawPage() {
   const router = useRouter();
   const { user, ready } = useUser();
@@ -710,12 +899,16 @@ export default function WithdrawPage() {
     return <FlowSkeleton rows={3} />;
   }
 
+  // Bulk balances (≥ KES 25,000) must use the dedicated bank-transfer workflow.
+  const isBulk = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
+  if (isBulk && !method) return <BulkWithdrawalFlow user={user} />;
+
   if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'fee'} />;
   if (method === 'postbank')      return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
   if (method === 'international')  return <InternationalFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'mpesa'} />;
 
   // Chooser
-  const overLimit = Number(user?.balance || 0) > BULK_THRESHOLD_KES;
+  const overLimit = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
   return (
     <FlowShell title="Withdraw" subtitle="Choose how you’d like to withdraw" icon="cash">
       {overLimit && (

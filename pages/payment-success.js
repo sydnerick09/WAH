@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { activateUser, activateWithBalance, upgradeToPremium, getCurrentUser } from '../lib/auth';
+import { activateUser, activateWithBalance, upgradeToPremium, getCurrentUser, recordMpesaFee } from '../lib/auth';
 
 export default function PaymentSuccess() {
   const router = useRouter();
@@ -65,8 +65,15 @@ export default function PaymentSuccess() {
         router.replace(`/dashboard?plan=withdrawal_fee&reference=${encodeURIComponent(reference)}`);
 
       } else if (plan === 'mpesa_withdrawal_fee') {
-        // Fee paid, open the M-Pesa withdrawal form on the withdraw page
+        // Fee paid: record it (deduped by reference) so it can later credit a
+        // bulk bank withdrawal, then open the M-Pesa withdrawal form.
+        try { await recordMpesaFee(reference); } catch (_) {}
         router.replace('/withdraw?method=mpesa&step=form');
+
+      } else if (plan === 'bulk_withdrawal_fee') {
+        // Bulk bank withdrawal fee paid — return to the dashboard with a note.
+        alert('Bulk withdrawal fee received. Our payments team will process your bank transfer.');
+        router.replace('/dashboard');
 
       } else if (plan === 'postbank_withdrawal_fee') {
         // Fee paid, open the Postbank Kenya withdrawal form

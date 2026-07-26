@@ -17,6 +17,45 @@ function getAdmin() {
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
+// ── Bulk withdrawal (balances ≥ KES 25,000 → bank only) ───────────────────────
+const BULK_THRESHOLD_KES  = 25000;   // at/above this, standard M-Pesa is unavailable
+const BANK_FEE_USD        = 23;      // bank withdrawal processing fee (converted live)
+const MPESA_FEE_KES       = 650;     // one previously-paid M-Pesa withdrawal fee
+const MAX_FEE_DEDUCTIONS  = 2;       // at most two KES 650 credits (KES 1,300)
+
+// Live USD→KES rate (never hardcoded). Fetched per request; falls back to a
+// clearly-flagged approximate value only if the rate service is unreachable so
+// the flow never hard-fails.
+async function fetchUsdToKes() {
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(6000) });
+    const j = await r.json();
+    const kes = Number(j?.rates?.KES);
+    if (kes && kes > 0) return { rate: kes, live: true };
+  } catch (_) { /* fall through to fallback */ }
+  return { rate: 129, live: false };
+}
+
+// Server-authoritative bulk fee breakdown from the user's recorded M-Pesa fee
+// history. `paidBefore` (from the notice modal) gates whether credits apply; the
+// count is always taken from the record and capped at two, so it can't be gamed.
+async function computeBulkQuote(u, paidBefore) {
+  const balance      = Number(u.balance || 0);
+  const subs         = u.task_submissions || {};
+  const recordedFees = Math.max(0, Number(subs._mpesaFeesPaid || 0));
+  const eligible     = paidBefore ? Math.min(recordedFees, MAX_FEE_DEDUCTIONS) : 0;
+  const { rate, live } = await fetchUsdToKes();
+  const convertedKes = Math.round(BANK_FEE_USD * rate);
+  const deductionKes = eligible * MPESA_FEE_KES;
+  const amountDueKes = Math.max(0, convertedKes - deductionKes);
+  return {
+    balance, feeUsd: BANK_FEE_USD, rate: Math.round(rate * 100) / 100, rateLive: live,
+    convertedKes, recordedFees, eligibleDeductions: eligible,
+    perFeeKes: MPESA_FEE_KES, maxDeductions: MAX_FEE_DEDUCTIONS,
+    deductionKes, amountDueKes,
+  };
+}
+
 // The password hash is never returned in any response (not even to the admin
 // panel) so it can't leak or be accidentally re-submitted. Admins reset
 // passwords via a write-only "new password" field.
@@ -77,6 +116,7 @@ function norm(row) {
     premiumBalance:  Number(subs._pbal   ?? 0),
     premiumTestDone: ptest !== null,
     premiumTestScore: Number(ptest?.score ?? 0),
+    mpesaFeesPaid:   Math.max(0, Number(subs._mpesaFeesPaid ?? 0)),
   };
 }
 
@@ -258,6 +298,7 @@ const USER_SCOPED = new Set([
   'updateWithdrawal', 'listUserSubmissions', 'listUserApplications',
   'createApplication',
   'updateProfile', 'updateAvatar', 'changeContact', 'deleteAccount',
+  'recordMpesaFee', 'bulkWithdrawalQuote', 'submitBulkWithdrawal',
 ]);
 
 export default async function handler(req, res) {
@@ -647,6 +688,65 @@ export default async function handler(req, res) {
           .update({ status: p.status, updated_at: new Date().toISOString() })
           .eq('id', p.requestId).select().single();
         return res.json({ data: normWd(data) });
+      }
+
+      // ─── Bulk withdrawal (balances ≥ KES 25,000) ──────────────────────────
+      // Record a successfully-paid M-Pesa withdrawal fee. Deduped by the
+      // Paystack reference so a page reload can't double-count.
+      case 'recordMpesaFee': {
+        const ref = clean(p.reference, 120);
+        const { data: u } = await db.from('users')
+          .select('task_submissions').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false });
+        const subs = { ...(u.task_submissions || {}) };
+        const refs = Array.isArray(subs._mpesaFeeRefs) ? subs._mpesaFeeRefs : [];
+        if (ref && refs.includes(ref)) {
+          return res.json({ success: true, duplicate: true, mpesaFeesPaid: Number(subs._mpesaFeesPaid || 0) });
+        }
+        subs._mpesaFeesPaid = Math.max(0, Number(subs._mpesaFeesPaid || 0)) + 1;
+        if (ref) subs._mpesaFeeRefs = [...refs, ref].slice(-20);
+        await db.from('users').update({ task_submissions: subs }).eq('id', p.userId);
+        await logAction(db, { action: 'mpesa_fee_paid', entity: 'user', entityId: p.userId,
+          detail: `count:${subs._mpesaFeesPaid}${ref ? ` ref:${ref}` : ''}` });
+        return res.json({ success: true, mpesaFeesPaid: subs._mpesaFeesPaid });
+      }
+
+      // Server-authoritative fee quote for a bulk withdrawal (live FX + capped
+      // deductions from recorded history). Audited on every request.
+      case 'bulkWithdrawalQuote': {
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'User not found.' });
+        if (Number(u.balance || 0) < BULK_THRESHOLD_KES) {
+          return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });
+        }
+        const q = await computeBulkQuote(u, !!p.paidBefore);
+        await logAction(db, { action: 'bulk_withdrawal_quote', entity: 'user', entityId: p.userId,
+          detail: `bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} usd:${q.feeUsd} converted:${q.convertedKes} recorded:${q.recordedFees} deductions:${q.eligibleDeductions} deductionKes:${q.deductionKes} due:${q.amountDueKes}` });
+        return res.json({ success: true, eligible: true, ...q });
+      }
+
+      // Validate bank details, recompute the quote server-side (authoritative),
+      // and log the full bulk request for auditing. Returns the final breakdown.
+      case 'submitBulkWithdrawal': {
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'User not found.' });
+        if (Number(u.balance || 0) < BULK_THRESHOLD_KES) {
+          return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });
+        }
+        const bankName      = clean(p.bankName, 80);
+        const accountName   = clean(p.accountName, 80);
+        const accountNumber = clean(p.accountNumber, 40);
+        const branch        = clean(p.branch, 80);
+        const swift         = clean(p.swift, 40);
+        if (!nonEmpty(bankName) || !nonEmpty(accountName) || !nonEmpty(accountNumber)) {
+          return res.json({ success: false, error: 'Bank name, account name and account number are required.' });
+        }
+        const q = await computeBulkQuote(u, !!p.paidBefore);
+        await logAction(db, { action: 'bulk_withdrawal_request', entity: 'user', entityId: p.userId,
+          detail: `bank:${bankName} acct:${accountName}/${accountNumber}${branch ? ` branch:${branch}` : ''}${swift ? ` swift:${swift}` : ''} | bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} converted:${q.convertedKes} deductions:${q.eligibleDeductions}x${q.perFeeKes} due:${q.amountDueKes}` });
+        return res.json({ success: true, ...q, bank: { bankName, accountName, accountNumber, branch, swift } });
       }
 
       case 'listUsers': {
