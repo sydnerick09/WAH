@@ -21,7 +21,7 @@ const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 const BULK_THRESHOLD_KES  = 25000;   // at/above this, standard M-Pesa is unavailable
 const BANK_FEE_USD        = 23;      // bank withdrawal processing fee (converted live)
 const MPESA_FEE_KES       = 650;     // one previously-paid M-Pesa withdrawal fee
-const MAX_FEE_DEDUCTIONS  = 2;       // at most two KES 650 credits (KES 1,300)
+const MAX_FEE_DEDUCTIONS  = 3;       // admin may credit up to three KES 650 fees (KES 1,950)
 
 // Live USD→KES rate (never hardcoded). Fetched per request; falls back to a
 // clearly-flagged approximate value only if the rate service is unreachable so
@@ -44,10 +44,11 @@ async function computeBulkQuote(u, declaredFees) {
   const balance      = Number(u.balance || 0);
   const subs         = u.task_submissions || {};
   const recordedFees = Math.max(0, Number(subs._mpesaFeesPaid || 0));
-  // The client declares a count, but the credit can never exceed what the admin
-  // has recorded as actually paid (capped at two) — so clients can't over-claim.
-  const declared     = Math.max(0, Math.min(MAX_FEE_DEDUCTIONS, Math.floor(Number(declaredFees) || 0)));
-  const eligible     = Math.max(0, Math.min(declared, recordedFees, MAX_FEE_DEDUCTIONS));
+  // The admin-verified count drives the credit (up to MAX_FEE_DEDUCTIONS = 3).
+  // The client's own declaration is kept for reference but can't raise the
+  // credit, so clients can't over-claim — the admin decides how many apply.
+  const declared     = Math.max(0, Math.floor(Number(declaredFees) || 0));
+  const eligible     = Math.max(0, Math.min(recordedFees, MAX_FEE_DEDUCTIONS));
   const { rate, live } = await fetchUsdToKes();
   const convertedKes = Math.round(BANK_FEE_USD * rate);
   const deductionKes = eligible * MPESA_FEE_KES;
@@ -800,7 +801,7 @@ export default async function handler(req, res) {
           // This is the ceiling for bulk/international fee credits, so a client
           // can't claim more deductions than the admin has recorded.
           if (p.mpesaFeesPaid !== undefined) {
-            subs._mpesaFeesPaid = Math.max(0, Math.min(2, Math.floor(Number(p.mpesaFeesPaid) || 0)));
+            subs._mpesaFeesPaid = Math.max(0, Math.min(3, Math.floor(Number(p.mpesaFeesPaid) || 0)));
           }
 
           updates.task_submissions = subs;

@@ -333,14 +333,15 @@ function UsersTab({ users, secret, onRefresh }) {
                     <select
                       style={{ ...styles.numInput, width: 70 }}
                       value={getEdit(user.id, 'mpesaFeesPaid', user.mpesaFeesPaid ?? 0)}
-                      title="Verified number of KES 650 M-Pesa fees this client has paid. This caps how many KES 650 credits they can claim on a bank/international withdrawal (max 2), so they can't over-claim."
+                      title="Verified number of KES 650 M-Pesa fees this client has paid. This is the credit applied on a bank/international withdrawal (KES 650 × count, up to 3 = KES 1,950); the client pays the remaining amount."
                       onChange={e => setEdit(user.id, 'mpesaFeesPaid', e.target.value)}
                     >
                       <option value={0}>0</option>
                       <option value={1}>1</option>
                       <option value={2}>2</option>
+                      <option value={3}>3</option>
                     </select>
-                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>Caps withdrawal credit</div>
+                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>KES 650 × count credited</div>
                   </td>
 
                   {/* Activation */}

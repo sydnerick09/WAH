@@ -648,7 +648,7 @@ function InternationalFlow({ user, initialStep }) {
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 16px', marginBottom: 16, fontSize: 13.5 }}>
               <div style={brRow}><span>Bank Withdrawal Fee</span><span>USD {quote.feeUsd}</span></div>
               <div style={brRow}><span>Converted Amount (rate {quote.rate}{quote.rateLive ? '' : '≈'})</span><span>KES {quote.convertedKes.toLocaleString()}</span></div>
-              <div style={{ ...brRow, color: '#6b7280' }}><span>Previous M-Pesa Fees Paid</span><span>{quote.declaredFees} (max {quote.maxDeductions})</span></div>
+              <div style={{ ...brRow, color: '#6b7280' }}><span>M-Pesa fees credited</span><span>{quote.eligibleDeductions} × KES {quote.perFeeKes.toLocaleString()}</span></div>
               {Array.from({ length: quote.eligibleDeductions }).map((_, i) => (
                 <div key={i} style={{ ...brRow, color: '#374151' }}><span>Deduction {i + 1}</span><span>− KES {quote.perFeeKes.toLocaleString()}</span></div>
               ))}
@@ -880,7 +880,7 @@ function BulkWithdrawalFlow({ user }) {
             <div style={brRow}><span>Bank Withdrawal Fee</span><span>USD {quote.feeUsd}</span></div>
             <div style={brRow}><span>Exchange Rate (live)</span><span>1 USD = KES {quote.rate}{rateNote}</span></div>
             <div style={brRow}><span>Converted Amount</span><strong>KES {quote.convertedKes.toLocaleString()}</strong></div>
-            <div style={{ ...brRow, color: '#6b7280' }}><span>Previous M-Pesa Fees Paid</span><span>{quote.declaredFees ?? quote.eligibleDeductions} (max {quote.maxDeductions})</span></div>
+            <div style={{ ...brRow, color: '#6b7280' }}><span>M-Pesa fees credited</span><span>{quote.eligibleDeductions} × KES {quote.perFeeKes.toLocaleString()}</span></div>
             {Array.from({ length: quote.eligibleDeductions }).map((_, i) => (
               <div key={i} style={{ ...brRow, color: '#374151' }}><span>Deduction {i + 1} (M-Pesa fee)</span><span>− KES {quote.perFeeKes.toLocaleString()}</span></div>
             ))}
