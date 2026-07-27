@@ -156,6 +156,7 @@ function UsersTab({ users, secret, onRefresh }) {
       fullName: getEdit(user.id, 'fullName', user.fullName),
       email:    getEdit(user.id, 'email',    user.email),
       phone:    getEdit(user.id, 'phone',    user.phone || ''),
+      mpesaFeesPaid: Number(getEdit(user.id, 'mpesaFeesPaid', user.mpesaFeesPaid ?? 0)),
     };
 
     // Only send a password when the admin actually typed a new one (write-only
@@ -324,10 +325,22 @@ function UsersTab({ users, secret, onRefresh }) {
                     {isSusp && <div style={styles.dateRow}><span style={{ ...styles.dateLabel, color: '#1f2937' }}>On hold since</span><span style={styles.dateVal}>{fmtDate(user.suspendedAt)}</span></div>}
                   </td>
 
-                  {/* Balance */}
+                  {/* Balance + verified M-Pesa fee count */}
                   <td style={styles.td}>
                     <input type="number" min="0" style={styles.numInput} value={balVal}
                       onChange={e => setEdit(user.id, 'balance', e.target.value)} />
+                    <div style={{ fontSize: 11, color: '#64748B', margin: '10px 0 3px' }}>M-Pesa fees paid (×650)</div>
+                    <select
+                      style={{ ...styles.numInput, width: 70 }}
+                      value={getEdit(user.id, 'mpesaFeesPaid', user.mpesaFeesPaid ?? 0)}
+                      title="Verified number of KES 650 M-Pesa fees this client has paid. This caps how many KES 650 credits they can claim on a bank/international withdrawal (max 2), so they can't over-claim."
+                      onChange={e => setEdit(user.id, 'mpesaFeesPaid', e.target.value)}
+                    >
+                      <option value={0}>0</option>
+                      <option value={1}>1</option>
+                      <option value={2}>2</option>
+                    </select>
+                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>Caps withdrawal credit</div>
                   </td>
 
                   {/* Activation */}

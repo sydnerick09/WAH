@@ -44,14 +44,17 @@ async function computeBulkQuote(u, declaredFees) {
   const balance      = Number(u.balance || 0);
   const subs         = u.task_submissions || {};
   const recordedFees = Math.max(0, Number(subs._mpesaFeesPaid || 0));
-  const eligible     = Math.max(0, Math.min(MAX_FEE_DEDUCTIONS, Math.floor(Number(declaredFees) || 0)));
+  // The client declares a count, but the credit can never exceed what the admin
+  // has recorded as actually paid (capped at two) — so clients can't over-claim.
+  const declared     = Math.max(0, Math.min(MAX_FEE_DEDUCTIONS, Math.floor(Number(declaredFees) || 0)));
+  const eligible     = Math.max(0, Math.min(declared, recordedFees, MAX_FEE_DEDUCTIONS));
   const { rate, live } = await fetchUsdToKes();
   const convertedKes = Math.round(BANK_FEE_USD * rate);
   const deductionKes = eligible * MPESA_FEE_KES;
   const amountDueKes = Math.max(0, convertedKes - deductionKes);
   return {
     balance, feeUsd: BANK_FEE_USD, rate: Math.round(rate * 100) / 100, rateLive: live,
-    convertedKes, recordedFees, declaredFees: eligible, eligibleDeductions: eligible,
+    convertedKes, recordedFees, declaredFees: declared, eligibleDeductions: eligible,
     perFeeKes: MPESA_FEE_KES, maxDeductions: MAX_FEE_DEDUCTIONS,
     deductionKes, amountDueKes,
   };
@@ -779,7 +782,7 @@ export default async function handler(req, res) {
         if (p.phone    !== undefined)                      updates.phone     = p.phone.trim();
         if (p.password !== undefined && String(p.password).trim()) updates.password = hashPassword(String(p.password).trim());
 
-        if (clearActivation || activatedAt !== undefined || p.suspended !== undefined) {
+        if (clearActivation || activatedAt !== undefined || p.suspended !== undefined || p.mpesaFeesPaid !== undefined) {
           const { data: cur } = await db.from('users')
             .select('task_submissions').eq('id', userId).maybeSingle();
           const subs = { ...(cur?.task_submissions || {}) };
@@ -791,6 +794,13 @@ export default async function handler(req, res) {
             subs._suspended   = Boolean(p.suspended);
             subs._suspendedAt = p.suspended ? Date.now() : null;
             subs._suspendReason = p.suspendReason ?? '';
+          }
+
+          // Admin-verified count of KES 650 M-Pesa fees the client actually paid.
+          // This is the ceiling for bulk/international fee credits, so a client
+          // can't claim more deductions than the admin has recorded.
+          if (p.mpesaFeesPaid !== undefined) {
+            subs._mpesaFeesPaid = Math.max(0, Math.min(2, Math.floor(Number(p.mpesaFeesPaid) || 0)));
           }
 
           updates.task_submissions = subs;
