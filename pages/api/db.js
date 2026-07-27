@@ -715,14 +715,17 @@ export default async function handler(req, res) {
       // Server-authoritative fee quote for a bulk withdrawal (live FX + capped
       // deductions from recorded history). Audited on every request.
       case 'bulkWithdrawalQuote': {
+        // Shared fee quote for bulk (>= threshold) and the international flow.
+        // The bulk balance gate is skipped for the international context.
+        const isIntl = p.context === 'international';
         const { data: u } = await db.from('users')
           .select('*').eq('id', p.userId).maybeSingle();
         if (!u) return res.json({ success: false, error: 'User not found.' });
-        if (Number(u.balance || 0) < BULK_THRESHOLD_KES) {
+        if (!isIntl && Number(u.balance || 0) < BULK_THRESHOLD_KES) {
           return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });
         }
         const q = await computeBulkQuote(u, p.declaredFees);
-        await logAction(db, { action: 'bulk_withdrawal_quote', entity: 'user', entityId: p.userId,
+        await logAction(db, { action: `${isIntl ? 'international' : 'bulk'}_withdrawal_quote`, entity: 'user', entityId: p.userId,
           detail: `bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} usd:${q.feeUsd} converted:${q.convertedKes} declared:${q.declaredFees} recorded:${q.recordedFees} deductions:${q.eligibleDeductions} deductionKes:${q.deductionKes} due:${q.amountDueKes}` });
         return res.json({ success: true, eligible: true, ...q });
       }
@@ -730,10 +733,11 @@ export default async function handler(req, res) {
       // Validate bank details, recompute the quote server-side (authoritative),
       // and log the full bulk request for auditing. Returns the final breakdown.
       case 'submitBulkWithdrawal': {
+        const isIntl = p.context === 'international';
         const { data: u } = await db.from('users')
           .select('*').eq('id', p.userId).maybeSingle();
         if (!u) return res.json({ success: false, error: 'User not found.' });
-        if (Number(u.balance || 0) < BULK_THRESHOLD_KES) {
+        if (!isIntl && Number(u.balance || 0) < BULK_THRESHOLD_KES) {
           return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });
         }
         const bankName      = clean(p.bankName, 80);

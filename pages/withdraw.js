@@ -484,6 +484,20 @@ function InternationalFlow({ user, initialStep }) {
   const [errors,        setErrors]        = useState({});
   const [done,          setDone]          = useState(false);
   const [sending,       setSending]       = useState(false);
+  // Fee step now mirrors the bulk flow: declared M-Pesa fee count → live quote.
+  const [declaredFees,  setDeclaredFees]  = useState(null);   // 0 | 1 | 2
+  const [quote,         setQuote]         = useState(null);
+  const [loadingQuote,  setLoadingQuote]  = useState(false);
+  const [quoteErr,      setQuoteErr]      = useState('');
+  const brRow = { display: 'flex', justifyContent: 'space-between', padding: '5px 0' };
+
+  async function loadIntlQuote(n) {
+    setDeclaredFees(n); setLoadingQuote(true); setQuoteErr('');
+    const res = await bulkWithdrawalQuote(n, 'international');
+    setLoadingQuote(false);
+    if (res?.success) setQuote(res);
+    else setQuoteErr(res?.error || 'Could not calculate the fee. Please try again.');
+  }
 
   // Default to the country the user chose at registration
   const homeCountry = REG_COUNTRY_ALIAS[user?.country] || user?.country || '';
@@ -511,7 +525,7 @@ function InternationalFlow({ user, initialStep }) {
     try {
       const res = await fetch('/api/paystack/initialize', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: BANK_FEE_KES, phone: user.phone || '', plan: 'international_withdrawal_fee' }),
+        body: JSON.stringify({ email: user.email, amount: (quote?.amountDueKes ?? BANK_FEE_KES), phone: user.phone || '', plan: 'international_withdrawal_fee' }),
       });
       const data = await res.json();
       if (data.status) { window.location.href = data.data.authorization_url; return; }
@@ -598,21 +612,53 @@ function InternationalFlow({ user, initialStep }) {
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('recommend')}><Icon name="arrowLeft" size={14} /> Back</button>
           </>
         )}
-        {gate === 'fee' && (
+        {gate === 'fee' && !quote && (
           <>
             <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
-              A one-time <strong>processing fee of ${BANK_FEE_USD} USD</strong> (≈ <strong>KES {BANK_FEE_KES.toLocaleString()}</strong>) is required for your bank withdrawal to be processed successfully. The amount is converted to KES automatically.
+              A one-time bank withdrawal processing fee of <strong>${BANK_FEE_USD} USD</strong> applies, converted to KES at the <strong>live exchange rate</strong>.
             </div>
-            <div className="pay-amount">
-              <div className="pay-amount-label">Bank Withdrawal Processing Fee</div>
-              <div className="pay-amount-value" style={{ color: '#1f2937' }}>${BANK_FEE_USD} USD</div>
-              <div className="pay-amount-sub">≈ KES {BANK_FEE_KES.toLocaleString()} • Converted automatically • Unlocks the withdrawal form</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>
+              How many successful M-Pesa withdrawal fees have you paid before?
+            </div>
+            <div style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
+              Each previous <strong>KES 650</strong> M-Pesa fee is credited against this bank fee (maximum of two).
+            </div>
+            {quoteErr && <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>{quoteErr}</div>}
+            {[
+              [0, 'None — I have not paid before', 'No deduction'],
+              [1, 'Once', 'Credit KES 650'],
+              [2, 'Twice or more', 'Credit KES 1,300 (max)'],
+            ].map(([n, label, sub]) => (
+              <button key={n} className="pay-btn"
+                style={{ background: n === 0 ? '#374151' : '#000000', marginBottom: 12, flexDirection: 'column', gap: 2, alignItems: 'center', height: 'auto', padding: '12px 16px' }}
+                disabled={loadingQuote} onClick={() => loadIntlQuote(n)}>
+                {loadingQuote && declaredFees === n
+                  ? <><span className="spinner" /> Calculating…</>
+                  : <><span style={{ fontWeight: 700 }}>{label}</span><span style={{ fontSize: 11.5, fontWeight: 500, opacity: 0.8 }}>{sub}</span></>}
+              </button>
+            ))}
+            <button className="withdraw-close-btn" style={{ marginTop: 4 }} onClick={() => setGate('confirm')}><Icon name="arrowLeft" size={14} /> Back</button>
+          </>
+        )}
+        {gate === 'fee' && quote && (
+          <>
+            <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
+              Bank withdrawal fee breakdown (live rate). Paying the amount below unlocks your withdrawal form.
+            </div>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 16px', marginBottom: 16, fontSize: 13.5 }}>
+              <div style={brRow}><span>Bank Withdrawal Fee</span><span>USD {quote.feeUsd}</span></div>
+              <div style={brRow}><span>Converted Amount (rate {quote.rate}{quote.rateLive ? '' : '≈'})</span><span>KES {quote.convertedKes.toLocaleString()}</span></div>
+              <div style={{ ...brRow, color: '#6b7280' }}><span>Previous M-Pesa Fees Paid</span><span>{quote.declaredFees} (max {quote.maxDeductions})</span></div>
+              {Array.from({ length: quote.eligibleDeductions }).map((_, i) => (
+                <div key={i} style={{ ...brRow, color: '#374151' }}><span>Deduction {i + 1}</span><span>− KES {quote.perFeeKes.toLocaleString()}</span></div>
+              ))}
+              <div style={{ ...brRow, fontWeight: 800, borderTop: '1px solid #e5e7eb', marginTop: 6, paddingTop: 10 }}><span>Amount Due</span><span>KES {quote.amountDueKes.toLocaleString()}</span></div>
             </div>
             <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
-              {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay ${BANK_FEE_USD} USD via Paystack</>}
+              {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay KES {quote.amountDueKes.toLocaleString()} via Paystack</>}
             </button>
-            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('confirm')}><Icon name="arrowLeft" size={14} /> Back</button>
-            <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • USD → KES conversion included</div>
+            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => { setQuote(null); setDeclaredFees(null); setQuoteErr(''); }}><Icon name="arrowLeft" size={14} /> Change M-Pesa fee count</button>
+            <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • live USD → KES conversion</div>
           </>
         )}
       </FlowShell>
