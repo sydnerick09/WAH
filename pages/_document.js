@@ -6,7 +6,7 @@ export default function Document() {
     <Html lang="en">
       <Head>
         <meta charSet="utf-8" />
-        <meta name="description" content="Online Business Hub, Work, Earn, Grow. Complete tasks, post assignments, and earn money from anywhere in Kenya." />
+        <meta name="description" content="Gweno, Work, Earn, Grow. Complete tasks, post assignments, and earn money from anywhere in Kenya." />
         <meta name="theme-color" content="#000000" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />

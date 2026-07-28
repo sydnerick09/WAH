@@ -1,6 +1,6 @@
 // pages/dashboard.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Business Hub Dashboard
+// Gweno Dashboard
 // M-Pesa Withdrawal flow:
 //   1. User clicks "Withdraw with M-Pesa" → pays KES 5 (simulated locally)
 //   2. Fee confirmed → Withdrawal Details Form (phone + ID number only)
@@ -121,7 +121,7 @@ const REVIEWS = [
   { name: 'Wanjiku Maina',     country: 'Nakuru, Kenya',     rating: 5,
     text: 'Guys, you need to have correct details before you withdraw so that you avoid the inconveniences of paying the withdrawal fee twice or thrice.' },
   { name: 'Grace Achieng',     country: 'Kisumu, Kenya',     rating: 5,
-    text: 'The M-Pesa payout hit my phone in under two minutes. Double-checking my number first made it smooth. Business Hub is legit.' },
+    text: 'The M-Pesa payout hit my phone in under two minutes. Double-checking my number first made it smooth. Gweno is legit.' },
   { name: 'Chinedu Okafor',    country: 'Lagos, Nigeria',    rating: 5,
     text: 'I was skeptical at first, but after my very first successful withdrawal I upgraded to premium. Worth every naira.' },
   { name: 'Ama Mensah',        country: 'Accra, Ghana',      rating: 4,
@@ -659,8 +659,8 @@ function ReferralModal({ user, onClose }) {
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
             {[
-              { label: 'WhatsApp', icon: 'share', url: `https://wa.me/?text=Join%20Business%20Hub%20and%20earn%20online!%20${encodeURIComponent(referralLink)}` },
-              { label: 'Email',    icon: 'mail',  url: `mailto:?subject=Join%20Business%20Hub&body=Hey!%20Join%20me%20on%20Business%20Hub.%20Use%20my%20link:%20${encodeURIComponent(referralLink)}` },
+              { label: 'WhatsApp', icon: 'share', url: `https://wa.me/?text=Join%20Gweno%20and%20earn%20online!%20${encodeURIComponent(referralLink)}` },
+              { label: 'Email',    icon: 'mail',  url: `mailto:?subject=Join%20Gweno&body=Hey!%20Join%20me%20on%20Gweno.%20Use%20my%20link:%20${encodeURIComponent(referralLink)}` },
             ].map(btn => (
               <a key={btn.label} href={user?.activated ? btn.url : '#'} target="_blank" rel="noopener noreferrer"
                 style={{ flex: 1, padding: 12, background: '#000000', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, textAlign: 'center', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: user?.activated ? 1 : 0.5, pointerEvents: user?.activated ? 'auto' : 'none' }}>
@@ -1122,7 +1122,7 @@ export default function Dashboard() {
             Account On Hold
           </h2>
           <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, marginBottom: 20 }}>
-            Your account has been placed on hold and you cannot access Business Hub at this time.
+            Your account has been placed on hold and you cannot access Gweno at this time.
           </p>
           {user.suspendReason && (
             <div style={{ background: '#e5e7eb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
@@ -1144,7 +1144,7 @@ export default function Dashboard() {
       {/* Navbar */}
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">
-          <Link href="/" className="dash-logo">BUSINESS HUB</Link>
+          <Link href="/" className="dash-logo">GWENO</Link>
           <div className="dash-user">
             <Link href="/profile" className="dash-user-info" style={{ textDecoration: 'none' }}>
               <div className="dash-user-name">{user.fullName}</div>

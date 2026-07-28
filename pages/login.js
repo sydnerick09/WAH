@@ -46,7 +46,7 @@ export default function Login() {
     <div className="auth-page auth-page--top">
       <header className="auth-header">
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <div className="auth-brand">BUSINESS HUB</div>
+          <div className="auth-brand">GWENO</div>
         </Link>
       </header>
 

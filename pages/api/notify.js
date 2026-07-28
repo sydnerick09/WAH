@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   }
 
   const admin   = process.env.NOTIFY_EMAIL || process.env.SMTP_USER;
-  const fromAddr = `"Business Hub" <${process.env.SMTP_USER}>`;
+  const fromAddr = `"Gweno" <${process.env.SMTP_USER}>`;
 
   const detailRows = `
     <table cellpadding="8" style="border-collapse:collapse;font-family:Inter,Arial,sans-serif;font-size:14px;">
@@ -80,15 +80,15 @@ export default async function handler(req, res) {
       await transporter.sendMail({
         from: fromAddr,
         to: email,
-        subject: 'We’ve received your request, Business Hub',
+        subject: 'We’ve received your request, Gweno',
         html: `
           <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;">
             <p>Hi ${esc(name) || 'there'},</p>
-            <p>Thank you for reaching out to <strong>Business Hub</strong>. We’ve received your <strong>${esc(type).toLowerCase()}</strong> and our team will get back to you shortly.</p>
+            <p>Thank you for reaching out to <strong>Gweno</strong>. We’ve received your <strong>${esc(type).toLowerCase()}</strong> and our team will get back to you shortly.</p>
             <p style="background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;padding:12px 14px;">
               <strong>Summary</strong><br/>${esc(details).replace(/\n/g, '<br/>')}
             </p>
-            <p>Warm regards,<br/>The Business Hub Team</p>
+            <p>Warm regards,<br/>The Gweno Team</p>
           </div>`,
       });
       clientSent = true;

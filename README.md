@@ -1,4 +1,4 @@
-# Business Hub — Online Earning Platform
+# Gweno — Online Earning Platform
 
 A full-stack Next.js web app for task management and earning, targeting East African users. Supports real payments via Paystack, Supabase persistence, and a full withdrawal flow.
 

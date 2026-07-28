@@ -58,7 +58,7 @@ export default function ForgotPassword() {
       <div className="auth-grid-bg" />
       <div className="auth-card">
         <Link href="/" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
-          <div className="auth-logo">BUSINESS HUB</div>
+          <div className="auth-logo">GWENO</div>
         </Link>
         <p className="auth-tagline">Work. Earn. Grow.</p>
         <h1 className="auth-title">Reset your password</h1>

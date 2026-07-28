@@ -2,20 +2,20 @@ import { useState, useEffect } from 'react';
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
-const BROADCAST_DEFAULT_SUBJECT = 'Welcome to Business Hub';
+const BROADCAST_DEFAULT_SUBJECT = 'Welcome to Gweno';
 const BROADCAST_DEFAULT_BODY = `Dear Client,
 
-Welcome to Business Hub! We are delighted to have you as part of our community.
+Welcome to Gweno! We are delighted to have you as part of our community.
 
 We have been working hard to improve our services and address your concerns. We are pleased to introduce a few simple steps that will make it easier for you to manage your Activation Fee and Premium Fee at your convenience.
 
 We also encourage you to carefully complete the available tasks and assessments, as they provide genuine earning opportunities that can help you cover your activation and premium fees.
 
-For your security, we kindly ask you to withdraw your earnings promptly. In line with our policies, Business Hub does not hold clients' funds. We operate as a secure bridge between clients and service providers, not as a bank.
+For your security, we kindly ask you to withdraw your earnings promptly. In line with our policies, Gweno does not hold clients' funds. We operate as a secure bridge between clients and service providers, not as a bank.
 
 Our mission is to create opportunities, empower our community, and give back to society through a reliable and transparent platform.
 
-Thank you for choosing Business Hub. We look forward to supporting your success.`;
+Thank you for choosing Gweno. We look forward to supporting your success.`;
 
 async function dbProxy(op, params = {}) {
   const r = await fetch('/api/db', {
@@ -1294,7 +1294,7 @@ export default function AdminPanel() {
     return (
       <div style={styles.loginWrap}>
         <div style={styles.loginCard}>
-          <div style={styles.logo}>BUSINESS HUB</div>
+          <div style={styles.logo}>GWENO</div>
           <p style={styles.loginSub}>Admin Panel</p>
           <form onSubmit={handleLogin}>
             <input style={styles.input} type="password" placeholder="Admin password"
@@ -1313,7 +1313,7 @@ export default function AdminPanel() {
     <div style={styles.wrap}>
       <div style={styles.header}>
         <div>
-          <div style={styles.logo}>BUSINESS HUB</div>
+          <div style={styles.logo}>GWENO</div>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>Admin, Full Database Manager</p>
         </div>
         <button style={{ ...styles.btn, padding: '8px 18px', fontSize: 13, width: 'auto' }} onClick={refresh}>
