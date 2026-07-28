@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   styles/globals.css, Gweno Enhanced
+   styles/globals.css, Gweno Hub Enhanced
    ══════════════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;500;600;700&display=swap');
@@ -300,7 +300,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   padding: 56px 20px 76px;
 }
 .auth-page::after {
-  content: '© 2026 Gweno. All rights reserved.';
+  content: '© 2026 Gweno Hub. All rights reserved.';
   position: absolute; left: 0; right: 0; bottom: 24px;
   text-align: center; font-family: var(--font-sub); font-size: 12.5px;
   color: var(--gray); padding: 0 20px;

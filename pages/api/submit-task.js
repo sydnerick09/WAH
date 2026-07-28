@@ -158,7 +158,7 @@ export default async function handler(req, res) {
 
   // ── 7. Send email ─────────────────────────────────────────────────────────
   const mailOptions = {
-    from: `"Gweno" <${process.env.SMTP_USER}>`,
+    from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
     to: destination,
     replyTo: userEmail && userEmail !== "N/A" ? userEmail : undefined,
     subject: `[Task Submission] ${taskTitle} (${paymentDisplay}), ${userName !== "N/A" ? userName : "User " + userId}`,
@@ -194,14 +194,14 @@ export default async function handler(req, res) {
   if (userEmail && userEmail !== "N/A") {
     try {
       await transporter.sendMail({
-        from: `"Gweno" <${process.env.SMTP_USER}>`,
+        from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
         to: userEmail,
         subject: `We received your submission, ${taskTitle}`,
         html: `
           <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;">
             <p>Hi ${escHtml(userName !== "N/A" ? userName : "there")},</p>
             <p>Thank you, we’ve received your submission for <strong>${escHtml(taskTitle)}</strong> with your attached file <strong>${escHtml(fileName)}</strong>. Our team will review it and get back to you.</p>
-            <p>Warm regards,<br/>The Gweno Team</p>
+            <p>Warm regards,<br/>The Gweno Hub Team</p>
           </div>`,
       });
     } catch (err) {

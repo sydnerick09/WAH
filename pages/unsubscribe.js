@@ -31,7 +31,7 @@ export default function Unsubscribe() {
   return (
     <div style={wrap}>
       <div style={card}>
-        <div style={logo}>GWENO</div>
+        <div style={logo}>GWENO HUB</div>
         {state === 'done' ? (
           <>
             <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={44} /></div>

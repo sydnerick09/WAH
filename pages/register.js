@@ -147,7 +147,7 @@ export default function Register() {
     <div className="auth-page auth-page--top">
       <header className="auth-header">
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <div className="auth-brand">GWENO</div>
+          <div className="auth-brand">GWENO HUB</div>
         </Link>
       </header>
 
@@ -155,7 +155,7 @@ export default function Register() {
 
         <div className="auth-lead">
           <h1 className="auth-title">Create Your Account</h1>
-          <p className="auth-subtitle">Join thousands of earners on Gweno.</p>
+          <p className="auth-subtitle">Join thousands of earners on Gweno Hub.</p>
         </div>
 
         {/* Referral notice — only when the page was opened via a valid referral link */}
@@ -172,13 +172,13 @@ export default function Register() {
               fontWeight: 600,
             }}
           >
-            You were invited by a Gweno member.
+            You were invited by a Gweno Hub member.
           </div>
         )}
 
         {deviceUsed && (
           <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', color: '#374151', padding: '12px 16px', borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 600 }}>
-            This browser already has a Gweno account. Only one account is allowed per browser.{' '}
+            This browser already has a Gweno Hub account. Only one account is allowed per browser.{' '}
             <Link href="/login" style={{ color: '#4b5563', textDecoration: 'underline' }}>Log in instead →</Link>
           </div>
         )}
@@ -327,7 +327,7 @@ export default function Register() {
 
             <br /><br />
 
-            By creating an account on Gweno,
+            By creating an account on Gweno Hub,
             you agree to the platform terms and policies.
           </div>
 

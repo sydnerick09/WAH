@@ -75,7 +75,7 @@ export default async function handler(req, res) {
   let emailSent = true;
   try {
     await transporter.sendMail({
-      from: `"Gweno" <${process.env.SMTP_USER}>`,
+      from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
       to: destination,
       replyTo: email && email !== "N/A" ? email : undefined,
       subject: `[New Applicant CV] ${fullName !== "N/A" ? fullName : email}`,

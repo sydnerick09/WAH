@@ -56,7 +56,7 @@ export function DashboardSkeleton() {
     <div className="dashboard">
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">
-          <div className="dash-logo">GWENO</div>
+          <div className="dash-logo">GWENO HUB</div>
           <div className="dash-user">
             <Skeleton w={40} h={40} r="50%" />
             <Skeleton w={32} h={26} r={8} />

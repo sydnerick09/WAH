@@ -550,7 +550,7 @@ function InternationalFlow({ user, initialStep }) {
     setSending(false);
     if (ok) { setDone(true); return; }
     // Fallback to email app if server email isn't available
-    const body = `Hello Gweno,\n\nI would like to request a withdrawal to my bank account.\n\n${details}\n\nThank you.`;
+    const body = `Hello Gweno Hub,\n\nI would like to request a withdrawal to my bank account.\n\n${details}\n\nThank you.`;
     window.location.href = `mailto:businesshub.comke@gmail.com?subject=${encodeURIComponent('Withdrawal Request, Other Countries')}&body=${encodeURIComponent(body)}`;
   }
 

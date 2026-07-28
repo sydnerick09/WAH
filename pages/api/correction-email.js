@@ -73,7 +73,7 @@ function toHtml(vars) {
         <a href="${esc(vars.unsubscribeLink)}" style="color:#94A3B8;">unsubscribe</a>.
         Unsubscribing will permanently stop all OTP and account-related email communications.
       </p>
-      <p style="margin-top:16px;color:#1f2937;font-weight:600;">— The Gweno Team</p>
+      <p style="margin-top:16px;color:#1f2937;font-weight:600;">— The Gweno Hub Team</p>
     </div>`;
 }
 
@@ -130,7 +130,7 @@ export default async function handler(req, res) {
 
   try {
     await transporter.sendMail({
-      from: `"Gweno" <${process.env.SMTP_USER}>`,
+      from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
       to: vars.userEmail,
       subject: SUBJECT,
       text: fillTemplate(TEMPLATE, vars),

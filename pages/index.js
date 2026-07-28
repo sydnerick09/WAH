@@ -87,7 +87,7 @@ export default function Home() {
       >
         <div className="navbar-inner">
           <div className="navbar-logo">
-            GWE<span>NO</span>
+            GWENO <span>HUB</span>
           </div>
 
           <div className="navbar-actions">
@@ -237,7 +237,7 @@ export default function Home() {
           </div>
 
           <h1 className="hero-title">
-            <span className="blue">GWENO</span>
+            <span className="blue">GWENO HUB</span>
           </h1>
 
           <p className="hero-subtitle">
@@ -249,7 +249,7 @@ export default function Home() {
           <p className="hero-desc">
             Turn your skills and free time into earnings. Whether you want
             to complete tasks for money or post tasks for others,
-            GWENO makes work easy, fast, and secure.
+            GWENO HUB makes work easy, fast, and secure.
           </p>
 
           <div className="hero-actions">
@@ -364,7 +364,7 @@ export default function Home() {
             >
               What You Can Do on
               <br />
-              <span className="blue">GWENO</span>
+              <span className="blue">GWENO HUB</span>
             </h2>
           </div>
 
@@ -603,7 +603,7 @@ export default function Home() {
               More Ways to <span className="blue">Earn Online</span>
             </h2>
             <p className="section-desc" style={{ color: 'rgba(255,255,255,0.6)' }}>
-              These top platforms are coming to Gweno. Click any card to visit them directly.
+              These top platforms are coming to Gweno Hub. Click any card to visit them directly.
             </p>
           </div>
 
@@ -694,7 +694,7 @@ export default function Home() {
             <div className="section-tag">Why Choose Us</div>
 
             <h2 className="section-title">
-              Why <span className="blue">GWENO</span> is the Best
+              Why <span className="blue">GWENO HUB</span> is the Best
               Choice
             </h2>
           </div>
@@ -768,7 +768,7 @@ export default function Home() {
         <h2>Ready to Start Earning?</h2>
 
         <p>
-          Join thousands of Kenyans already earning on Gweno
+          Join thousands of Kenyans already earning on Gweno Hub
           today.
         </p>
 
@@ -809,7 +809,7 @@ export default function Home() {
       <footer className="footer">
         <div className="footer-inner">
           <div>
-            <div className="footer-logo">GWENO</div>
+            <div className="footer-logo">GWENO HUB</div>
 
             <p className="footer-desc">
               The all-in-one digital platform for tasks and assignments.
@@ -874,7 +874,7 @@ export default function Home() {
 
         <div className="footer-bottom">
           <p className="footer-copy">
-            © 2026 Gweno. All rights reserved.
+            © 2026 Gweno Hub. All rights reserved.
           </p>
 
           <p
