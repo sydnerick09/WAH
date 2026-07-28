@@ -1256,6 +1256,47 @@ function AuditTab({ secret }) {
   );
 }
 
+// ─── Payment Settings (M-Pesa Buy Goods till) ─────────────────────────────────
+function TillSettingsBar({ secret }) {
+  const [till,   setTill]   = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg,    setMsg]    = useState(null);
+
+  useEffect(() => {
+    dbProxy('getSettings').then(d => setTill(String(d?.till ?? '1545320'))).catch(() => setTill('1545320'));
+  }, []);
+
+  async function save() {
+    setSaving(true); setMsg(null);
+    const res = await dbProxy('adminSetSetting', { adminSecret: secret, key: 'mpesa_till', value: till });
+    setSaving(false);
+    setMsg(res?.success ? { ok: true, text: 'Till saved!' } : { ok: false, text: res?.error || 'Save failed.' });
+    setTimeout(() => setMsg(null), 6000);
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 14, color: '#111827', whiteSpace: 'nowrap' }}>
+        M-Pesa Buy Goods Till
+      </div>
+      <input
+        style={{ ...styles.numInput, width: 150, fontSize: 15, letterSpacing: 1, fontWeight: 700 }}
+        value={till}
+        inputMode="numeric"
+        onChange={e => setTill(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
+        placeholder="1545320"
+      />
+      <button style={{ ...styles.btn, width: 'auto', padding: '8px 18px', fontSize: 13 }} disabled={saving} onClick={save}>
+        {saving ? 'Saving…' : 'Save Till'}
+      </button>
+      <span style={{ fontSize: 12.5, color: '#64748B', flex: 1, minWidth: 200 }}>
+        Used for Premium &amp; withdrawal-fee payments — clients pay this till, then notify support.
+      </span>
+      {msg && <span style={{ fontSize: 13, fontWeight: 700, color: msg.ok ? '#166534' : '#b91c1c' }}>{msg.text}</span>}
+    </div>
+  );
+}
+
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 export default function AdminPanel() {
   const [secret,      setSecret]      = useState('');
@@ -1320,6 +1361,8 @@ export default function AdminPanel() {
           Refresh
         </button>
       </div>
+
+      <TillSettingsBar secret={secret} />
 
       {/* Tabs */}
       <div style={styles.tabs}>

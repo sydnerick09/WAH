@@ -104,3 +104,16 @@ create table if not exists rate_limits (
   count        integer not null default 0,
   window_start timestamptz not null default now()
 );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Global key/value app settings, editable from the admin panel (e.g. the M-Pesa
+-- Buy Goods till number used for Premium + withdrawal-fee payments). Optional:
+-- the code falls back to a baked-in default till (1545320) if this is absent.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists app_settings (
+  key        text primary key,
+  value      text default '',
+  updated_at timestamptz default now()
+);
+insert into app_settings (key, value) values ('mpesa_till', '1545320')
+  on conflict (key) do nothing;

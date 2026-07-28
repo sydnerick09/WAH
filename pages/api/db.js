@@ -23,6 +23,7 @@ const BULK_THRESHOLD_KES  = 25000;   // at/above this, standard M-Pesa is unavai
 const BANK_FEE_USD        = 23;      // bank withdrawal processing fee (converted live)
 const MPESA_FEE_KES       = 650;     // one previously-paid M-Pesa withdrawal fee
 const MAX_FEE_DEDUCTIONS  = 3;       // admin may credit up to three KES 650 fees (KES 1,950)
+const DEFAULT_TILL        = process.env.MPESA_TILL || '1545320';  // M-Pesa Buy Goods till (admin-editable)
 
 // Live USD→KES rate (never hardcoded). Fetched per request; falls back to a
 // clearly-flagged approximate value only if the rate service is unreachable so
@@ -756,6 +757,36 @@ export default async function handler(req, res) {
         }).sort((a, b) => b.xp - a.xp).slice(0, limit)
           .map((e, i) => ({ ...e, rank: i + 1 }));
         return res.json({ data: ranked });
+      }
+
+      // ── Public app settings (currently just the M-Pesa Buy Goods till) ──
+      case 'getSettings': {
+        let till = DEFAULT_TILL;
+        try {
+          const { data } = await db.from('app_settings').select('value').eq('key', 'mpesa_till').maybeSingle();
+          if (data?.value) till = String(data.value);
+        } catch (_) { /* table missing → fall back to default */ }
+        return res.json({ till });
+      }
+
+      // ── Admin: update a global setting (e.g. the M-Pesa till number) ──
+      case 'adminSetSetting': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const key   = clean(p.key, 40);
+        const value = String(p.value ?? '').replace(/[^0-9]/g, '').slice(0, 12);   // till = digits only
+        if (!key)   return res.json({ success: false, error: 'Missing setting key.' });
+        if (!value) return res.json({ success: false, error: 'Enter a valid till number.' });
+        try {
+          const { error } = await db.from('app_settings')
+            .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+          if (error) return res.json({ success: false, error: `${error.message} (run db/admin-tables.sql to create app_settings)` });
+          await logAction(db, { action: 'setting_update', entity: 'settings', entityId: key, detail: value });
+          return res.json({ success: true, key, value });
+        } catch (e) {
+          return res.json({ success: false, error: e.message });
+        }
       }
 
       // Server-authoritative fee quote for a bulk withdrawal (live FX + capped
