@@ -64,6 +64,11 @@ const PATHS = {
   clock:       '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   bell:        '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
   eye:         '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  // ── gamification set ──
+  trophy:      '<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3a2 2 0 0 1 0 4h-1.2"/><path d="M7 5H4a2 2 0 0 0 0 4h1.2"/>',
+  flame:       '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  zap:         '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  award:       '<circle cx="12" cy="8" r="6"/><path d="M15.5 13.1 17 22l-5-3-5 3 1.5-8.9"/>',
 };
 
 export default function Icon({ name, size = 20, stroke = 1.8, title, style, className }) {

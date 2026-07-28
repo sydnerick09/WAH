@@ -1201,3 +1201,101 @@ button.profile-row:hover { background: #F4F4F5; }
   .profile-body { padding: 22px 14px 56px; }
   .profile-username { font-size: 21px; }
 }
+/* ══════════════════════════════════════════════════════════════════════════════
+   GAMIFICATION (flat black & white, subtle motion)
+   ══════════════════════════════════════════════════════════════════════════════ */
+.gami-card {
+  background: var(--white); border: 1px solid var(--gray-light);
+  border-radius: var(--radius-lg); padding: 20px 22px; margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.gami-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.gami-level { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.gami-level-badge {
+  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  background: var(--black); color: var(--white);
+  display: flex; align-items: center; justify-content: center;
+}
+.gami-level-name { font-family: var(--font-display); font-size: 20px; font-weight: 800; color: var(--black); line-height: 1.1; }
+.gami-level-sub  { font-family: var(--font-sub); font-size: 12.5px; color: var(--gray); margin-top: 2px; }
+.gami-verify {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.3px;
+  padding: 5px 11px; border-radius: 100px;
+  background: var(--black); color: var(--white); border: 1.5px solid var(--black);
+}
+.gami-verify.tier-1 { background: var(--white); color: var(--black); }
+.gami-verify.tier-2 { background: #4b5563; border-color: #4b5563; color: #fff; }
+.gami-verify.tier-3 { background: var(--black); color: #fff; }
+
+.gami-progress-wrap { margin-bottom: 18px; }
+.gami-progress { height: 10px; border-radius: 100px; background: #ECECEF; overflow: hidden; }
+.gami-progress-fill {
+  height: 100%; border-radius: 100px; background: var(--black);
+  width: 0; transition: width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.gami-progress-label { font-size: 12px; color: var(--gray); margin-top: 7px; font-weight: 600; }
+
+.gami-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+.gami-stat {
+  display: flex; align-items: center; gap: 10px;
+  background: #F7F7F8; border: 1px solid var(--gray-light); border-radius: 12px; padding: 12px 12px;
+}
+.gami-stat-ico {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+  background: var(--black); color: var(--white);
+  display: flex; align-items: center; justify-content: center;
+}
+.gami-stat-num { font-family: var(--font-display); font-size: 17px; font-weight: 800; color: var(--black); line-height: 1; }
+.gami-stat-lbl { font-size: 11px; color: var(--gray); margin-top: 3px; }
+
+.gami-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.gami-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border-radius: 100px; font-size: 12px; font-weight: 700;
+  border: 1.5px solid var(--gray-light); background: var(--white); color: var(--gray-light);
+  animation: gamiPop 0.35s var(--ease) both;
+}
+.gami-badge.earned { border-color: var(--black); background: var(--black); color: var(--white); }
+.gami-badge.locked { color: #9CA3AF; }
+.gami-badge.locked span { color: #9CA3AF; }
+@keyframes gamiPop { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+
+.gami-board { margin-top: 16px; border-top: 1px solid var(--gray-light); padding-top: 12px; }
+.gami-board-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: none; border: none; cursor: pointer; padding: 4px 0;
+  font-family: var(--font-display); font-weight: 700; font-size: 13.5px; color: var(--black);
+}
+.gami-board-toggle > span { display: inline-flex; align-items: center; gap: 7px; }
+.gami-board-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.gami-board-row {
+  display: grid; grid-template-columns: 34px 1fr auto auto; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 9px; background: #F7F7F8; font-size: 12.5px;
+}
+.gami-board-row.me { background: var(--black); color: var(--white); }
+.gami-board-rank { font-weight: 800; color: inherit; }
+.gami-board-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gami-board-lvl  { font-size: 11px; color: var(--gray); }
+.gami-board-row.me .gami-board-lvl { color: rgba(255,255,255,0.7); }
+.gami-board-xp   { font-weight: 700; white-space: nowrap; }
+
+/* Reward toast */
+.gami-toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+  z-index: 500; width: min(360px, calc(100vw - 32px));
+  display: flex; align-items: center; gap: 12px;
+  background: var(--black); color: var(--white);
+  border-radius: 14px; padding: 14px 14px 14px 16px;
+  box-shadow: var(--shadow-lg); animation: gamiToast 0.4s var(--ease);
+}
+@keyframes gamiToast { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.gami-toast-ico { width: 40px; height: 40px; border-radius: 11px; background: rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gami-toast-title { font-family: var(--font-display); font-weight: 800; font-size: 15px; }
+.gami-toast-sub   { font-size: 12.5px; color: rgba(255,255,255,0.75); margin-top: 1px; }
+.gami-toast-x     { background: none; border: none; color: rgba(255,255,255,0.7); cursor: pointer; flex-shrink: 0; display: flex; }
+
+@media (max-width: 640px) {
+  .gami-stats { grid-template-columns: repeat(2, 1fr); }
+  .gami-card { padding: 18px 16px; }
+}

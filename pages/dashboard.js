@@ -12,12 +12,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { getCurrentUser, logout, awardQuizBonus, getToken } from '../lib/auth';
+import { getCurrentUser, logout, awardQuizBonus, getToken, recordDailyLogin } from '../lib/auth';
 import { applyForTask, listMyApplications, applicationsByTask } from '../lib/applications';
 import { TASKS } from '../lib/tasks';
 import Icon from '../components/Icon';
 import EmptyState from '../components/EmptyState';
 import { DashboardSkeleton } from '../components/Skeleton';
+import { GamificationCard, RewardToast } from '../components/Gamification';
+import { computeXp, levelInfo, LEVELS } from '../lib/gamification';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -923,6 +925,7 @@ export default function Dashboard() {
   const [showMenu,            setShowMenu]            = useState(false);
   const [showTraining,        setShowTraining]        = useState(false);
   const [showQuiz,            setShowQuiz]            = useState(false);
+  const [rewardToast,         setRewardToast]         = useState(null);
 
   const [liveWithdrawals, setLiveWithdrawals] = useState([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState([]);
@@ -966,12 +969,35 @@ export default function Dashboard() {
     } catch (_) {}
   }
 
+  // Gamification: record the daily login (server-dated) and surface a streak /
+  // level-up reward toast. Streak XP is applied server-side; we reflect it here.
+  async function bootstrapGamification(u) {
+    if (!u?.id) return;
+    let cur = u;
+    try {
+      const gl = await recordDailyLogin(u.id);
+      if (gl?.success && gl.isNewDay) {
+        cur = { ...u, streak: gl.streak };
+        setUser(cur);
+        setRewardToast({ icon: 'flame', title: `Day ${gl.streak} streak!`, sub: `+${gl.bonusXp} XP daily bonus` });
+      }
+    } catch (_) {}
+    try {
+      const idx  = levelInfo(computeXp(cur)).index;
+      const key  = `bh_last_level_${u.id}`;
+      const prev = Number(localStorage.getItem(key) ?? idx);
+      if (idx > prev) setRewardToast({ icon: 'zap', title: `Level up — ${LEVELS[idx].name}!`, sub: 'New rewards unlocked' });
+      localStorage.setItem(key, String(idx));
+    } catch (_) {}
+  }
+
   useEffect(() => {
     async function init() {
       setMounted(true);
       const u = await getCurrentUser();
       if (!u) { router.replace('/login'); return; }
       setUser(u);
+      bootstrapGamification(u);
       setLiveWithdrawals(getOrGenerateWithdrawals());
       setPendingWithdrawals(getOrGeneratePending());
       // Joining-gift quiz appears once, right after the first successful sign-up / sign-in
@@ -1155,6 +1181,9 @@ export default function Dashboard() {
             <div className="dash-balance-sub">Available for withdrawal</div>
           </div>
         </div>
+
+        {/* Gamification */}
+        <GamificationCard user={user} />
 
         {/* Referral Banner */}
         <div className="referral-banner" onClick={() => setShowReferral(true)}>
@@ -1351,6 +1380,7 @@ export default function Dashboard() {
       )}
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
       {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}
+      <RewardToast toast={rewardToast} onClose={() => setRewardToast(null)} />
 
       {showMenu && (
         <HamburgerMenu

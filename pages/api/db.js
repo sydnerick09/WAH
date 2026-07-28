@@ -5,6 +5,7 @@ import { sendApprovalEmail } from '../../lib/approvalEmail';
 import { isEmail, isPhone, nonEmpty, isPositiveNumber, clean } from '../../lib/validate';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { issueToken, verifyToken, issueResetToken, verifyResetToken, peekUid } from '../../lib/token';
+import { computeXp, levelInfo } from '../../lib/gamification';
 import { sendResetEmail } from '../../lib/resetEmail';
 
 function getAdmin() {
@@ -122,6 +123,8 @@ function norm(row) {
     premiumTestDone: ptest !== null,
     premiumTestScore: Number(ptest?.score ?? 0),
     mpesaFeesPaid:   Math.max(0, Number(subs._mpesaFeesPaid ?? 0)),
+    streak:          Math.max(0, Number(subs._streak?.count ?? 0)),
+    lastLoginDay:    subs._streak?.lastDay ?? null,
   };
 }
 
@@ -714,6 +717,45 @@ export default async function handler(req, res) {
         await logAction(db, { action: 'mpesa_fee_paid', entity: 'user', entityId: p.userId,
           detail: `count:${subs._mpesaFeesPaid}${ref ? ` ref:${ref}` : ''}` });
         return res.json({ success: true, mpesaFeesPaid: subs._mpesaFeesPaid });
+      }
+
+      // ── Gamification: daily-login streak (server-dated, once per UTC day) ──
+      case 'recordDailyLogin': {
+        const { data: u } = await db.from('users')
+          .select('task_submissions').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false });
+        const subs = { ...(u.task_submissions || {}) };
+        const s = (subs._streak && typeof subs._streak === 'object') ? { ...subs._streak } : { count: 0, lastDay: null };
+        const today = new Date().toISOString().slice(0, 10);
+        const yday  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        let isNewDay = false, bonusXp = 0;
+        if (s.lastDay !== today) {
+          isNewDay  = true;
+          s.count   = (s.lastDay === yday) ? Math.max(0, Number(s.count || 0)) + 1 : 1;
+          s.lastDay = today;
+          bonusXp   = 20 + Math.min(Number(s.count), 7) * 5;   // escalating, caps at day 7
+          subs._streak = s;
+          await db.from('users').update({ task_submissions: subs }).eq('id', p.userId);
+          await logAction(db, { action: 'daily_login', entity: 'user', entityId: p.userId, detail: `streak:${s.count} bonusXp:${bonusXp}` });
+        }
+        return res.json({ success: true, streak: Math.max(0, Number(s.count || 0)), isNewDay, bonusXp, lastDay: s.lastDay });
+      }
+
+      // ── Gamification: leaderboard, top players by server-derived XP ──
+      case 'gamificationLeaderboard': {
+        const limit = Math.max(1, Math.min(25, Number(p.limit) || 10));
+        const { data: rows } = await db.from('users')
+          .select('id, full_name, completed_tasks, referral_count, balance, premium, premium_paid_at, task_submissions')
+          .limit(1000);
+        const ranked = (rows || []).map(r => {
+          const gu = norm(r);
+          const xp = computeXp(gu);
+          const parts = String(r.full_name || 'Member').trim().split(/\s+/);
+          const name = parts[0] + (parts[1] ? ` ${parts[1][0].toUpperCase()}.` : '');
+          return { id: r.id, name, xp, level: levelInfo(xp).name, tasks: gu.completedTasks };
+        }).sort((a, b) => b.xp - a.xp).slice(0, limit)
+          .map((e, i) => ({ ...e, rank: i + 1 }));
+        return res.json({ data: ranked });
       }
 
       // Server-authoritative fee quote for a bulk withdrawal (live FX + capped
