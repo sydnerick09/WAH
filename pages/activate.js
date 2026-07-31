@@ -20,7 +20,6 @@ export default function ActivatePage() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [doneUser, setDoneUser] = useState(null);
-  const [mpesa,    setMpesa]    = useState(false);   // true once Daraja STK is live
 
   const balance = Number(user?.balance || 0);
   const enough  = balance >= FEE;
@@ -32,12 +31,6 @@ export default function ActivatePage() {
     setPhone(user.phone || '');
     setStep(enough ? 'confirm' : 'topup');
   }, [ready, user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Detect whether M-Pesa (Daraja STK) is configured; if so use it, else fall
-  // back to the legacy gateway.
-  useEffect(() => {
-    fetch('/api/mpesa/config').then(r => r.json()).then(d => setMpesa(!!d.stk)).catch(() => {});
-  }, []);
 
   // Called after a successful STK payment: refresh the user (the server already
   // activated the account in the callback) and show the success screen.
@@ -56,25 +49,6 @@ export default function ActivatePage() {
     setLoading(false);
     if (updated) { setDoneUser(updated); setStep('success'); }
     else setError('Activation failed. Please try again.');
-  }
-
-  async function payTopup() {
-    if (!phone.trim()) { setError('Enter your phone number.'); return; }
-    setError('');
-    setLoading(true);
-    try {
-      const res  = await fetch('/api/paystack/initialize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: topup, phone, plan: 'activation_topup' }),
-      });
-      const data = await res.json();
-      if (data.status) { window.location.href = data.data.authorization_url; return; }
-      setError('Payment could not be started. Please try again.');
-    } catch {
-      setError('Network error. Please try again.');
-    }
-    setLoading(false);
   }
 
   if (!ready || !user || !step) {
@@ -130,31 +104,13 @@ export default function ActivatePage() {
             Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Pay <strong style={{ color: '#1f2937' }}>KES {topup}</strong> to activate your account.
           </div>
 
-          {mpesa ? (
-            <MpesaPay
-              purpose="activation_topup"
-              amount={topup}
-              defaultPhone={phone}
-              payLabel={`Pay KES ${topup} via M-Pesa`}
-              onSuccess={onMpesaPaid}
-            />
-          ) : (
-            <>
-              <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
-              <input
-                className="pay-phone-input"
-                value={phone}
-                onChange={e => { setPhone(e.target.value); setError(''); }}
-                placeholder="+254 7XX XXX XXX"
-                style={{ borderColor: error ? '#4b5563' : undefined }}
-              />
-              {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
-              <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
-                {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="lock" size={16} /> Add KES {topup}</>}
-              </button>
-              <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secure checkout</div>
-            </>
-          )}
+          <MpesaPay
+            purpose="activation_topup"
+            amount={topup}
+            defaultPhone={phone}
+            payLabel={`Pay KES ${topup} via M-Pesa`}
+            onSuccess={onMpesaPaid}
+          />
         </>
       )}
 

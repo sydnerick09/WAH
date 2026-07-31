@@ -147,22 +147,6 @@ function MpesaFlow({ user, till, initialStep }) {
     return () => clearInterval(t);
   }, [step]);
 
-  async function handlePayFee() {
-    if (!phone.trim()) { alert('Enter your M-Pesa number'); return; }
-    setLoading(true);
-    try {
-      const res  = await fetch('/api/paystack/initialize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: FEE_KES, phone, plan: 'mpesa_withdrawal_fee' }),
-      });
-      const data = await res.json();
-      if (data.status) { window.location.href = data.data.authorization_url; return; }
-      alert('Payment could not be initiated. Please try again.');
-    } catch { alert('Network error. Please check your connection.'); }
-    setLoading(false);
-  }
-
   async function handleSubmitForm() {
     const errs = {};
     if (!phone.trim())    errs.phone    = 'Phone number is required';
@@ -297,20 +281,6 @@ function PostbankFlow({ user, till, initialStep }) {
     }, 1000);
     return () => clearInterval(t);
   }, [step]);
-
-  async function handlePayFee() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/paystack/initialize', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: BANK_FEE_KES, phone: user.phone || '', plan: 'postbank_withdrawal_fee' }),
-      });
-      const data = await res.json();
-      if (data.status) { window.location.href = data.data.authorization_url; return; }
-      alert('Payment could not be initiated. Please try again.');
-    } catch { alert('Network error. Please check your connection.'); }
-    setLoading(false);
-  }
 
   function handleSubmitForm() {
     const errs = {};
@@ -505,20 +475,6 @@ function InternationalFlow({ user, till, initialStep }) {
     if (b.name === 'Postbank Kenya') { router.push('/withdraw?method=postbank'); return; }
     setSelectedBank(b); setBankOpen(false); setBankQuery(''); setAccountNumber('');
     setErrors(prev => ({ ...prev, bank: undefined, accountNumber: undefined }));
-  }
-
-  async function handlePayFee() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/paystack/initialize', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, amount: (quote?.amountDueKes ?? BANK_FEE_KES), phone: user.phone || '', plan: 'international_withdrawal_fee' }),
-      });
-      const data = await res.json();
-      if (data.status) { window.location.href = data.data.authorization_url; return; }
-      alert('Payment could not be initiated. Please try again.');
-    } catch { alert('Network error. Please check your connection.'); }
-    setLoading(false);
   }
 
   async function handleSubmit() {

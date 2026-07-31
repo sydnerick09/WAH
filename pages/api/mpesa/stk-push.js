@@ -8,6 +8,7 @@ import { createTransaction } from '../../../lib/mpesaStore';
 
 const ACTIVATION_FEE = 50;
 const PREMIUM_FEE    = 480;
+const TRAINING_FEE   = 132;
 const KNOWN_FEES     = new Set([650, 2990]); // M-Pesa (KES 650) + bank (KES 2,990) withdrawal fees
 
 function adminDb() {
@@ -39,6 +40,8 @@ export default async function handler(req, res) {
     if (amount <= 0) return res.json({ success: false, message: 'Your balance already covers activation.' });
   } else if (purpose === 'premium' || purpose === 'premium_topup') {
     amount = PREMIUM_FEE;
+  } else if (purpose === 'training') {
+    amount = TRAINING_FEE;
   } else if (purpose === 'withdrawal_fee' || purpose.endsWith('_withdrawal_fee')) {
     const a = Math.round(Number(req.body?.amount) || 0);
     if (!KNOWN_FEES.has(a)) return res.json({ success: false, message: 'Invalid fee amount.' });

@@ -17,6 +17,7 @@ import { applyForTask, listMyApplications, applicationsByTask } from '../lib/app
 import { TASKS } from '../lib/tasks';
 import Icon from '../components/Icon';
 import EmptyState from '../components/EmptyState';
+import MpesaPay from '../components/MpesaPay';
 import { PostTaskModal, MyPostedTasksModal } from '../components/PostTask';
 import { DashboardSkeleton } from '../components/Skeleton';
 import { GamificationCard, RewardToast } from '../components/Gamification';
@@ -536,26 +537,6 @@ function QuizModal({ user, onComplete }) {
 
 // ─── Training Payment Modal ───────────────────────────────────────────────────
 function TrainingModal({ user, onClose }) {
-  const [phone,   setPhone]   = useState(user?.phone || '');
-  const [loading, setLoading] = useState(false);
-
-  async function handleTrainingPay() {
-    if (!phone.trim()) { alert('Enter phone number'); return; }
-    setLoading(true);
-    const res  = await fetch('/api/paystack/initialize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, amount: 132, phone, plan: 'training' }),
-    });
-    const data = await res.json();
-    if (data.status) {
-      window.location.href = data.data.authorization_url;
-    } else {
-      alert('Payment initiation failed. Please try again.');
-    }
-    setLoading(false);
-  }
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="pay-modal-card" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
@@ -586,12 +567,13 @@ function TrainingModal({ user, onClose }) {
             <div className="pay-amount-value">KES 132</div>
             <div className="pay-amount-sub">One-time payment • Instant access</div>
           </div>
-          <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
-          <input className="pay-phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+254 7XX XXX XXX" />
-          <button className="pay-btn" style={{ background: '#000000' }} onClick={handleTrainingPay} disabled={loading}>
-            {loading ? <><span className="spinner" /> Processing...</> : <><Icon name="graduation" size={16} /> Pay & Apply Now</>}
-          </button>
-          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • M-Pesa supported</div>
+          <MpesaPay
+            purpose="training"
+            amount={132}
+            defaultPhone={user?.phone || ''}
+            payLabel="Pay KES 132 via M-Pesa"
+            onSuccess={() => {}}
+          />
         </div>
       </div>
     </div>
