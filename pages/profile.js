@@ -400,6 +400,15 @@ export default function ProfilePage() {
           })}
         </div>
 
+        {/* ── Privacy & Cookies ── */}
+        <div className="profile-section-label">Privacy &amp; Cookies</div>
+        <button className="profile-action-btn" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event('gweno:open-cookies')); }}>
+          <Icon name="shield" size={20} /> Manage Cookie Preferences
+        </button>
+        <button className="profile-action-btn" style={{ marginTop: 10 }} onClick={() => router.push('/cookie-policy')}>
+          <Icon name="file" size={20} /> Cookie Policy
+        </button>
+
         {/* ── Sessions ── */}
         <div className="profile-section-label">Sessions</div>
         <button className="profile-action-btn" onClick={signOut}>
