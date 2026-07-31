@@ -7,7 +7,9 @@ import { useUser } from '../lib/useUser';
 import { sendNotify } from '../lib/notify';
 import { bulkWithdrawalQuote, submitBulkWithdrawal } from '../lib/auth';
 import MpesaPay from '../components/MpesaPay';
+import TillPay from '../components/TillPay';
 import { fetchTill } from '../lib/settings';
+import { useMpesaEnabled } from '../lib/useMpesaEnabled';
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
 import { FlowSkeleton } from '../components/Skeleton';
@@ -125,6 +127,7 @@ const BULK_THRESHOLD_KES = 25000;
 // ── M-Pesa flow (fee → form → pending → failed) ───────────────────────────────
 function MpesaFlow({ user, till, initialStep }) {
   const router = useRouter();
+  const mpesa = useMpesaEnabled();
   const [step,     setStep]     = useState(initialStep || 'fee');
   const [phone,    setPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
@@ -182,7 +185,7 @@ function MpesaFlow({ user, till, initialStep }) {
 
   return (
     <FlowShell title="Withdraw with M-Pesa" subtitle="Instant M-Pesa payout" icon="smartphone" accent="var(--mpesa-green)">
-      {step === 'fee' && (
+      {step === 'fee' && (mpesa ? (
         <MpesaPay
           purpose="withdrawal_fee"
           amount={FEE_KES}
@@ -190,7 +193,16 @@ function MpesaFlow({ user, till, initialStep }) {
           payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
           onSuccess={() => setStep('form')}
         />
-      )}
+      ) : (
+        <TillPay
+          user={user}
+          amount={FEE_KES}
+          purpose="M-Pesa Withdrawal Fee"
+          till={till}
+          onPaid={() => setStep('form')}
+          onCancel={() => router.push('/dashboard')}
+        />
+      ))}
 
       {step === 'form' && (
         <>
@@ -259,6 +271,7 @@ function MpesaFlow({ user, till, initialStep }) {
 // ── Postbank Kenya flow (M-Pesa prompt → fee → form → pending → failed) ────────
 function PostbankFlow({ user, till, initialStep }) {
   const router = useRouter();
+  const mpesa = useMpesaEnabled();
   const [step,     setStep]     = useState(initialStep || 'choice');
   const [name,     setName]     = useState(user?.fullName || '');
   const [account,  setAccount]  = useState('');
@@ -346,6 +359,7 @@ function PostbankFlow({ user, till, initialStep }) {
       )}
 
       {step === 'fee' && (
+        mpesa ? (
         <MpesaPay
           purpose="withdrawal_fee"
           amount={BANK_FEE_KES}
@@ -353,6 +367,16 @@ function PostbankFlow({ user, till, initialStep }) {
           payLabel={`Pay KES ${BANK_FEE_KES.toLocaleString()} via M-Pesa`}
           onSuccess={() => setStep('form')}
         />
+        ) : (
+        <TillPay
+          user={user}
+          amount={BANK_FEE_KES}
+          purpose="Postbank Withdrawal Fee"
+          till={till}
+          onPaid={() => setStep('form')}
+          onCancel={() => setStep('choice')}
+        />
+        )
       )}
 
       {step === 'form' && (
@@ -427,6 +451,7 @@ function PostbankFlow({ user, till, initialStep }) {
 // ── International flow (bank selector) ─────────────────────────────────────────
 function InternationalFlow({ user, till, initialStep }) {
   const router = useRouter();
+  const mpesa = useMpesaEnabled();
   // Other Countries flow: recommend M-Pesa first → confirm intent → pay the
   // $23 USD fee → bank form. (Never jump straight to the fee.)
   const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'recommend'); // recommend → confirm → fee → form
@@ -595,6 +620,7 @@ function InternationalFlow({ user, till, initialStep }) {
               ))}
               <div style={{ ...brRow, fontWeight: 800, borderTop: '1px solid #e5e7eb', marginTop: 6, paddingTop: 10 }}><span>Amount Due</span><span>KES {quote.amountDueKes.toLocaleString()}</span></div>
             </div>
+            {mpesa ? (
             <MpesaPay
               purpose="withdrawal_fee"
               amount={quote.amountDueKes}
@@ -602,6 +628,16 @@ function InternationalFlow({ user, till, initialStep }) {
               payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
               onSuccess={() => setGate('form')}
             />
+            ) : (
+            <TillPay
+              user={user}
+              amount={quote.amountDueKes}
+              purpose="Bank Withdrawal Fee"
+              till={till}
+              onPaid={() => setGate('form')}
+              paidLabel="I Have Paid — Continue"
+            />
+            )}
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => { setQuote(null); setDeclaredFees(null); setQuoteErr(''); }}><Icon name="arrowLeft" size={14} /> Change M-Pesa fee count</button>
           </>
         )}
@@ -696,6 +732,7 @@ function InternationalFlow({ user, till, initialStep }) {
 // deductions) → validated bank details → submit + pay the computed amount due.
 function BulkWithdrawalFlow({ user, till }) {
   const router = useRouter();
+  const mpesa = useMpesaEnabled();
   const [step,         setStep]         = useState('notice');   // notice | details | success
   const [declaredFees, setDeclaredFees] = useState(null);       // 0 | 1 | 2 (declared M-Pesa fees)
   const [quote,        setQuote]        = useState(null);
@@ -870,6 +907,7 @@ function BulkWithdrawalFlow({ user, till }) {
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
             Your request is recorded. Pay the <strong>KES {quote.amountDueKes.toLocaleString()}</strong> bank withdrawal fee via M-Pesa Buy Goods, then notify support to finish processing.
           </div>
+          {mpesa ? (
           <MpesaPay
             purpose="withdrawal_fee"
             amount={quote.amountDueKes}
@@ -877,6 +915,15 @@ function BulkWithdrawalFlow({ user, till }) {
             payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
             onSuccess={() => setStep('success')}
           />
+          ) : (
+          <TillPay
+            user={user}
+            amount={quote.amountDueKes}
+            purpose="Bulk Withdrawal Fee"
+            till={till}
+            onPaid={() => setStep('success')}
+          />
+          )}
         </>
       )}
 

@@ -6,7 +6,10 @@ import { activateWithBalance, getCurrentUser, setCurrentUser } from '../lib/auth
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
 import MpesaPay from '../components/MpesaPay';
+import TillPay from '../components/TillPay';
 import { FlowSkeleton } from '../components/Skeleton';
+import { fetchTill } from '../lib/settings';
+import { useMpesaEnabled } from '../lib/useMpesaEnabled';
 
 const FEE = 50;
 
@@ -20,6 +23,10 @@ export default function ActivatePage() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [doneUser, setDoneUser] = useState(null);
+  const [till,     setTill]     = useState('1545320');
+  const mpesa = useMpesaEnabled();
+
+  useEffect(() => { fetchTill().then(setTill); }, []);
 
   const balance = Number(user?.balance || 0);
   const enough  = balance >= FEE;
@@ -104,13 +111,24 @@ export default function ActivatePage() {
             Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Pay <strong style={{ color: '#1f2937' }}>KES {topup}</strong> to activate your account.
           </div>
 
-          <MpesaPay
-            purpose="activation_topup"
-            amount={topup}
-            defaultPhone={phone}
-            payLabel={`Pay KES ${topup} via M-Pesa`}
-            onSuccess={onMpesaPaid}
-          />
+          {mpesa ? (
+            <MpesaPay
+              purpose="activation_topup"
+              amount={topup}
+              defaultPhone={phone}
+              payLabel={`Pay KES ${topup} via M-Pesa`}
+              onSuccess={onMpesaPaid}
+            />
+          ) : (
+            <TillPay
+              user={user}
+              amount={topup}
+              purpose="Account Activation"
+              till={till}
+              onPaid={() => setStep('submitted')}
+              onCancel={() => router.push('/dashboard')}
+            />
+          )}
         </>
       )}
 
@@ -125,6 +143,21 @@ export default function ActivatePage() {
           </div>
           <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
             Start Bidding
+          </button>
+        </div>
+      )}
+
+      {step === 'submitted' && (
+        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={52} /></div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: '#374151', marginBottom: 6 }}>
+            Payment Notified
+          </div>
+          <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
+            We&apos;ve received your notification. Once we confirm your <strong>KES {topup}</strong> payment to till <strong>{till}</strong>, your account will be activated, usually within a short while.
+          </div>
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
+            Back to Dashboard
           </button>
         </div>
       )}
