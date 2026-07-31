@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword } from '../../lib/password';
 import { issueToken, verifyToken, issueResetToken, verifyResetToken, peekUid } from '../../lib/token';
 import { computeXp, levelInfo } from '../../lib/gamification';
 import { sendResetEmail } from '../../lib/resetEmail';
+import { b2cPayment, isB2CConfigured, normalizePhone, isValidMsisdn } from '../../lib/daraja';
 
 function getAdmin() {
   return createClient(
@@ -197,6 +198,9 @@ function normTask(row) {
     datePosted:  freshDatePosted(row),
     dueDate:     freshDueDate(row),
     createdAt:   row.created_at,
+    // User-posted marketplace tasks encode the creator in the id: "<uid>~<rand>".
+    userPosted:  String(row.id || '').includes('~'),
+    creatorId:   String(row.id || '').includes('~') ? String(row.id).split('~')[0] : null,
   };
 }
 
@@ -920,6 +924,37 @@ export default async function handler(req, res) {
         return res.json({ success: true, data: normWd(wUp) });
       }
 
+      case 'adminPayoutWithdrawal': {
+        // Admin-triggered real M-Pesa payout (B2C) for a withdrawal request.
+        // Deliberately manual (never auto) so money only leaves on approval.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        if (!isB2CConfigured()) return res.json({ success: false, error: 'M-Pesa B2C payouts are not configured yet.' });
+        const { data: wd } = await db.from('withdrawal_requests').select('*').eq('id', p.requestId).maybeSingle();
+        if (!wd) return res.json({ success: false, error: 'Withdrawal request not found.' });
+        if (wd.status === 'paid' || wd.status === 'processing') return res.json({ success: false, error: `This withdrawal is already ${wd.status}.` });
+        const amount = Number(wd.amount || 0);
+        if (!isValidMsisdn(wd.phone)) return res.json({ success: false, error: 'This request has no valid Safaricom number to pay.' });
+        if (!(amount > 0)) return res.json({ success: false, error: 'Invalid payout amount.' });
+
+        try {
+          const { ok, data } = await b2cPayment({ phone: wd.phone, amount, remarks: 'Gweno Hub withdrawal', occasion: String(p.requestId) });
+          if (!ok) return res.json({ success: false, error: data?.errorMessage || data?.ResponseDescription || 'B2C request was rejected by M-Pesa.' });
+          await db.from('mpesa_transactions').insert({
+            conversation_id: data.ConversationID || null,
+            originator_conversation_id: data.OriginatorConversationID || null,
+            withdrawal_id: String(p.requestId),
+            user_id: wd.user_id || null,
+            purpose: 'withdrawal_payout', direction: 'b2c',
+            amount, phone: normalizePhone(wd.phone), status: 'pending',
+          });
+          await db.from('withdrawal_requests').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', p.requestId);
+          await logAction(db, { action: 'withdrawal_payout', entity: 'withdrawal', entityId: p.requestId, detail: `KES ${amount} to ${normalizePhone(wd.phone)} (B2C queued)` });
+          return res.json({ success: true, message: data.ResponseDescription || 'Payout queued. It will be confirmed shortly.' });
+        } catch (e) {
+          return res.json({ success: false, error: e.message || 'B2C payout error.' });
+        }
+      }
+
       case 'adminDeleteWithdrawal': {
         if (p.adminSecret !== process.env.ADMIN_SECRET) {
           return res.status(403).json({ error: 'Unauthorized' });
@@ -986,6 +1021,68 @@ export default async function handler(req, res) {
           return true;
         });
         return res.json({ data: live.map(normTask) });
+      }
+
+      // ── Marketplace (Phase A): user-posted tasks ──────────────────────────
+      // Identity is derived from the signed session token; the creator is
+      // encoded in the task id ("<uid>~<rand>") so ownership needs no schema
+      // change and can be authorized on edit/delete.
+      case 'createUserTask': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const title = clean(p.title, 120);
+        if (!nonEmpty(title)) return res.json({ success: false, error: 'Task title is required.' });
+        const reward = Math.floor(Number(p.reward) || 0);
+        if (!(reward > 0))       return res.json({ success: false, error: 'Enter a valid reward amount.' });
+        if (reward > 1000000)    return res.json({ success: false, error: 'Reward amount is too high.' });
+        const category    = clean(p.category, 40) || 'General';
+        const description = clean(p.description, 2000);
+        const instructions = clean(p.instructions, 2000);
+        const deadline    = clean(p.deadline, 40);
+        const workers     = Math.max(1, Math.min(50, Math.floor(Number(p.workers) || 1)));
+
+        const { data: u } = await db.from('users').select('full_name').eq('id', uid).maybeSingle();
+        if (!u) return res.status(403).json({ error: 'Unauthorized' });
+
+        // Anti-spam: cap active postings + block duplicate titles by the same user.
+        const { count } = await db.from('tasks')
+          .select('id', { count: 'exact', head: true }).like('id', `${uid}~%`).eq('active', true);
+        if ((count || 0) >= 15) return res.json({ success: false, error: 'You already have 15 active posted tasks. Remove some first.' });
+        const { data: dup } = await db.from('tasks')
+          .select('id').like('id', `${uid}~%`).eq('title', title).eq('active', true).limit(1);
+        if (dup && dup.length) return res.json({ success: false, error: 'You already have an active task with this title.' });
+
+        const id = `${uid}~${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const fullDesc  = deadline ? `${description}\n\nDeadline: ${deadline}` : description;
+        const questions = instructions ? [instructions] : [];
+        const { data, error } = await db.from('tasks').insert({
+          id, title, description: fullDesc, category,
+          poster: clean(u.full_name, 80) || 'Member', location: 'Remote',
+          questions, payment: reward, slots: workers, active: true,
+        }).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, { action: 'user_task_posted', entity: 'task', entityId: id, detail: `by:${uid} reward:${reward} workers:${workers} "${title}"` });
+        return res.json({ success: true, task: normTask(data) });
+      }
+
+      case 'listMyTasks': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('tasks')
+          .select('*').like('id', `${uid}~%`).order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normTask) });
+      }
+
+      case 'deleteMyTask': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const taskId = String(p.taskId || '');
+        if (!taskId.startsWith(`${uid}~`)) return res.status(403).json({ error: 'You can only remove your own tasks.' });
+        const { error } = await db.from('tasks').delete().eq('id', taskId);
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, { action: 'user_task_removed', entity: 'task', entityId: taskId, detail: `by:${uid}` });
+        return res.json({ success: true });
       }
 
       case 'adminListTasks': {

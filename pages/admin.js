@@ -485,6 +485,20 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
     setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[wd.id]; return n; }), 3000);
   }
 
+  async function payout(wd) {
+    if (!confirm(`Send KES ${Number(wd.amount).toLocaleString()} to ${wd.phone} via M-Pesa (B2C)?\n\nThis pays out REAL money and cannot be undone.`)) return;
+    setSaving(prev => ({ ...prev, [wd.id]: true }));
+    const res = await dbProxy('adminPayoutWithdrawal', { adminSecret: secret, requestId: wd.id });
+    setSaving(prev => ({ ...prev, [wd.id]: false }));
+    if (res.success) {
+      setMsg(prev => ({ ...prev, [wd.id]: { type: 'ok', text: '💸 Payout queued via M-Pesa.' } }));
+      await onRefresh();
+    } else {
+      setMsg(prev => ({ ...prev, [wd.id]: { type: 'err', text: res.error || 'Payout failed.' } }));
+    }
+    setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[wd.id]; return n; }), 4000);
+  }
+
   const filtered = withdrawals.filter(w => {
     const q = search.toLowerCase();
     return !q || w.fullName?.toLowerCase().includes(q) || w.phone?.includes(q) || w.status?.includes(q);
@@ -585,6 +599,11 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
                         ❌ Reject
                       </button>
                     </div>
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#065F46' }}
+                      disabled={isSaving || isDel || wd.status === 'paid' || wd.status === 'processing'} onClick={() => payout(wd)}
+                      title="Send the money now via Safaricom M-Pesa B2C">
+                      {wd.status === 'paid' ? '✅ Paid' : wd.status === 'processing' ? '⏳ Processing…' : '💸 Pay via M-Pesa'}
+                    </button>
                     <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6 }}
                       disabled={isSaving || isDel} onClick={() => saveWithdrawal(wd)}>
                       {isSaving ? 'Saving…' : 'Save edits'}

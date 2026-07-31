@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
-import { activateWithBalance } from '../lib/auth';
+import { activateWithBalance, getCurrentUser, setCurrentUser } from '../lib/auth';
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
+import MpesaPay from '../components/MpesaPay';
 import { FlowSkeleton } from '../components/Skeleton';
 
 const FEE = 50;
@@ -19,6 +20,7 @@ export default function ActivatePage() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [doneUser, setDoneUser] = useState(null);
+  const [mpesa,    setMpesa]    = useState(false);   // true once Daraja STK is live
 
   const balance = Number(user?.balance || 0);
   const enough  = balance >= FEE;
@@ -30,6 +32,20 @@ export default function ActivatePage() {
     setPhone(user.phone || '');
     setStep(enough ? 'confirm' : 'topup');
   }, [ready, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Detect whether M-Pesa (Daraja STK) is configured; if so use it, else fall
+  // back to the legacy gateway.
+  useEffect(() => {
+    fetch('/api/mpesa/config').then(r => r.json()).then(d => setMpesa(!!d.stk)).catch(() => {});
+  }, []);
+
+  // Called after a successful STK payment: refresh the user (the server already
+  // activated the account in the callback) and show the success screen.
+  async function onMpesaPaid() {
+    const u = await getCurrentUser().catch(() => null);
+    if (u) { setCurrentUser(u); setDoneUser(u); }
+    setStep('success');
+  }
 
   async function submitPassword() {
     if (!password) { setError('Please enter your password.'); return; }
@@ -111,21 +127,34 @@ export default function ActivatePage() {
       {step === 'topup' && (
         <>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', marginBottom: 18 }}>
-            Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Add <strong style={{ color: '#1f2937' }}>KES {topup}</strong> via Paystack to activate your account.
+            Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Pay <strong style={{ color: '#1f2937' }}>KES {topup}</strong> to activate your account.
           </div>
-          <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
-          <input
-            className="pay-phone-input"
-            value={phone}
-            onChange={e => { setPhone(e.target.value); setError(''); }}
-            placeholder="+254 7XX XXX XXX"
-            style={{ borderColor: error ? '#4b5563' : undefined }}
-          />
-          {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
-          <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
-            {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="lock" size={16} /> Add KES {topup} via Paystack</>}
-          </button>
-          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secured by Paystack • M-Pesa supported</div>
+
+          {mpesa ? (
+            <MpesaPay
+              purpose="activation_topup"
+              amount={topup}
+              defaultPhone={phone}
+              payLabel={`Pay KES ${topup} via M-Pesa`}
+              onSuccess={onMpesaPaid}
+            />
+          ) : (
+            <>
+              <div className="pay-phone-label">M-Pesa / Mobile Money Number</div>
+              <input
+                className="pay-phone-input"
+                value={phone}
+                onChange={e => { setPhone(e.target.value); setError(''); }}
+                placeholder="+254 7XX XXX XXX"
+                style={{ borderColor: error ? '#4b5563' : undefined }}
+              />
+              {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
+              <button className="pay-btn" style={{ marginTop: 18 }} onClick={payTopup} disabled={loading}>
+                {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="lock" size={16} /> Add KES {topup}</>}
+              </button>
+              <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Secure checkout</div>
+            </>
+          )}
         </>
       )}
 

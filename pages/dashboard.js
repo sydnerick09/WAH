@@ -17,6 +17,7 @@ import { applyForTask, listMyApplications, applicationsByTask } from '../lib/app
 import { TASKS } from '../lib/tasks';
 import Icon from '../components/Icon';
 import EmptyState from '../components/EmptyState';
+import { PostTaskModal, MyPostedTasksModal } from '../components/PostTask';
 import { DashboardSkeleton } from '../components/Skeleton';
 import { GamificationCard, RewardToast } from '../components/Gamification';
 import { computeXp, levelInfo, LEVELS } from '../lib/gamification';
@@ -991,6 +992,19 @@ export default function Dashboard() {
     } catch (_) {}
   }
 
+  // Reload the marketplace task list (admin + user-posted). Reused on mount and
+  // after a user posts/removes a task.
+  const reloadTasks = useCallback(async () => {
+    try {
+      const r = await fetch('/api/db', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'listTasks' }),
+      });
+      const { data } = await r.json();
+      if (Array.isArray(data)) { setDbTasks(shuffle(data)); setTasksReady(true); }
+    } catch (_) {}
+  }, []);
+
   useEffect(() => {
     async function init() {
       setMounted(true);
@@ -1004,15 +1018,8 @@ export default function Dashboard() {
       if (!u.quizDone) setShowQuiz(true);
       loadUserSubs(u.id);
       loadUserApps(u);
-      // Load any admin-created tasks (best-effort; falls back to built-in tasks)
-      try {
-        const r = await fetch('/api/db', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ op: 'listTasks' }),
-        });
-        const { data } = await r.json();
-        if (Array.isArray(data)) { setDbTasks(shuffle(data)); setTasksReady(true); }   // DB is now the source of truth
-      } catch (_) {}
+      // Load admin + user-posted marketplace tasks (falls back to built-in tasks)
+      reloadTasks();
     }
     init();
   }, [router]);
