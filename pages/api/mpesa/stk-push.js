@@ -9,7 +9,6 @@ import { createTransaction } from '../../../lib/mpesaStore';
 const ACTIVATION_FEE = 50;
 const PREMIUM_FEE    = 480;
 const TRAINING_FEE   = 132;
-const KNOWN_FEES     = new Set([650, 2990]); // M-Pesa (KES 650) + bank (KES 2,990) withdrawal fees
 
 function adminDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -43,8 +42,11 @@ export default async function handler(req, res) {
   } else if (purpose === 'training') {
     amount = TRAINING_FEE;
   } else if (purpose === 'withdrawal_fee' || purpose.endsWith('_withdrawal_fee')) {
+    // Fees are app-computed (fixed 650/2,990 or a dynamic bulk quote). Accept a
+    // sane range — this fee only unlocks the withdrawal form; the payout itself
+    // is admin-gated B2C.
     const a = Math.round(Number(req.body?.amount) || 0);
-    if (!KNOWN_FEES.has(a)) return res.json({ success: false, message: 'Invalid fee amount.' });
+    if (!(a >= 500 && a <= 100000)) return res.json({ success: false, message: 'Invalid fee amount.' });
     amount = a;
   } else {
     return res.json({ success: false, message: 'Unknown payment purpose.' });

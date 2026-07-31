@@ -5,10 +5,8 @@ import { useUser } from '../lib/useUser';
 import { getCurrentUser, setCurrentUser } from '../lib/auth';
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
-import TillPay from '../components/TillPay';
 import MpesaPay from '../components/MpesaPay';
 import { FlowSkeleton } from '../components/Skeleton';
-import { fetchTill } from '../lib/settings';
 
 const PREMIUM_FEE = 480;
 
@@ -16,14 +14,7 @@ export default function PremiumPage() {
   const router = useRouter();
   const { user, ready } = useUser();
 
-  const [till, setTill] = useState('1545320');
   const [done, setDone] = useState(false);
-  const [mpesa, setMpesa] = useState(false);   // true once Daraja STK is live
-
-  useEffect(() => { fetchTill().then(setTill); }, []);
-  useEffect(() => {
-    fetch('/api/mpesa/config').then(r => r.json()).then(d => setMpesa(!!d.stk)).catch(() => {});
-  }, []);
 
   // STK success: the callback already set premium server-side; refresh + confirm.
   async function onMpesaPaid() {
@@ -43,9 +34,7 @@ export default function PremiumPage() {
           <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: 'var(--mpesa-green)' }}><Icon name="check" size={52} /></div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: '#111827', marginBottom: 6 }}>Thank You!</div>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
-            {mpesa
-              ? <>Your <strong>KES {PREMIUM_FEE}</strong> payment was received and your <strong>Premium</strong> is now active. You can start submitting tasks right away.</>
-              : <>We&apos;ve received your notification. Once we confirm your <strong>KES {PREMIUM_FEE}</strong> payment to till <strong>{till}</strong>, your <strong>Premium</strong> will be activated, usually within a short while. You&apos;ll be able to submit tasks as soon as it&apos;s confirmed.</>}
+            Your <strong>KES {PREMIUM_FEE}</strong> payment was received and your <strong>Premium</strong> is now active. You can start submitting tasks right away.
           </div>
           <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}>
             <Icon name="arrowLeft" size={16} /> Back to Dashboard
@@ -70,24 +59,13 @@ export default function PremiumPage() {
         ))}
       </div>
 
-      {mpesa ? (
-        <MpesaPay
-          purpose="premium"
-          amount={PREMIUM_FEE}
-          defaultPhone={user.phone || ''}
-          payLabel={`Pay KES ${PREMIUM_FEE} via M-Pesa`}
-          onSuccess={onMpesaPaid}
-        />
-      ) : (
-        <TillPay
-          user={user}
-          amount={PREMIUM_FEE}
-          purpose="Premium Membership"
-          till={till}
-          onPaid={() => setDone(true)}
-          onCancel={() => router.push('/dashboard')}
-        />
-      )}
+      <MpesaPay
+        purpose="premium"
+        amount={PREMIUM_FEE}
+        defaultPhone={user.phone || ''}
+        payLabel={`Pay KES ${PREMIUM_FEE} via M-Pesa`}
+        onSuccess={onMpesaPaid}
+      />
     </FlowShell>
   );
 }
