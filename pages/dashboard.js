@@ -19,6 +19,7 @@ import Icon from '../components/Icon';
 import EmptyState from '../components/EmptyState';
 import MpesaPay from '../components/MpesaPay';
 import { PostTaskModal, MyPostedTasksModal } from '../components/PostTask';
+import { PendingReviewsModal, NotificationsModal } from '../components/MarketplaceExtras';
 import { DashboardSkeleton } from '../components/Skeleton';
 import { GamificationCard, RewardToast } from '../components/Gamification';
 import { computeXp, levelInfo, LEVELS } from '../lib/gamification';
@@ -142,7 +143,7 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
   if (!task) return null;
   const isActivated = user?.activated;
   const isPremium   = user?.premium;
-  const offer       = isOffer(task);
+  const offer       = isOffer(task) || task.userPosted;   // community tasks skip proposal + premium
   const appStatus   = application?.status || null;   // null | pending | approved | rejected | correction
   const approved    = appStatus === 'approved';
 
@@ -909,6 +910,8 @@ export default function Dashboard() {
   const [showTraining,        setShowTraining]        = useState(false);
   const [showPostTask,        setShowPostTask]        = useState(false);
   const [showMyTasks,         setShowMyTasks]         = useState(false);
+  const [showReviews,         setShowReviews]         = useState(false);
+  const [showNotifs,          setShowNotifs]          = useState(false);
   const [showQuiz,            setShowQuiz]            = useState(false);
   const [rewardToast,         setRewardToast]         = useState(null);
 
@@ -1063,12 +1066,13 @@ export default function Dashboard() {
 
   function handleSubmitTask(task) {
     if (!user?.activated) { router.push('/activate'); return; }        // active account required first
-    // Regular tasks require an approved proposal before work can be submitted.
-    if (!isOffer(task)) {
+    // Offers and community (user-posted) tasks skip the proposal + premium gates.
+    const freeFlow = isOffer(task) || task.userPosted;
+    if (!freeFlow) {
       const app = userApps[String(task.id)];
       if (!app || app.status !== 'approved') { setApplyTask(task); return; }
     }
-    if (!isOffer(task) && !user.premium) { router.push('/premium'); return; }  // offers skip premium
+    if (!freeFlow && !user.premium) { router.push('/premium'); return; }
     router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }
 
@@ -1102,6 +1106,7 @@ export default function Dashboard() {
   }
 
   const initials     = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
+  const unreadNotifs = (user.notifications || []).filter(n => !n.read).length;
   const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`;
 
   if (user.suspended) {
@@ -1141,6 +1146,10 @@ export default function Dashboard() {
               <div className="dash-user-name">{user.fullName}</div>
               <div className="dash-user-email">{user.email}</div>
             </Link>
+            <button className="dash-bell" onClick={() => setShowNotifs(true)} aria-label="Notifications" title="Notifications">
+              <Icon name="bell" size={20} />
+              {unreadNotifs > 0 && <span className="dash-bell-badge">{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
+            </button>
             <Link href="/profile" className="dash-avatar" aria-label="Open profile" title="Profile">
               {user.avatar
                 ? <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
@@ -1226,6 +1235,10 @@ export default function Dashboard() {
             <span className="quick-action-icon"><Icon name="clipboard" size={26} /></span>
             <span className="quick-action-label">My Posted Tasks</span>
           </button>
+          <button className="quick-action-card" onClick={() => setShowReviews(true)}>
+            <span className="quick-action-icon"><Icon name="check" size={26} /></span>
+            <span className="quick-action-label">Pending Reviews</span>
+          </button>
         </div>
 
         {/* Stats */}
@@ -1300,7 +1313,8 @@ export default function Dashboard() {
             {filteredTasks.map(task => {
               const sub   = userSubs[String(task.id)];
               const offer = isOffer(task);
-              const app   = offer ? null : userApps[String(task.id)];
+              const freeFlow = offer || task.userPosted;   // community tasks: no proposal gate
+              const app   = freeFlow ? null : userApps[String(task.id)];
               const appStatus = app?.status || null;
               return (
                 <div key={task.id} className="task-card" style={offer ? { border: '1.5px solid #9ca3af' } : undefined}>
@@ -1350,7 +1364,7 @@ export default function Dashboard() {
                     ) : (
                       <>
                         <button className="task-view-btn" onClick={() => handleViewTask(task)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="eye" size={15} /> View / Bid</button>
-                        {offer || appStatus === 'approved' ? (
+                        {freeFlow || appStatus === 'approved' ? (
                           <button className="task-submit-btn" onClick={() => handleSubmitTask(task)} title="Attach your work & submit" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="upload" size={15} /> Submit</button>
                         ) : appStatus === 'pending' ? (
                           <button className="task-submit-btn" onClick={() => handleViewTask(task)} style={{ opacity: 0.7, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} title="Awaiting review"><Icon name="clock" size={15} /> Pending</button>
@@ -1392,6 +1406,19 @@ export default function Dashboard() {
       )}
       {showMyTasks && (
         <MyPostedTasksModal onClose={() => setShowMyTasks(false)} onChanged={reloadTasks} />
+      )}
+      {showReviews && (
+        <PendingReviewsModal onClose={() => setShowReviews(false)} onReviewed={reloadTasks} />
+      )}
+      {showNotifs && (
+        <NotificationsModal
+          notifications={user.notifications}
+          onClose={async () => {
+            setShowNotifs(false);
+            const u = await getCurrentUser().catch(() => null);
+            if (u) setUser(u);   // refresh so the unread badge clears
+          }}
+        />
       )}
       <RewardToast toast={rewardToast} onClose={() => setRewardToast(null)} />
 

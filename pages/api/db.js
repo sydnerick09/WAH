@@ -127,6 +127,7 @@ function norm(row) {
     mpesaFeesPaid:   Math.max(0, Number(subs._mpesaFeesPaid ?? 0)),
     streak:          Math.max(0, Number(subs._streak?.count ?? 0)),
     lastLoginDay:    subs._streak?.lastDay ?? null,
+    notifications:   Array.isArray(subs._notifs) ? subs._notifs : [],
   };
 }
 
@@ -262,6 +263,21 @@ async function logAction(db, { action, entity, entityId, detail }) {
       action, entity, entity_id: entityId != null ? String(entityId) : null, detail: detail || '',
     });
   } catch (_) { /* audit is best-effort */ }
+}
+
+// In-app notification for a user. Stored in task_submissions._notifs (capped)
+// so no schema change is needed. Best-effort; never throws.
+async function pushNotif(db, userId, { type, title, body }) {
+  if (!userId) return;
+  try {
+    const { data: u } = await db.from('users').select('task_submissions').eq('id', userId).maybeSingle();
+    if (!u) return;
+    const subs = { ...(u.task_submissions || {}) };
+    const list = Array.isArray(subs._notifs) ? subs._notifs : [];
+    list.unshift({ id: `${Date.now()}${Math.random().toString(36).slice(2, 6)}`, type, title, body: body || '', read: false, at: Date.now() });
+    subs._notifs = list.slice(0, 40);
+    await db.from('users').update({ task_submissions: subs }).eq('id', userId);
+  } catch (_) { /* best-effort */ }
 }
 
 // ── Rate limiting (Supabase-backed fixed window; no external service) ─────────
@@ -1066,8 +1082,17 @@ export default async function handler(req, res) {
         const deadline    = clean(p.deadline, 40);
         const workers     = Math.max(1, Math.min(50, Math.floor(Number(p.workers) || 1)));
 
-        const { data: u } = await db.from('users').select('full_name').eq('id', uid).maybeSingle();
+        const { data: u } = await db.from('users').select('full_name, balance').eq('id', uid).maybeSingle();
         if (!u) return res.status(403).json({ error: 'Unauthorized' });
+
+        // Escrow: the creator pre-funds the full payout (reward × workers). The
+        // amount is held out of their balance now and released to workers on
+        // approval (or refunded if the task is removed with unclaimed slots).
+        const hold    = reward * workers;
+        const balance = Number(u.balance || 0);
+        if (balance < hold) {
+          return res.json({ success: false, error: `Insufficient balance. Funding this task needs KES ${hold.toLocaleString('en-KE')} (reward × workers); your balance is KES ${balance.toLocaleString('en-KE')}.` });
+        }
 
         // Anti-spam: cap active postings + block duplicate titles by the same user.
         const { count } = await db.from('tasks')
@@ -1086,8 +1111,11 @@ export default async function handler(req, res) {
           questions, payment: reward, slots: workers, active: true,
         }).select().single();
         if (error) return res.json({ success: false, error: error.message });
-        await logAction(db, { action: 'user_task_posted', entity: 'task', entityId: id, detail: `by:${uid} reward:${reward} workers:${workers} "${title}"` });
-        return res.json({ success: true, task: normTask(data) });
+
+        // Debit the escrow only after the task row was created successfully.
+        await db.from('users').update({ balance: balance - hold }).eq('id', uid);
+        await logAction(db, { action: 'user_task_posted', entity: 'task', entityId: id, detail: `by:${uid} reward:${reward} workers:${workers} escrow:${hold} "${title}"` });
+        return res.json({ success: true, task: normTask(data), escrowHeld: hold });
       }
 
       case 'listMyTasks': {
@@ -1104,9 +1132,95 @@ export default async function handler(req, res) {
         if (!uid) return res.status(403).json({ error: 'Unauthorized' });
         const taskId = String(p.taskId || '');
         if (!taskId.startsWith(`${uid}~`)) return res.status(403).json({ error: 'You can only remove your own tasks.' });
+        // Refund the escrow that hasn't been paid out yet: reward × unclaimed slots.
+        const { data: t } = await db.from('tasks').select('payment, slots, claimed').eq('id', taskId).maybeSingle();
+        if (!t) return res.json({ success: false, error: 'Task not found.' });
+        const refund = Math.max(0, Number(t.payment || 0) * (Number(t.slots || 0) - Number(t.claimed || 0)));
         const { error } = await db.from('tasks').delete().eq('id', taskId);
         if (error) return res.json({ success: false, error: error.message });
-        await logAction(db, { action: 'user_task_removed', entity: 'task', entityId: taskId, detail: `by:${uid}` });
+        if (refund > 0) {
+          const { data: u } = await db.from('users').select('balance').eq('id', uid).maybeSingle();
+          if (u) await db.from('users').update({ balance: Number(u.balance || 0) + refund }).eq('id', uid);
+        }
+        await logAction(db, { action: 'user_task_removed', entity: 'task', entityId: taskId, detail: `by:${uid} refund:${refund}` });
+        return res.json({ success: true, refund });
+      }
+
+      // ── Marketplace review (Phase B): the task CREATOR reviews submissions to
+      // their own tasks. Approving releases escrow to the worker; rejecting or
+      // requesting corrections notifies the worker with a reason. ─────────────
+      case 'listMyReviewSubmissions': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('submissions')
+          .select('*').like('task_id', `${uid}~%`).order('created_at', { ascending: false }).limit(200);
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normSub) });
+      }
+
+      case 'reviewSubmission': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const status = p.status;
+        const allowed = ['approved', 'rejected', 'correction'];
+        if (!allowed.includes(status)) return res.json({ success: false, error: 'Invalid status.' });
+        const { data: sub } = await db.from('submissions').select('*').eq('id', p.submissionId).maybeSingle();
+        if (!sub) return res.json({ success: false, error: 'Submission not found.' });
+        // Authorization: the submission's task must belong to this creator.
+        if (!String(sub.task_id || '').startsWith(`${uid}~`)) {
+          return res.status(403).json({ error: 'You can only review submissions to your own tasks.' });
+        }
+        const reason = clean(p.reason, 500);
+        const reward = Number(sub.reward || 0);
+        const isNewApproval = status === 'approved' && sub.status !== 'approved';
+
+        if (isNewApproval) {
+          // Enforce the worker cap: never pay out more than the funded slots.
+          const { data: t } = await db.from('tasks').select('slots, claimed').eq('id', sub.task_id).maybeSingle();
+          if (t && Number(t.claimed || 0) >= Number(t.slots || 0)) {
+            return res.json({ success: false, error: 'All funded worker slots for this task are already filled.' });
+          }
+          if (sub.user_id && reward > 0) {
+            const { data: w } = await db.from('users').select('balance, completed_tasks').eq('id', sub.user_id).maybeSingle();
+            if (w) {
+              await db.from('users').update({
+                balance:         Number(w.balance || 0) + reward,
+                completed_tasks: Number(w.completed_tasks || 0) + 1,
+              }).eq('id', sub.user_id);
+            }
+          }
+          if (t) await db.from('tasks').update({ claimed: Number(t.claimed || 0) + 1 }).eq('id', sub.task_id);
+        }
+
+        const updates = { status, updated_at: new Date().toISOString() };
+        if (p.reason !== undefined) updates.reason = reason;
+        const { data: updated, error } = await db.from('submissions').update(updates).eq('id', p.submissionId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+
+        // Notify the worker of the outcome.
+        const tt = sub.task_title || 'your task';
+        if (status === 'approved') {
+          await pushNotif(db, sub.user_id, { type: 'approved', title: 'Submission approved — you got paid', body: `Your work on "${tt}" was approved and KES ${reward.toLocaleString('en-KE')} was credited to your balance.` });
+        } else if (status === 'rejected') {
+          await pushNotif(db, sub.user_id, { type: 'rejected', title: 'Submission rejected', body: `Your work on "${tt}" was rejected.${reason ? ` Reason: ${reason}` : ''}` });
+        } else {
+          await pushNotif(db, sub.user_id, { type: 'correction', title: 'Corrections requested', body: `The creator asked for changes on "${tt}".${reason ? ` ${reason}` : ''}` });
+        }
+        await logAction(db, { action: `creator_review_${status}`, entity: 'submission', entityId: p.submissionId, detail: `by:${uid} task:${sub.task_id} worker:${sub.user_id} reward:${reward}${reason ? ` reason:${reason}` : ''}` });
+        return res.json({ success: true, submission: normSub(updated) });
+      }
+
+      // ── Notifications ─────────────────────────────────────────────────────
+      case 'markNotificationsRead': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: u } = await db.from('users').select('task_submissions').eq('id', uid).maybeSingle();
+        if (!u) return res.json({ success: false });
+        const subs = { ...(u.task_submissions || {}) };
+        if (Array.isArray(subs._notifs) && subs._notifs.length) {
+          subs._notifs = subs._notifs.map(n => ({ ...n, read: true }));
+          await db.from('users').update({ task_submissions: subs }).eq('id', uid);
+        }
         return res.json({ success: true });
       }
 
@@ -1156,8 +1270,24 @@ export default async function handler(req, res) {
 
       case 'adminDeleteTask': {
         if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
-        const { error } = await db.from('tasks').delete().eq('id', p.taskId);
+        const taskId = String(p.taskId || '');
+        // If it's a user-posted (community) task, refund the creator's unpaid
+        // escrow before removing it (admin fraud/dispute removal).
+        if (taskId.includes('~')) {
+          const creator = taskId.split('~')[0];
+          const { data: t } = await db.from('tasks').select('payment, slots, claimed').eq('id', taskId).maybeSingle();
+          if (t) {
+            const refund = Math.max(0, Number(t.payment || 0) * (Number(t.slots || 0) - Number(t.claimed || 0)));
+            if (refund > 0) {
+              const { data: u } = await db.from('users').select('balance').eq('id', creator).maybeSingle();
+              if (u) await db.from('users').update({ balance: Number(u.balance || 0) + refund }).eq('id', creator);
+              await pushNotif(db, creator, { type: 'refund', title: 'Task removed — escrow refunded', body: `An admin removed your task and KES ${refund.toLocaleString('en-KE')} of unused escrow was refunded to your balance.` });
+            }
+          }
+        }
+        const { error } = await db.from('tasks').delete().eq('id', taskId);
         if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, { action: 'admin_task_removed', entity: 'task', entityId: taskId, detail: taskId.includes('~') ? 'community task (escrow refunded)' : 'admin task' });
         return res.json({ success: true });
       }
 

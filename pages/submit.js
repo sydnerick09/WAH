@@ -41,7 +41,9 @@ export default function SubmitPage() {
   }, []);
 
   const task = [...dbTasks, ...TASKS].find(t => String(t.id) === String(router.query.task));
-  const isOfferTask = String(task?.id || '').startsWith('offer_');
+  // Offers and community (user-posted, id contains "~") tasks skip the proposal
+  // + premium gates and go straight to proof submission.
+  const isOfferTask = String(task?.id || '').startsWith('offer_') || String(task?.id || '').includes('~');
 
   // Load this user's application status for the task (proposal gate).
   useEffect(() => {
@@ -133,8 +135,8 @@ export default function SubmitPage() {
     );
   }
 
-  // Premium is required to submit, except limited-time OFFER tasks (id starts with offer_)
-  if (!user.premium && !String(task?.id || '').startsWith('offer_')) {
+  // Premium is required to submit, except OFFER and community (user-posted) tasks
+  if (!user.premium && !isOfferTask) {
     return (
       <FlowShell title="Submit Task" subtitle="Premium required" icon="upload">
         <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>

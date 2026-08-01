@@ -1352,3 +1352,18 @@ button.profile-row:hover { background: #F4F4F5; }
   .cookie-card { padding: 16px; border-radius: 14px; }
   .cookie-btn { flex: 1 1 100%; }
 }
+
+/* ── Dashboard notifications bell ── */
+.dash-bell {
+  position: relative; width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255,255,255,0.12); color: var(--white);
+  display: flex; align-items: center; justify-content: center;
+  border: none; cursor: pointer; flex-shrink: 0; transition: background var(--t-fast) var(--ease);
+}
+.dash-bell:hover { background: rgba(255,255,255,0.22); }
+.dash-bell-badge {
+  position: absolute; top: -2px; right: -2px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: #fff; color: #000;
+  font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
+  border: 2px solid var(--black);
+}

@@ -236,6 +236,22 @@ export default async function handler(req, res) {
         const { data: t } = await db.from("tasks").select("claimed").eq("id", taskId).maybeSingle();
         if (t) await db.from("tasks").update({ claimed: Number(t.claimed || 0) + 1 }).eq("id", taskId);
       }
+
+      // Community (user-posted) task: notify the CREATOR that work was submitted
+      // for their review. Creator id is encoded in the task id ("<uid>~<rand>").
+      if (taskId && taskId !== "N/A" && taskId.includes("~")) {
+        const creatorId = taskId.split("~")[0];
+        try {
+          const { data: cu } = await db.from("users").select("task_submissions").eq("id", creatorId).maybeSingle();
+          if (cu) {
+            const subs = { ...(cu.task_submissions || {}) };
+            const list = Array.isArray(subs._notifs) ? subs._notifs : [];
+            list.unshift({ id: `${Date.now()}${Math.random().toString(36).slice(2, 6)}`, type: "submission", title: "New submission to review", body: `${userName !== "N/A" ? userName : "A worker"} submitted work for "${taskTitle}". Review it in Pending Reviews.`, read: false, at: Date.now() });
+            subs._notifs = list.slice(0, 40);
+            await db.from("users").update({ task_submissions: subs }).eq("id", creatorId);
+          }
+        } catch (_) { /* best-effort */ }
+      }
     }
   } catch (err) {
     console.error("[submit-task] submission log error:", err.message);
