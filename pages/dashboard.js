@@ -907,6 +907,8 @@ export default function Dashboard() {
   const [showReferral,        setShowReferral]        = useState(false);
   const [showMenu,            setShowMenu]            = useState(false);
   const [showTraining,        setShowTraining]        = useState(false);
+  const [showPostTask,        setShowPostTask]        = useState(false);
+  const [showMyTasks,         setShowMyTasks]         = useState(false);
   const [showQuiz,            setShowQuiz]            = useState(false);
   const [rewardToast,         setRewardToast]         = useState(null);
 
@@ -1216,6 +1218,14 @@ export default function Dashboard() {
             <span className="quick-action-icon"><Icon name="graduation" size={26} /></span>
             <span className="quick-action-label">Apply for Training</span>
           </button>
+          <button className="quick-action-card" onClick={() => { if (!user?.activated) { router.push('/activate'); return; } setShowPostTask(true); }}>
+            <span className="quick-action-icon"><Icon name="plus" size={26} /></span>
+            <span className="quick-action-label">Post a Task</span>
+          </button>
+          <button className="quick-action-card" onClick={() => setShowMyTasks(true)}>
+            <span className="quick-action-icon"><Icon name="clipboard" size={26} /></span>
+            <span className="quick-action-label">My Posted Tasks</span>
+          </button>
         </div>
 
         {/* Stats */}
@@ -1309,6 +1319,11 @@ export default function Dashboard() {
                       <Icon name="star" size={12} /> OFFER · No premium needed
                     </div>
                   )}
+                  {task.userPosted && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#111827', color: '#fff', fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 999, marginBottom: 6 }}>
+                      <Icon name="users" size={12} /> Community
+                    </div>
+                  )}
                   <div className="task-category">{task.category}</div>
                   <div className="task-title">{task.title}</div>
                   {task.dueDate && (
@@ -1369,6 +1384,15 @@ export default function Dashboard() {
       )}
       {showReferral && <ReferralModal user={user} onClose={() => setShowReferral(false)} />}
       {showTraining && <TrainingModal user={user} onClose={() => setShowTraining(false)} />}
+      {showPostTask && (
+        <PostTaskModal
+          onClose={() => setShowPostTask(false)}
+          onPosted={() => { reloadTasks(); setShowMyTasks(true); }}
+        />
+      )}
+      {showMyTasks && (
+        <MyPostedTasksModal onClose={() => setShowMyTasks(false)} onChanged={reloadTasks} />
+      )}
       <RewardToast toast={rewardToast} onClose={() => setRewardToast(null)} />
 
       {showMenu && (

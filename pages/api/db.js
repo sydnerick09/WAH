@@ -924,6 +924,31 @@ export default async function handler(req, res) {
         return res.json({ success: true, data: normWd(wUp) });
       }
 
+      case 'adminMarkWithdrawalPaid': {
+        // Manual payout: admin has sent the money via their M-Pesa Business
+        // account, now marks it paid and the user's balance is deducted.
+        // Idempotent via the status guard so a double-click can't double-deduct.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: wd } = await db.from('withdrawal_requests').select('*').eq('id', p.requestId).maybeSingle();
+        if (!wd) return res.json({ success: false, error: 'Withdrawal request not found.' });
+        if (wd.status === 'paid') return res.json({ success: false, error: 'This withdrawal is already marked paid.' });
+
+        const amount = Number(wd.amount || 0);
+        if (wd.user_id && amount > 0) {
+          const { data: u } = await db.from('users').select('balance').eq('id', wd.user_id).maybeSingle();
+          if (u) {
+            const newBalance = Math.max(0, Number(u.balance || 0) - amount);
+            await db.from('users').update({ balance: newBalance }).eq('id', wd.user_id);
+          }
+        }
+        const { data: updated, error } = await db.from('withdrawal_requests')
+          .update({ status: 'paid', updated_at: new Date().toISOString() }).eq('id', p.requestId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, { action: 'withdrawal_marked_paid', entity: 'withdrawal', entityId: p.requestId,
+          detail: `KES ${amount} to ${wd.phone || ''} (manual M-Pesa) — balance deducted` });
+        return res.json({ success: true, data: normWd(updated) });
+      }
+
       case 'adminPayoutWithdrawal': {
         // Admin-triggered real M-Pesa payout (B2C) for a withdrawal request.
         // Deliberately manual (never auto) so money only leaves on approval.

@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
 import { sendNotify } from '../lib/notify';
+import { createWithdrawalRequest } from '../lib/auth';
 import { bulkWithdrawalQuote, submitBulkWithdrawal } from '../lib/auth';
 import MpesaPay from '../components/MpesaPay';
 import TillPay from '../components/TillPay';
@@ -155,12 +156,23 @@ function MpesaFlow({ user, till, initialStep }) {
     if (!phone.trim())    errs.phone    = 'Phone number is required';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
     if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    // Create the withdrawal request in the DB so it lands in the Admin Panel
+    // as "Pending Manual Payment" (admin sends the money via M-Pesa Business,
+    // then clicks Mark as Paid). Amount = the user's current balance.
+    const amount = Number(user?.balance || 0);
+    try {
+      await createWithdrawalRequest(user.id, {
+        fullName: user?.fullName || '', phone: phone.trim(), idNumber: idNumber.trim(), amount,
+      });
+    } catch (_) { /* email fallback below still notifies the admin */ }
+
     // Email the request to admin + auto-reply to the client (fire and continue)
     sendNotify({
       type: 'M-Pesa Withdrawal Request',
       name: user?.fullName || '', email: user?.email || '', phone,
       subject: 'M-Pesa Withdrawal Request',
-      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}`,
+      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nStatus: Pending Manual Payment`,
     });
     setStep('pending');
   }

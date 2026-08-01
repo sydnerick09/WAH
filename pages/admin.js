@@ -52,9 +52,11 @@ function daysLeft(paidAt) {
 }
 
 const STATUS_COLORS = {
-  pending:  { bg: '#f3f4f6', color: '#374151' },
-  approved: { bg: '#e5e7eb', color: '#1f2937' },
-  declined: { bg: '#e5e7eb', color: '#1f2937' },
+  pending:    { bg: '#f3f4f6', color: '#374151' },
+  approved:   { bg: '#e5e7eb', color: '#1f2937' },
+  declined:   { bg: '#e5e7eb', color: '#1f2937' },
+  processing: { bg: '#e5e7eb', color: '#1f2937' },
+  paid:       { bg: '#111827', color: '#ffffff' },
 };
 
 // Flat monochrome icons for the account Hold / Release control.
@@ -423,6 +425,13 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
   const [saving,  setSaving]  = useState({});
   const [msg,     setMsg]     = useState({});
   const [deleting, setDeleting] = useState({});
+  const [b2cEnabled, setB2cEnabled] = useState(false);   // true once Daraja B2C is live
+
+  // While B2C is pending approval, admins pay manually + Mark as Paid. Once B2C
+  // is configured, the automatic "Pay via M-Pesa" (B2C) button appears instead.
+  useEffect(() => {
+    fetch('/api/mpesa/config').then(r => r.json()).then(d => setB2cEnabled(!!d.b2c)).catch(() => {});
+  }, []);
 
   function setEdit(id, field, val) {
     setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: val } }));
@@ -499,6 +508,22 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
     setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[wd.id]; return n; }), 4000);
   }
 
+  // Manual payout confirmation: admin has already sent the money via their
+  // M-Pesa Business account; this marks it paid and deducts the user's balance.
+  async function markPaid(wd) {
+    if (!confirm(`Confirm you have SENT KES ${Number(wd.amount).toLocaleString()} to ${wd.phone} via your M-Pesa Business account.\n\nThis marks the request paid and deducts KES ${Number(wd.amount).toLocaleString()} from the user's balance. Cannot be undone.`)) return;
+    setSaving(prev => ({ ...prev, [wd.id]: true }));
+    const res = await dbProxy('adminMarkWithdrawalPaid', { adminSecret: secret, requestId: wd.id });
+    setSaving(prev => ({ ...prev, [wd.id]: false }));
+    if (res.success) {
+      setMsg(prev => ({ ...prev, [wd.id]: { type: 'ok', text: '✅ Marked paid — balance deducted.' } }));
+      await onRefresh();
+    } else {
+      setMsg(prev => ({ ...prev, [wd.id]: { type: 'err', text: res.error || 'Failed.' } }));
+    }
+    setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[wd.id]; return n; }), 4000);
+  }
+
   const filtered = withdrawals.filter(w => {
     const q = search.toLowerCase();
     return !q || w.fullName?.toLowerCase().includes(q) || w.phone?.includes(q) || w.status?.includes(q);
@@ -568,9 +593,11 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
                       value={getEdit(wd.id, 'status', wd.status)}
                       onChange={e => setEdit(wd.id, 'status', e.target.value)}
                     >
-                      <option value="pending">Pending</option>
+                      <option value="pending">Pending Manual Payment</option>
                       <option value="approved">Approved</option>
                       <option value="declined">Declined</option>
+                      <option value="paid">Paid</option>
+                      <option value="processing">Processing</option>
                     </select>
                     <textarea
                       style={{ ...styles.numInput, width: 130, marginTop: 6, minHeight: 42, resize: 'vertical', fontSize: 12 }}
@@ -599,11 +626,19 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
                         ❌ Reject
                       </button>
                     </div>
-                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#065F46' }}
-                      disabled={isSaving || isDel || wd.status === 'paid' || wd.status === 'processing'} onClick={() => payout(wd)}
-                      title="Send the money now via Safaricom M-Pesa B2C">
-                      {wd.status === 'paid' ? '✅ Paid' : wd.status === 'processing' ? '⏳ Processing…' : '💸 Pay via M-Pesa'}
-                    </button>
+                    {b2cEnabled ? (
+                      <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#065F46' }}
+                        disabled={isSaving || isDel || wd.status === 'paid' || wd.status === 'processing'} onClick={() => payout(wd)}
+                        title="Send the money now via Safaricom M-Pesa B2C (automatic)">
+                        {wd.status === 'paid' ? '✅ Paid' : wd.status === 'processing' ? '⏳ Processing…' : '💸 Pay via M-Pesa (auto)'}
+                      </button>
+                    ) : (
+                      <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#065F46' }}
+                        disabled={isSaving || isDel || wd.status === 'paid'} onClick={() => markPaid(wd)}
+                        title="You've sent the money manually via M-Pesa Business — mark paid and deduct balance">
+                        {wd.status === 'paid' ? '✅ Paid' : '✅ Mark as Paid (manual)'}
+                      </button>
+                    )}
                     <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6 }}
                       disabled={isSaving || isDel} onClick={() => saveWithdrawal(wd)}>
                       {isSaving ? 'Saving…' : 'Save edits'}
