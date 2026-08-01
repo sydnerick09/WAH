@@ -1687,13 +1687,23 @@ export default async function handler(req, res) {
       }
 
       case 'changeContact': {
-        // Changing email or phone cancels the Premium subscription (per spec).
+        // Changing email or phone now REQUIRES an active Premium subscription
+        // (server-side guard mirrors the client gate). Premium is NOT cancelled.
         // The new values arrive as newEmail/newPhone (the uid-based auth guard
         // strips a body `email` to prevent email-based user lookups).
         const userId = clean(p.userId, 64);
         if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
 
-        const updates = { premium: false, premium_paid_at: null };
+        const { data: cur } = await db.from('users')
+          .select('premium, premium_paid_at').eq('id', userId).maybeSingle();
+        if (!cur) return res.json({ success: false, error: 'User not found.' });
+        const cPaid = cur.premium_paid_at ?? null;
+        const premActive = !!cur.premium && cPaid !== null && Date.now() <= cPaid + ONE_MONTH_MS;
+        if (!premActive) {
+          return res.json({ success: false, needsPremium: true, error: 'An active Premium subscription is required to change your email or phone number.' });
+        }
+
+        const updates = {};
         if (p.newEmail !== undefined && p.newEmail !== '') {
           const email = clean(p.newEmail, 120).toLowerCase();
           if (!isEmail(email)) return res.json({ success: false, error: 'A valid email address is required.' });
@@ -1709,10 +1719,12 @@ export default async function handler(req, res) {
           if (!isPhone(phone)) return res.json({ success: false, error: 'A valid phone number is required.' });
           updates.phone = phone;
         }
+        if (Object.keys(updates).length === 0) return res.json({ success: false, error: 'Nothing to update.' });
 
         const { data: updated, error } = await db.from('users')
           .update(updates).eq('id', userId).select().single();
         if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, { action: 'contact_changed', entity: 'user', entityId: userId, detail: Object.keys(updates).join(',') });
         return res.json({ success: true, user: norm(updated) });
       }
 

@@ -21,7 +21,7 @@ import MpesaPay from '../components/MpesaPay';
 import { PostTaskModal, MyPostedTasksModal } from '../components/PostTask';
 import { PendingReviewsModal, NotificationsModal } from '../components/MarketplaceExtras';
 import { DashboardSkeleton } from '../components/Skeleton';
-import { GamificationCard, RewardToast } from '../components/Gamification';
+import { RewardToast } from '../components/Gamification';
 import { computeXp, levelInfo, LEVELS } from '../lib/gamification';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -842,10 +842,11 @@ function ActivityFeed({ withdrawals, pending }) {
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onLogout }) {
+function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onLogout }) {
   const items = [
     { icon: 'home',       label: 'Dashboard',                    action: () => { onClose(); } },
     { icon: 'user',       label: 'My Profile',                   action: () => { onClose(); onProfile(); } },
+    { icon: 'trophy',     label: 'Leaderboard',                  action: () => { onClose(); onLeaderboard(); } },
     { icon: 'star',       label: 'Upgrade to Premium',           action: () => { onClose(); onUpgrade(); } },
     { icon: 'check',      label: 'Awarded Tasks',                action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: 'smartphone', label: 'Withdraw with M-Pesa', mpesa: true, action: () => { onClose(); onMpesaWithdraw(); } },
@@ -1175,15 +1176,12 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
-          <div className="dash-balance-box">
+          <div className="dash-balance-card">
             <div className="dash-balance-label">Account Balance</div>
             <div className="dash-balance-amount">KES {(user.balance || 0).toLocaleString()}</div>
             <div className="dash-balance-sub">Available for withdrawal</div>
           </div>
         </div>
-
-        {/* Gamification */}
-        <GamificationCard user={user} />
 
         {/* Referral Banner */}
         <div className="referral-banner" onClick={() => setShowReferral(true)}>
@@ -1427,6 +1425,7 @@ export default function Dashboard() {
           user={user}
           onClose={() => setShowMenu(false)}
           onProfile={() => router.push('/profile')}
+          onLeaderboard={() => router.push('/leaderboard')}
           onUpgrade={() => router.push('/premium')}
           onMpesaWithdraw={() => router.push('/withdraw?method=mpesa')}
           onOtherWithdraw={() => router.push('/withdraw?method=international')}

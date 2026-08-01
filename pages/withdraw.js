@@ -125,11 +125,10 @@ const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES); // = KES 2,990
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
 const BULK_THRESHOLD_KES = 25000;
 
-// ── M-Pesa flow (fee → form → pending → failed) ───────────────────────────────
+// ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
 function MpesaFlow({ user, till, initialStep }) {
   const router = useRouter();
-  const mpesa = useMpesaEnabled();
-  const [step,     setStep]     = useState(initialStep || 'fee');
+  const [step,     setStep]     = useState(initialStep || 'notice');
   const [phone,    setPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
   const [errors,   setErrors]   = useState({});
@@ -197,24 +196,17 @@ function MpesaFlow({ user, till, initialStep }) {
 
   return (
     <FlowShell title="Withdraw with M-Pesa" subtitle="Instant M-Pesa payout" icon="smartphone" accent="var(--mpesa-green)">
-      {step === 'fee' && (mpesa ? (
-        <MpesaPay
-          purpose="withdrawal_fee"
-          amount={FEE_KES}
-          defaultPhone={user?.phone || ''}
-          payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
-          onSuccess={() => setStep('form')}
-        />
-      ) : (
-        <TillPay
-          user={user}
-          amount={FEE_KES}
-          purpose="M-Pesa Withdrawal Fee"
-          till={till}
-          onPaid={() => setStep('form')}
-          onCancel={() => router.push('/dashboard')}
-        />
-      ))}
+      {step === 'notice' && (
+        <>
+          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 20 }}>
+            <strong style={{ display: 'block', fontSize: 15, marginBottom: 6 }}>Instant M-Pesa Withdrawal</strong>
+            Your withdrawal will be processed after verification. Please enter your correct M-Pesa details to avoid delays or failed payouts. Ensure your phone number is registered for M-Pesa before submitting your request.
+          </div>
+          <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => setStep('form')}>
+            Continue
+          </button>
+        </>
+      )}
 
       {step === 'form' && (
         <>
@@ -556,7 +548,7 @@ function InternationalFlow({ user, till, initialStep }) {
         {gate === 'recommend' && (
           <>
             <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb' }}>
-              We recommend withdrawing using <strong>M-Pesa</strong> because it is <strong>faster, more convenient, and significantly cheaper</strong>.
+              We recommend using <strong>M-Pesa</strong> for withdrawals within Kenya as it is faster and more convenient.
             </div>
             {overLimit ? (
               <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
@@ -564,11 +556,11 @@ function InternationalFlow({ user, till, initialStep }) {
               </div>
             ) : (
               <button className="pay-btn" style={{ background: 'var(--mpesa-green)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-                <Icon name="smartphone" size={16} /> Continue with M-Pesa Withdrawal
+                <Icon name="smartphone" size={16} /> Continue with M-Pesa
               </button>
             )}
-            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('confirm')}>
-              <Icon name="globe" size={16} /> I Prefer International Withdrawal
+            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
+              <Icon name="globe" size={16} /> Continue with International Withdrawal
             </button>
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={14} /> Back to Dashboard</button>
           </>
@@ -975,7 +967,7 @@ export default function WithdrawPage() {
   const isBulk = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
   if (isBulk) return <BulkWithdrawalFlow user={user} till={till} />;
 
-  if (method === 'mpesa')         return <MpesaFlow user={user} till={till} initialStep={stepQ === 'form' ? 'form' : 'fee'} />;
+  if (method === 'mpesa')         return <MpesaFlow user={user} till={till} initialStep={stepQ === 'form' ? 'form' : 'notice'} />;
   if (method === 'postbank')      return <PostbankFlow user={user} till={till} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
   if (method === 'international')  return <InternationalFlow user={user} till={till} initialStep={stepQ === 'form' ? 'form' : 'mpesa'} />;
 

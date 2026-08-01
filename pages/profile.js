@@ -242,10 +242,14 @@ export default function ProfilePage() {
   }
 
   // ── Protected fields (Email, Phone) ──────────────────────────────────────────
+  // Changing email/phone now REQUIRES an active Premium subscription. Members
+  // without Premium are sent to the subscription screen first.
   function beginContact(field) {
+    if (!user.premium) { router.push('/premium'); return; }
     setContactEdit({ field, value: field === 'email' ? (user.email || '') : (user.phone || '') });
   }
   async function confirmContact() {
+    if (!user.premium) { setContactEdit(null); router.push('/premium'); return; }
     const { field, value } = contactEdit;
     const v = value.trim();
     if (!v) { setToast('Please enter a value'); return; }
@@ -255,8 +259,7 @@ export default function ProfilePage() {
     if (res.success && res.user) {
       setUser(res.user);
       setContactEdit(null);
-      // Premium is now cancelled — send them to re-subscribe via the normal flow.
-      router.push('/premium');
+      setToast(`${field === 'email' ? 'Email address' : 'Phone number'} updated`);
     } else {
       setToast(res.error || res.message || 'Could not update');
     }
@@ -510,14 +513,13 @@ export default function ProfilePage() {
         <div className="profile-dialog-overlay" onClick={() => setContactEdit(null)}>
           <div className="profile-dialog" onClick={e => e.stopPropagation()}>
             <div className="profile-dialog-head">
-              <span className="profile-dialog-ico"><Icon name="warning" size={20} /></span>
+              <span className="profile-dialog-ico"><Icon name="shield" size={20} /></span>
               <span className="profile-dialog-title">Change {contactEdit.field === 'email' ? 'Email Address' : 'Phone Number'}</span>
             </div>
             <div className="profile-dialog-body">
               <p style={{ marginBottom: 14 }}>
-                Changing your email address or phone number will automatically <strong>cancel your Premium
-                Subscription</strong>. You will need to subscribe again after verifying your new information.
-                Do you wish to continue?
+                As a <strong>Premium</strong> member you can update your {contactEdit.field === 'email' ? 'email address' : 'phone number'}.
+                Enter the new value below and confirm. Your Premium subscription stays active.
               </p>
               <input
                 className="profile-input"

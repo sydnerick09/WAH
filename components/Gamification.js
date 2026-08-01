@@ -8,10 +8,10 @@ import Icon from './Icon';
 import { gamify } from '../lib/gamification';
 import { fetchLeaderboard } from '../lib/auth';
 
-export function GamificationCard({ user }) {
+export function GamificationCard({ user, boardOpen = false }) {
   const g = gamify(user);
   const [board,     setBoard]     = useState([]);
-  const [showBoard, setShowBoard] = useState(false);
+  const [showBoard, setShowBoard] = useState(!!boardOpen);
   const [barW,      setBarW]      = useState(0);
 
   // Animate the XP bar fill after mount.
