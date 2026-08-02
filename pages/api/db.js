@@ -676,16 +676,41 @@ export default async function handler(req, res) {
       }
 
       case 'createWithdrawal': {
-        const userId   = clean(p.userId, 64);
+        const userId   = clean(p.userId, 64);   // from the verified session token
+        const method   = clean(p.method, 20) || 'mpesa';
         const fullName = clean(p.fullName, 80);
         const phone    = clean(p.phone, 20);
-        const idNumber = clean(p.idNumber, 40);
+        const idNumber = clean(p.idNumber, 120); // international packs bank details here
         const amount   = Number(p.amount);
+        const feeRef   = clean(p.feeRef, 64);    // STK CheckoutRequestID of the paid fee
         // Reject malformed withdrawal requests server-side.
         if (!nonEmpty(userId))          return res.json({ data: null, error: 'Missing user.' });
         if (!nonEmpty(fullName))        return res.json({ data: null, error: 'Account holder name is required.' });
-        if (!isPhone(phone))            return res.json({ data: null, error: 'A valid phone number is required.' });
+        if (method === 'mpesa' && !isPhone(phone)) return res.json({ data: null, error: 'A valid phone number is required.' });
         if (!isPositiveNumber(amount))  return res.json({ data: null, error: 'A valid amount is required.' });
+
+        // ── Enforce a real, verified, single-use withdrawal-fee payment ───────
+        // The fee must have been paid via STK (recorded server-side by the
+        // Daraja callback), belong to THIS user, and not already be linked to
+        // another withdrawal. This cannot be bypassed from the client.
+        if (!nonEmpty(feeRef)) {
+          await logAction(db, { action: 'withdrawal_fee_missing', entity: 'withdrawal', entityId: userId, detail: `method:${method} — no fee reference` });
+          return res.json({ data: null, error: 'A verified withdrawal-fee payment is required before submitting.' });
+        }
+        const { data: fee } = await db.from('mpesa_transactions')
+          .select('*').eq('checkout_request_id', feeRef).maybeSingle();
+        const feeOk = fee
+          && fee.status === 'success'
+          && fee.purpose === 'withdrawal_fee'
+          && String(fee.user_id) === String(userId)
+          && !fee.withdrawal_id;
+        if (!feeOk) {
+          const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
+            : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
+          await logAction(db, { action: 'withdrawal_fee_verify_failed', entity: 'withdrawal', entityId: userId, detail: `method:${method} fee:${feeRef} reason:${reason}` });
+          return res.json({ data: null, error: 'Your withdrawal-fee payment could not be verified. Please pay the fee and try again.' });
+        }
+
         const deadline = Date.now() + 2 * 60 * 60 * 1000;
         const { data, error } = await db.from('withdrawal_requests').insert({
           user_id:      userId,
@@ -697,7 +722,12 @@ export default async function handler(req, res) {
           deadline,
           requested_at: new Date().toISOString(),
         }).select().single();
-        if (error) return res.json({ data: null });
+        if (error) return res.json({ data: null, error: error.message });
+
+        // Consume the fee payment (link it to this withdrawal → non-reusable).
+        await db.from('mpesa_transactions').update({ withdrawal_id: String(data.id) }).eq('id', fee.id);
+        await logAction(db, { action: 'withdrawal_fee_verified', entity: 'withdrawal', entityId: data.id,
+          detail: `method:${method} user:${userId} fee_tx:${feeRef} receipt:${fee.mpesa_receipt || '—'} amount:KES ${fee.amount}` });
         return res.json({ data: normWd(data) });
       }
 

@@ -51,7 +51,7 @@ export default function MpesaPay({ purpose, amount, defaultPhone = '', payLabel,
           body: JSON.stringify({ authToken: getToken(), checkoutRequestId: id }),
         });
         const d = await r.json();
-        if (d.status === 'success') { doneRef.current = true; stop(); setState('success'); setMsg('Payment received. Thank you!'); onSuccess?.(d); return; }
+        if (d.status === 'success') { doneRef.current = true; stop(); setState('success'); setMsg('Payment received. Thank you!'); onSuccess?.({ ...d, checkoutRequestId: id }); return; }
         if (d.status === 'failed')  { doneRef.current = true; stop(); setState('failed'); setMsg('The payment was cancelled or failed. Please try again.'); onError?.('failed'); return; }
       } catch { /* keep polling */ }
       if (tries >= MAX_POLLS && !doneRef.current) {

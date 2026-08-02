@@ -133,6 +133,7 @@ function MpesaFlow({ user, till, initialStep }) {
   const [idNumber, setIdNumber] = useState('');
   const [errors,   setErrors]   = useState({});
   const [loading,  setLoading]  = useState(false);
+  const [feeRef,   setFeeRef]   = useState('');   // STK CheckoutRequestID of the paid fee
 
   // countdown
   const DURATION = 92 * 1000;
@@ -155,23 +156,32 @@ function MpesaFlow({ user, till, initialStep }) {
     if (!phone.trim())    errs.phone    = 'Phone number is required';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
     if (Object.keys(errs).length) { setErrors(errs); return; }
+    // Must have a verified fee payment; can't reach here without it, but guard anyway.
+    if (!feeRef) { setErrors({ form: 'Please pay the KES 650 withdrawal fee first.' }); setStep('fee'); return; }
 
-    // Create the withdrawal request in the DB so it lands in the Admin Panel
-    // as "Pending Manual Payment" (admin sends the money via M-Pesa Business,
-    // then clicks Mark as Paid). Amount = the user's current balance.
+    // The server re-verifies the fee payment (real, unused, owned by this user)
+    // before creating the request — the client can't fake it. Amount = balance.
     const amount = Number(user?.balance || 0);
+    setLoading(true);
+    let res;
     try {
-      await createWithdrawalRequest(user.id, {
-        fullName: user?.fullName || '', phone: phone.trim(), idNumber: idNumber.trim(), amount,
+      res = await createWithdrawalRequest(user.id, {
+        fullName: user?.fullName || '', phone: phone.trim(), idNumber: idNumber.trim(),
+        amount, feeRef, method: 'mpesa',
       });
-    } catch (_) { /* email fallback below still notifies the admin */ }
+    } catch (_) { res = { error: 'Network error. Please try again.' }; }
+    setLoading(false);
+    if (!res || res.error) {
+      setErrors({ form: (res && res.error) || 'Your withdrawal-fee payment could not be verified. Please try again.' });
+      return;
+    }
 
-    // Email the request to admin + auto-reply to the client (fire and continue)
+    // Fee verified + request recorded. Notify the admin (best-effort email).
     sendNotify({
       type: 'M-Pesa Withdrawal Request',
       name: user?.fullName || '', email: user?.email || '', phone,
       subject: 'M-Pesa Withdrawal Request',
-      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nStatus: Pending Manual Payment`,
+      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nFee paid (verified): KES ${FEE_KES.toLocaleString()}\nStatus: Pending Manual Payment`,
     });
     setStep('pending');
   }
@@ -198,12 +208,35 @@ function MpesaFlow({ user, till, initialStep }) {
     <FlowShell title="Withdraw with M-Pesa" subtitle="Instant M-Pesa payout" icon="smartphone" accent="var(--mpesa-green)">
       {step === 'notice' && (
         <>
-          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 20 }}>
+          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
             <strong style={{ display: 'block', fontSize: 15, marginBottom: 6 }}>Instant M-Pesa Withdrawal</strong>
             Your withdrawal will be processed after verification. Please enter your correct M-Pesa details to avoid delays or failed payouts. Ensure your phone number is registered for M-Pesa before submitting your request.
           </div>
-          <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => setStep('form')}>
+          <div className="pay-amount" style={{ marginBottom: 20 }}>
+            <div className="pay-amount-label">Withdrawal Fee</div>
+            <div className="pay-amount-value" style={{ color: 'var(--mpesa-green)' }}>KES {FEE_KES.toLocaleString()}</div>
+            <div className="pay-amount-sub">A one-time, non-refundable processing fee is paid via M-Pesa before your request is submitted.</div>
+          </div>
+          <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => setStep('fee')}>
             Continue
+          </button>
+        </>
+      )}
+
+      {step === 'fee' && (
+        <>
+          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 18 }}>
+            Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to continue. You&apos;ll get a prompt on your phone, enter your PIN to confirm. The withdrawal form unlocks only after the payment is verified.
+          </div>
+          <MpesaPay
+            purpose="withdrawal_fee"
+            amount={FEE_KES}
+            defaultPhone={user?.phone || ''}
+            payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
+            onSuccess={(d) => { setFeeRef(d?.checkoutRequestId || ''); setStep('form'); }}
+          />
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
+            <Icon name="arrowLeft" size={14} /> Back to Dashboard
           </button>
         </>
       )}
@@ -223,8 +256,12 @@ function MpesaFlow({ user, till, initialStep }) {
             onChange={e => { setIdNumber(e.target.value); setErrors(p => ({ ...p, idNumber: undefined })); }}
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
-          <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={handleSubmitForm}>
-            <Icon name="cash" size={16} /> Submit Withdrawal Request
+          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f0fff4', marginTop: 16, fontSize: 13 }}>
+            ✓ Withdrawal fee of <strong>KES {FEE_KES.toLocaleString()}</strong> paid and verified.
+          </div>
+          {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 16, opacity: loading ? 0.7 : 1 }} onClick={handleSubmitForm} disabled={loading || !feeRef}>
+            {loading ? <><span className="spinner" /> Submitting…</> : <><Icon name="cash" size={16} /> Submit Withdrawal Request</>}
           </button>
           <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your details are encrypted and secure</div>
         </>
@@ -468,6 +505,7 @@ function InternationalFlow({ user, till, initialStep }) {
   const [errors,        setErrors]        = useState({});
   const [done,          setDone]          = useState(false);
   const [sending,       setSending]       = useState(false);
+  const [feeRef,        setFeeRef]        = useState('');   // STK CheckoutRequestID of the paid fee
   // Fee step now mirrors the bulk flow: declared M-Pesa fee count → live quote.
   const [declaredFees,  setDeclaredFees]  = useState(null);   // 0 | 1 | 2
   const [quote,         setQuote]         = useState(null);
@@ -506,22 +544,41 @@ function InternationalFlow({ user, till, initialStep }) {
 
   async function handleSubmit() {
     if (!formValid || sending) return;
+    if (!feeRef) { setErrors(p => ({ ...p, form: 'Please pay the withdrawal fee first.' })); setGate('fee'); return; }
     setSending(true);
+    const amount = Number(user?.balance || 0);
+
+    // Server re-verifies the $23 (KES) fee payment before recording the request.
+    let res;
+    try {
+      res = await createWithdrawalRequest(user.id, {
+        fullName: accountName.trim(),
+        phone:    user?.phone || '',
+        idNumber: `${selectedBank.name} (${selectedBank.country}) — Acct ${accountNumber.trim()}`,
+        amount, feeRef, method: 'international',
+      });
+    } catch (_) { res = { error: 'Network error. Please try again.' }; }
+    if (!res || res.error) {
+      setSending(false);
+      setErrors(p => ({ ...p, form: (res && res.error) || 'Your fee payment could not be verified. Please try again.' }));
+      return;
+    }
+
+    // Fee verified + request recorded. Email the full bank details to admin.
     const details =
       `Account Holder Name: ${accountName.trim()}\n` +
       `Bank: ${selectedBank.name} (${selectedBank.country})\n` +
       `Account Number: ${accountNumber.trim()}\n` +
+      `Amount: KES ${amount.toLocaleString()}\n` +
+      `Fee: paid & verified\n` +
       `Requested by: ${user?.fullName || ''} (${user?.email || ''})`;
-    const ok = await sendNotify({
+    await sendNotify({
       type: 'International Withdrawal Request',
       name: accountName.trim(), email: user?.email || '', phone: user?.phone || '',
       subject: 'Withdrawal Request, Other Countries', details,
     });
     setSending(false);
-    if (ok) { setDone(true); return; }
-    // Fallback to email app if server email isn't available
-    const body = `Hello Gweno Hub,\n\nI would like to request a withdrawal to my bank account.\n\n${details}\n\nThank you.`;
-    window.location.href = `mailto:businesshub.comke@gmail.com?subject=${encodeURIComponent('Withdrawal Request, Other Countries')}&body=${encodeURIComponent(body)}`;
+    setDone(true);
   }
 
   if (done) {
@@ -630,7 +687,7 @@ function InternationalFlow({ user, till, initialStep }) {
               amount={quote.amountDueKes}
               defaultPhone={user?.phone || ''}
               payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
-              onSuccess={() => setGate('form')}
+              onSuccess={(d) => { setFeeRef(d?.checkoutRequestId || ''); setGate('form'); }}
             />
             ) : (
             <TillPay
@@ -717,6 +774,7 @@ function InternationalFlow({ user, till, initialStep }) {
         </div>
       )}
 
+      {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 12 }}>{errors.form}</div>}
       {formValid ? (
         <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={handleSubmit} disabled={sending}>
           {sending ? <><span className="spinner" /> Submitting…</> : <><Icon name="cash" size={16} /> Submit Withdrawal Request</>}
