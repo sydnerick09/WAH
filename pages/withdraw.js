@@ -479,7 +479,7 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
   const router = useRouter();
   // Other Countries flow: recommend M-Pesa first → confirm intent → pay the
   // $23 USD fee → bank form. (Never jump straight to the fee.)
-  const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'recommend'); // recommend → confirm → fee → form
+  const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'explain'); // explain → pay → form
   const [loading,       setLoading]       = useState(false);
   const [accountName,   setAccountName]   = useState('');
   const [selectedBank,  setSelectedBank]  = useState(null);
@@ -489,21 +489,20 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
   const [errors,        setErrors]        = useState({});
   const [done,          setDone]          = useState(false);
   const [sending,       setSending]       = useState(false);
-  const [feeRef,        setFeeRef]        = useState(initialFeeRef || '');   // verified Paystack fee reference
-  // Fee step now mirrors the bulk flow: declared M-Pesa fee count → live quote.
-  const [declaredFees,  setDeclaredFees]  = useState(null);   // 0 | 1 | 2
+  const [feeRef,        setFeeRef]        = useState(initialFeeRef || '');   // verified Daraja fee reference
   const [quote,         setQuote]         = useState(null);
   const [loadingQuote,  setLoadingQuote]  = useState(false);
   const [quoteErr,      setQuoteErr]      = useState('');
-  const brRow = { display: 'flex', justifyContent: 'space-between', padding: '5px 0' };
 
-  async function loadIntlQuote(n) {
-    setDeclaredFees(n); setLoadingQuote(true); setQuoteErr('');
-    const res = await bulkWithdrawalQuote(n, 'international');
+  // The international fee is USD 25, converted to KES at the live rate (no deductions).
+  async function loadQuote() {
+    setLoadingQuote(true); setQuoteErr('');
+    const res = await bulkWithdrawalQuote(0, 'international');
     setLoadingQuote(false);
     if (res?.success) setQuote(res);
     else setQuoteErr(res?.error || 'Could not calculate the fee. Please try again.');
   }
+  useEffect(() => { if (initialStep !== 'form') loadQuote(); /* eslint-disable-next-line */ }, []);
 
   // Default to the country the user chose at registration
   const homeCountry = REG_COUNTRY_ALIAS[user?.country] || user?.country || '';
@@ -528,7 +527,7 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
 
   async function handleSubmit() {
     if (!formValid || sending) return;
-    if (!feeRef) { setErrors(p => ({ ...p, form: 'Please pay the withdrawal fee first.' })); setGate('fee'); return; }
+    if (!feeRef) { setErrors(p => ({ ...p, form: 'Please pay the withdrawal fee first.' })); setGate('explain'); return; }
     setSending(true);
     const amount = Number(user?.balance || 0);
 
@@ -580,90 +579,47 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
     );
   }
 
-  // Recommendation → confirmation → fee gate, shown before the bank form.
+  // Fee explanation → Daraja payment, shown before the bank form.
+  // (No M-Pesa-vs-international choice and no withdrawal-count step.)
   if (gate !== 'form') {
-    const accent = '#000000';
-    const overLimit = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
     return (
-      <FlowShell title="Withdraw from Other Countries" subtitle="Choose your method" icon="globe" accent={accent}>
-        {gate === 'recommend' && (
+      <FlowShell title="Withdraw from Other Countries" subtitle="Withdrawal fee" icon="globe" accent="#000000">
+        {gate === 'explain' && (
           <>
-            <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb' }}>
-              We recommend using <strong>M-Pesa</strong> for withdrawals within Kenya as it is faster and more convenient.
+            <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>
+              <strong style={{ display: 'block', fontSize: 15, marginBottom: 6 }}>Withdrawal Fee</strong>
+              A one-time withdrawal fee is required to <strong>facilitate and process your payment to the agents
+              and workers</strong> who handle international payouts. It is converted to Kenyan Shillings at the
+              live exchange rate and paid via M-Pesa.
             </div>
-            {overLimit ? (
-              <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
-                Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn through a bank.
+            <div className="pay-amount" style={{ marginBottom: 18 }}>
+              <div className="pay-amount-label">Withdrawal Fee</div>
+              {loadingQuote || !quote ? (
+                <div style={{ padding: '6px 0' }}><span className="spinner" style={{ borderTopColor: '#000', borderColor: '#e5e7eb', width: 26, height: 26 }} /></div>
+              ) : (
+                <>
+                  <div className="pay-amount-value" style={{ color: '#1f2937' }}>KES {quote.amountDueKes.toLocaleString()}</div>
+                  <div className="pay-amount-sub">≈ USD {quote.feeUsd} • live rate {quote.rate}{quote.rateLive ? '' : ' (approx.)'}</div>
+                </>
+              )}
+            </div>
+            {quoteErr && (
+              <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>
+                {quoteErr} <button onClick={loadQuote} style={{ background: 'none', border: 'none', color: '#111827', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13 }}>Retry</button>
               </div>
-            ) : (
-              <button className="pay-btn" style={{ background: 'var(--mpesa-green)', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
-                <Icon name="smartphone" size={16} /> Continue with M-Pesa
-              </button>
             )}
-            <button className="pay-btn" style={{ background: accent }} onClick={() => setGate('fee')}>
-              <Icon name="globe" size={16} /> Continue with International Withdrawal
+            <button className="pay-btn" style={{ background: '#000000', opacity: (loadingQuote || !quote) ? 0.6 : 1 }} disabled={loadingQuote || !quote} onClick={() => setGate('pay')}>
+              <Icon name="arrowRight" size={16} /> Continue to Payment
             </button>
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={14} /> Back to Dashboard</button>
           </>
         )}
-        {gate === 'confirm' && (
+        {gate === 'pay' && quote && (
           <>
-            <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
-              International withdrawals are intended for <strong>users outside Kenya</strong> or for withdrawals <strong>approved by management</strong>. They are <strong>more expensive</strong> than M-Pesa withdrawals.
-            </div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>Do you want to continue with an international withdrawal?</div>
-            <button className="pay-btn" style={{ background: accent, marginBottom: 12 }} onClick={() => setGate('fee')}>
-              <Icon name="check" size={16} /> Yes, continue with International Withdrawal
-            </button>
-            {!overLimit && (
-              <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => router.push('/withdraw?method=mpesa')}>
-                <Icon name="smartphone" size={16} /> No, use M-Pesa instead
-              </button>
-            )}
-            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('recommend')}><Icon name="arrowLeft" size={14} /> Back</button>
-          </>
-        )}
-        {gate === 'fee' && !quote && (
-          <>
-            <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
-              A one-time bank withdrawal processing fee of <strong>${BANK_FEE_USD} USD</strong> applies, converted to KES at the <strong>live exchange rate</strong>.
-            </div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>
-              How many successful M-Pesa withdrawal fees have you paid before?
-            </div>
-            <div style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
-              Each previous <strong>KES 650</strong> M-Pesa fee is credited against this bank fee (maximum of two).
-            </div>
-            {quoteErr && <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>{quoteErr}</div>}
-            {[
-              [0, 'None — I have not paid before', 'No deduction'],
-              [1, 'Once', 'Credit KES 650'],
-              [2, 'Twice or more', 'Credit KES 1,300 (max)'],
-            ].map(([n, label, sub]) => (
-              <button key={n} className="pay-btn"
-                style={{ background: n === 0 ? '#374151' : '#000000', marginBottom: 12, flexDirection: 'column', gap: 2, alignItems: 'center', height: 'auto', padding: '12px 16px' }}
-                disabled={loadingQuote} onClick={() => loadIntlQuote(n)}>
-                {loadingQuote && declaredFees === n
-                  ? <><span className="spinner" /> Calculating…</>
-                  : <><span style={{ fontWeight: 700 }}>{label}</span><span style={{ fontSize: 11.5, fontWeight: 500, opacity: 0.8 }}>{sub}</span></>}
-              </button>
-            ))}
-            <button className="withdraw-close-btn" style={{ marginTop: 4 }} onClick={() => setGate('confirm')}><Icon name="arrowLeft" size={14} /> Back</button>
-          </>
-        )}
-        {gate === 'fee' && quote && (
-          <>
-            <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
-              Bank withdrawal fee breakdown (live rate). Paying the amount below unlocks your withdrawal form.
-            </div>
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 16px', marginBottom: 16, fontSize: 13.5 }}>
-              <div style={brRow}><span>Bank Withdrawal Fee</span><span>USD {quote.feeUsd}</span></div>
-              <div style={brRow}><span>Converted Amount (rate {quote.rate}{quote.rateLive ? '' : '≈'})</span><span>KES {quote.convertedKes.toLocaleString()}</span></div>
-              <div style={{ ...brRow, color: '#6b7280' }}><span>M-Pesa fees credited</span><span>{quote.eligibleDeductions} × KES {quote.perFeeKes.toLocaleString()}</span></div>
-              {Array.from({ length: quote.eligibleDeductions }).map((_, i) => (
-                <div key={i} style={{ ...brRow, color: '#374151' }}><span>Deduction {i + 1}</span><span>− KES {quote.perFeeKes.toLocaleString()}</span></div>
-              ))}
-              <div style={{ ...brRow, fontWeight: 800, borderTop: '1px solid #e5e7eb', marginTop: 6, paddingTop: 10 }}><span>Amount Due</span><span>KES {quote.amountDueKes.toLocaleString()}</span></div>
+            <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
+              Pay the <strong>KES {quote.amountDueKes.toLocaleString()}</strong> withdrawal fee via M-Pesa. You&apos;ll
+              get an STK prompt on your phone — enter your PIN to confirm. Your withdrawal form unlocks once the
+              payment is confirmed.
             </div>
             <MpesaPay
               purpose="withdrawal_fee"
@@ -672,7 +628,7 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
               payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
               onSuccess={(d) => { setFeeRef(d?.checkoutRequestId || ''); setGate('form'); }}
             />
-            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => { setQuote(null); setDeclaredFees(null); setQuoteErr(''); }}><Icon name="arrowLeft" size={14} /> Change M-Pesa fee count</button>
+            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('explain')}><Icon name="arrowLeft" size={14} /> Back</button>
           </>
         )}
       </FlowShell>
