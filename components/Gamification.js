@@ -35,7 +35,7 @@ export function GamificationCard({ user, boardOpen = false }) {
           <span className="gami-level-badge"><Icon name="zap" size={20} /></span>
           <div>
             <div className="gami-level-name">{g.level.name}</div>
-            <div className="gami-level-sub">{g.xp.toLocaleString()} XP{meRank >= 0 ? ` · Rank #${meRank + 1}` : ''}</div>
+            <div className="gami-level-sub">{meRank >= 0 ? `Rank #${meRank + 1}` : 'Keep going to rank up'}</div>
           </div>
         </div>
         {g.verification.tier && (
@@ -48,7 +48,7 @@ export function GamificationCard({ user, boardOpen = false }) {
       <div className="gami-progress-wrap">
         <div className="gami-progress"><div className="gami-progress-fill" style={{ width: `${barW}%` }} /></div>
         <div className="gami-progress-label">
-          {g.level.isMax ? 'Max level reached' : `${g.level.xpToNext.toLocaleString()} XP to ${g.level.nextName}`}
+          {g.level.isMax ? 'Max level reached' : `Progress to ${g.level.nextName}`}
         </div>
       </div>
 
@@ -89,7 +89,6 @@ export function GamificationCard({ user, boardOpen = false }) {
                   <span className="gami-board-rank">#{e.rank}</span>
                   <span className="gami-board-name">{String(e.id) === String(user.id) ? 'You' : e.name}</span>
                   <span className="gami-board-lvl">{e.level}</span>
-                  <span className="gami-board-xp">{e.xp.toLocaleString()} XP</span>
                 </div>
               ))}
             </div>

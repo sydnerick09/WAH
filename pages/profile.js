@@ -20,6 +20,9 @@ import {
 } from '../lib/auth';
 import Icon from '../components/Icon';
 import { ProfileSkeleton } from '../components/Skeleton';
+import MpesaPay from '../components/MpesaPay';
+
+const PROFILE_FEE = 480;   // KES fee (via Daraja) to change personal name / email / phone
 
 // Validate a chosen image file and return a data URL (cropping happens later,
 // in the interactive AvatarCropper).
@@ -161,7 +164,7 @@ export default function ProfilePage() {
   const [viewerOpen,  setViewerOpen]  = useState(false);  // profile photo viewer
   const [cropSrc,     setCropSrc]     = useState(null);   // image being cropped (data URL)
   const [qrOpen,      setQrOpen]      = useState(false);
-  const [contactEdit, setContactEdit] = useState(null);   // { field:'email'|'phone', value }
+  const [feeEdit, setFeeEdit] = useState(null);   // { field:'fullName'|'email'|'phone', step:'notice'|'pay'|'input', value, feeRef }
   const [deleteStep,  setDeleteStep]  = useState(0);       // 0 closed · 1 warning · 2 final
   const [confirmText, setConfirmText] = useState('');
 
@@ -241,25 +244,27 @@ export default function ProfilePage() {
     else setToast(res.error || res.message || 'Could not remove picture');
   }
 
-  // ── Protected fields (Email, Phone) ──────────────────────────────────────────
-  // Changing email/phone now REQUIRES an active Premium subscription. Members
-  // without Premium are sent to the subscription screen first.
-  function beginContact(field) {
-    if (!user.premium) { router.push('/premium'); return; }
-    setContactEdit({ field, value: field === 'email' ? (user.email || '') : (user.phone || '') });
+  // ── Fee-gated personal fields (Full Name, Email, Phone) ──────────────────────
+  // Changing a personal name / email / phone requires a KES 480 fee paid via
+  // Safaricom Daraja (M-Pesa). Flow: notice → pay (STK) → enter new value → save.
+  // The server re-verifies the paid fee before applying the change.
+  const fieldLabel = f => f === 'fullName' ? 'Full Name' : f === 'email' ? 'Email Address' : 'Phone Number';
+  function beginPaidChange(field) {
+    const cur = field === 'fullName' ? (user.fullName || '') : field === 'email' ? (user.email || '') : (user.phone || '');
+    setFeeEdit({ field, step: 'notice', value: cur, feeRef: '' });
   }
-  async function confirmContact() {
-    if (!user.premium) { setContactEdit(null); router.push('/premium'); return; }
-    const { field, value } = contactEdit;
-    const v = value.trim();
+  async function saveFeeChange() {
+    const { field, value, feeRef } = feeEdit;
+    const v = String(value || '').trim();
     if (!v) { setToast('Please enter a value'); return; }
+    if (!feeRef) { setToast('Please complete the KES 480 payment first'); return; }
     setBusy(true);
-    const res = await changeContact(user.id, { [field]: v });
+    const res = await changeContact(user.id, { [field]: v, feeRef });
     setBusy(false);
     if (res.success && res.user) {
       setUser(res.user);
-      setContactEdit(null);
-      setToast(`${field === 'email' ? 'Email address' : 'Phone number'} updated`);
+      setFeeEdit(null);
+      setToast(`${fieldLabel(field)} updated`);
     } else {
       setToast(res.error || res.message || 'Could not update');
     }
@@ -287,11 +292,11 @@ export default function ProfilePage() {
 
   // ── Info rows ────────────────────────────────────────────────────────────────
   const rows = [
-    { key: 'fullName',   label: 'Full Name',      value: user.fullName,   icon: 'user',   kind: 'edit' },
+    { key: 'fullName',   label: 'Full Name',      value: user.fullName,   icon: 'user',   kind: 'paid' },
     { key: 'username',   label: 'Username',       value: user.username,   icon: 'atSign', kind: 'edit' },
     { key: 'address',    label: 'Address',        value: user.address,    icon: 'mapPin', kind: 'read' },
-    { key: 'email',      label: 'Email Address',  value: user.email,      icon: 'mail',   kind: 'protected' },
-    { key: 'phone',      label: 'Phone Number',   value: user.phone,      icon: 'phone',  kind: 'protected' },
+    { key: 'email',      label: 'Email Address',  value: user.email,      icon: 'mail',   kind: 'paid' },
+    { key: 'phone',      label: 'Phone Number',   value: user.phone,      icon: 'phone',  kind: 'paid' },
     { key: 'postalCode', label: 'Postal Code',    value: user.postalCode, icon: 'hash',   kind: 'read' },
     { key: 'state',      label: 'State / Region', value: user.state,      icon: 'map',    kind: 'read' },
     { key: 'country',    label: 'Country',        value: user.country,    icon: 'globe',  kind: 'read' },
@@ -312,7 +317,7 @@ export default function ProfilePage() {
         </div>
         <div className="profile-header-title">Profile</div>
         <div className="profile-header-right">
-          <button className="profile-icon-btn" aria-label="Edit profile" onClick={() => beginEdit('fullName')}>
+          <button className="profile-icon-btn" aria-label="Edit username" onClick={() => beginEdit('username')}>
             <Icon name="edit" size={19} />
           </button>
           <button className="profile-icon-btn" aria-label="Search" onClick={() => { setShowSearch(s => !s); setQuery(''); }}>
@@ -387,7 +392,7 @@ export default function ProfilePage() {
             }
             const Tag = r.kind === 'read' ? 'div' : 'button';
             const onClick = r.kind === 'edit' ? () => beginEdit(r.key)
-                          : r.kind === 'protected' ? () => beginContact(r.key)
+                          : r.kind === 'paid' ? () => beginPaidChange(r.key)
                           : undefined;
             return (
               <Tag key={r.key} className="profile-row" onClick={onClick}>
@@ -396,8 +401,8 @@ export default function ProfilePage() {
                   <span className="profile-row-label">{r.label}</span>
                   <span className={`profile-row-value${empty ? ' muted' : ''}`}>{r.value || 'Not provided'}</span>
                 </span>
-                {r.kind === 'protected' && <span className="profile-row-lock"><Icon name="lock" size={16} /></span>}
-                {r.kind === 'edit'      && <span className="profile-row-chevron"><Icon name="chevronRight" size={18} /></span>}
+                {r.kind === 'paid' && <span className="profile-row-lock"><Icon name="lock" size={16} /></span>}
+                {r.kind === 'edit' && <span className="profile-row-chevron"><Icon name="chevronRight" size={18} /></span>}
               </Tag>
             );
           })}
@@ -508,32 +513,66 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ── Contact change (Email / Phone) ── */}
-      {contactEdit && (
-        <div className="profile-dialog-overlay" onClick={() => setContactEdit(null)}>
+      {/* ── Personal field change (Full Name / Email / Phone) — KES 480 via Daraja ── */}
+      {feeEdit && (
+        <div className="profile-dialog-overlay" onClick={() => setFeeEdit(null)}>
           <div className="profile-dialog" onClick={e => e.stopPropagation()}>
             <div className="profile-dialog-head">
-              <span className="profile-dialog-ico"><Icon name="shield" size={20} /></span>
-              <span className="profile-dialog-title">Change {contactEdit.field === 'email' ? 'Email Address' : 'Phone Number'}</span>
+              <span className="profile-dialog-ico"><Icon name={feeEdit.step === 'input' ? 'edit' : 'lock'} size={20} /></span>
+              <span className="profile-dialog-title">Change {fieldLabel(feeEdit.field)}</span>
             </div>
             <div className="profile-dialog-body">
-              <p style={{ marginBottom: 14 }}>
-                As a <strong>Premium</strong> member you can update your {contactEdit.field === 'email' ? 'email address' : 'phone number'}.
-                Enter the new value below and confirm. Your Premium subscription stays active.
-              </p>
-              <input
-                className="profile-input"
-                type={contactEdit.field === 'email' ? 'email' : 'tel'}
-                value={contactEdit.value}
-                onChange={e => setContactEdit({ ...contactEdit, value: e.target.value })}
-                placeholder={contactEdit.field === 'email' ? 'you@example.com' : '+254 7XX XXX XXX'}
-              />
+              {feeEdit.step === 'notice' && (
+                <p style={{ marginBottom: 0 }}>
+                  Changing your <strong>{fieldLabel(feeEdit.field).toLowerCase()}</strong> requires a one-time
+                  <strong> KES {PROFILE_FEE} profile-change fee</strong>, paid via <strong>M-Pesa (Safaricom)</strong>.
+                  After the payment is confirmed, you can enter and save the new value. Do you want to continue?
+                </p>
+              )}
+              {feeEdit.step === 'pay' && (
+                <>
+                  <div className="pay-amount" style={{ marginBottom: 14 }}>
+                    <div className="pay-amount-label">Profile Change Fee</div>
+                    <div className="pay-amount-value" style={{ color: 'var(--mpesa-green)' }}>KES {PROFILE_FEE}</div>
+                    <div className="pay-amount-sub">Paid via M-Pesa • unlocks this change once confirmed</div>
+                  </div>
+                  <MpesaPay
+                    purpose="profile_change"
+                    amount={PROFILE_FEE}
+                    defaultPhone={user.phone || ''}
+                    payLabel={`Pay KES ${PROFILE_FEE} via M-Pesa`}
+                    onSuccess={(d) => setFeeEdit(f => ({ ...f, feeRef: d?.checkoutRequestId || '', step: 'input' }))}
+                  />
+                </>
+              )}
+              {feeEdit.step === 'input' && (
+                <>
+                  <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f0fff4', marginBottom: 14, fontSize: 13 }}>
+                    <Icon name="check" size={14} /> KES {PROFILE_FEE} fee paid and verified. Enter your new {fieldLabel(feeEdit.field).toLowerCase()}.
+                  </div>
+                  <input
+                    className="profile-input"
+                    type={feeEdit.field === 'email' ? 'email' : feeEdit.field === 'phone' ? 'tel' : 'text'}
+                    value={feeEdit.value}
+                    onChange={e => setFeeEdit({ ...feeEdit, value: e.target.value })}
+                    placeholder={feeEdit.field === 'email' ? 'you@example.com' : feeEdit.field === 'phone' ? '+254 7XX XXX XXX' : 'Your full name'}
+                    autoFocus
+                  />
+                </>
+              )}
             </div>
             <div className="profile-dialog-actions">
-              <button className="btn-mono" onClick={confirmContact} disabled={busy}>
-                {busy ? <span className="spinner" /> : 'Continue'}
-              </button>
-              <button className="btn-mono ghost" onClick={() => setContactEdit(null)} disabled={busy}>Cancel</button>
+              {feeEdit.step === 'notice' && (
+                <button className="btn-mono" onClick={() => setFeeEdit(f => ({ ...f, step: 'pay' }))}>
+                  <Icon name="lock" size={15} /> Pay KES {PROFILE_FEE} to continue
+                </button>
+              )}
+              {feeEdit.step === 'input' && (
+                <button className="btn-mono" onClick={saveFeeChange} disabled={busy}>
+                  {busy ? <span className="spinner" /> : 'Save Change'}
+                </button>
+              )}
+              <button className="btn-mono ghost" onClick={() => setFeeEdit(null)} disabled={busy}>Cancel</button>
             </div>
           </div>
         </div>

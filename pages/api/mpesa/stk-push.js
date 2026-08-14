@@ -9,6 +9,7 @@ import { createTransaction } from '../../../lib/mpesaStore';
 const ACTIVATION_FEE = 50;
 const PREMIUM_FEE    = 480;
 const TRAINING_FEE   = 132;
+const PROFILE_FEE    = 480;   // KES 480 fee to change personal name / email / phone
 
 function adminDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -41,6 +42,8 @@ export default async function handler(req, res) {
     amount = PREMIUM_FEE;
   } else if (purpose === 'training') {
     amount = TRAINING_FEE;
+  } else if (purpose === 'profile_change') {
+    amount = PROFILE_FEE;
   } else if (purpose === 'withdrawal_fee' || purpose.endsWith('_withdrawal_fee')) {
     // Fees are app-computed (fixed 650/2,990 or a dynamic bulk quote). Accept a
     // sane range — this fee only unlocks the withdrawal form; the payout itself

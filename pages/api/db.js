@@ -1716,9 +1716,10 @@ export default async function handler(req, res) {
 
       // ─── Profile (self-service) ───────────────────────────────────────────
       case 'updateProfile': {
-        // Only Full Name and Username are user-editable (per the profile spec).
-        // Extended fields (address, postalCode, state) are stored in _profile too
-        // so the page can round-trip them, but the UI keeps them read-only.
+        // Username is freely editable. Full Name is NOT changed here — it now
+        // requires the KES 480 profile-change fee (handled in changeContact).
+        // Extended fields (address, postalCode, state) are stored in _profile so
+        // the page can round-trip them, but the UI keeps them read-only.
         const userId = clean(p.userId, 64);
         if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
 
@@ -1726,12 +1727,7 @@ export default async function handler(req, res) {
           .select('task_submissions').eq('id', userId).maybeSingle();
         if (!u) return res.json({ success: false, error: 'User not found.' });
 
-        const updates = {};
-        if (p.fullName !== undefined) {
-          const fullName = clean(p.fullName, 80);
-          if (!nonEmpty(fullName)) return res.json({ success: false, error: 'Full name cannot be empty.' });
-          updates.full_name = fullName;
-        }
+        const updates = {};   // full_name intentionally not settable here (fee-gated)
 
         const subs    = { ...(u.task_submissions || {}) };
         const profile = { ...(subs._profile || {}) };
@@ -1775,27 +1771,37 @@ export default async function handler(req, res) {
       }
 
       case 'changeContact': {
-        // Changing email or phone now REQUIRES an active Premium subscription
-        // (server-side guard mirrors the client gate). Premium is NOT cancelled.
-        // The new values arrive as newEmail/newPhone (the uid-based auth guard
-        // strips a body `email` to prevent email-based user lookups).
+        // Changing personal name / email / phone requires a verified, single-use
+        // KES 480 profile-change fee paid via Daraja (recorded by the STK callback
+        // in mpesa_transactions). Values arrive as newFullName/newEmail/newPhone
+        // (the uid-based auth guard strips a body `email`). Cannot be bypassed.
         const userId = clean(p.userId, 64);
         if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
 
-        const { data: cur } = await db.from('users')
-          .select('premium, premium_paid_at').eq('id', userId).maybeSingle();
-        if (!cur) return res.json({ success: false, error: 'User not found.' });
-        const cPaid = cur.premium_paid_at ?? null;
-        const premActive = !!cur.premium && cPaid !== null && Date.now() <= cPaid + ONE_MONTH_MS;
-        if (!premActive) {
-          return res.json({ success: false, needsPremium: true, error: 'An active Premium subscription is required to change your email or phone number.' });
+        const feeRef = clean(p.feeRef, 120);
+        if (!nonEmpty(feeRef)) {
+          return res.json({ success: false, needsFee: true, error: 'A KES 480 profile-change fee is required.' });
+        }
+        const { data: fee } = await db.from('mpesa_transactions')
+          .select('*').eq('checkout_request_id', feeRef).maybeSingle();
+        const feeOk = fee && fee.status === 'success' && fee.purpose === 'profile_change'
+          && String(fee.user_id) === String(userId) && !fee.withdrawal_id;
+        if (!feeOk) {
+          const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
+            : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
+          await logAction(db, { action: 'profile_fee_verify_failed', entity: 'user', entityId: userId, detail: `fee:${feeRef} reason:${reason}` });
+          return res.json({ success: false, needsFee: true, error: 'Your KES 480 payment could not be verified. Please pay the fee and try again.' });
         }
 
         const updates = {};
+        if (p.newFullName !== undefined && p.newFullName !== '') {
+          const fullName = clean(p.newFullName, 80);
+          if (!nonEmpty(fullName)) return res.json({ success: false, error: 'Full name cannot be empty.' });
+          updates.full_name = fullName;
+        }
         if (p.newEmail !== undefined && p.newEmail !== '') {
           const email = clean(p.newEmail, 120).toLowerCase();
           if (!isEmail(email)) return res.json({ success: false, error: 'A valid email address is required.' });
-          // Enforce uniqueness (case-insensitive), ignoring the user's own row.
           const { data: existing } = await db.from('users').select('id').ilike('email', email).limit(2);
           if ((existing || []).some(r => String(r.id) !== String(userId))) {
             return res.json({ success: false, error: 'That email is already in use by another account.' });
@@ -1812,7 +1818,9 @@ export default async function handler(req, res) {
         const { data: updated, error } = await db.from('users')
           .update(updates).eq('id', userId).select().single();
         if (error) return res.json({ success: false, error: error.message });
-        await logAction(db, { action: 'contact_changed', entity: 'user', entityId: userId, detail: Object.keys(updates).join(',') });
+        // Consume the fee (link it → single-use), then log.
+        await db.from('mpesa_transactions').update({ withdrawal_id: `profile:${Date.now()}` }).eq('id', fee.id);
+        await logAction(db, { action: 'profile_changed', entity: 'user', entityId: userId, detail: `${Object.keys(updates).join(',')} fee:${feeRef}` });
         return res.json({ success: true, user: norm(updated) });
       }
 
