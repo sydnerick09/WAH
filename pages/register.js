@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { registerUser, setCurrentUser, getBoundEmail, bindBrowser } from '../lib/auth';
+import { registerUser, setCurrentUser } from '../lib/auth';
 import { isEmail, isPhone } from '../lib/validate';
 import Icon from '../components/Icon';
 
@@ -36,12 +36,6 @@ export default function Register() {
   const [referrerId, setReferrerId] = useState(null);
   const [fromReferralLink, setFromReferralLink] = useState(false);  // true only when opened via ?ref=
   const [cv, setCv] = useState(null);
-  const [deviceUsed, setDeviceUsed] = useState(false);
-
-  // One account per browser
-  useEffect(() => {
-    if (getBoundEmail()) setDeviceUsed(true);
-  }, []);
 
   function onPickCv(e) {
     const f = e.target.files?.[0];
@@ -92,13 +86,7 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
-    // One account per browser
-    if (getBoundEmail()) {
-      setError('This browser already has an account. Only one account is allowed per browser.');
-      setDeviceUsed(true);
-      return;
-    }
-
+    // Multiple accounts are allowed on the same device/browser — no device check.
     const validationError = validate();
     if (validationError) { setError(validationError); return; }
 
@@ -137,7 +125,6 @@ export default function Register() {
       } catch (_) { /* ignore, CV is optional */ }
     }
 
-    bindBrowser(email);
     localStorage.removeItem('referrerId');
     setCurrentUser(result.user);
     router.push('/dashboard');
@@ -173,13 +160,6 @@ export default function Register() {
             }}
           >
             You were invited by a Gweno Hub member.
-          </div>
-        )}
-
-        {deviceUsed && (
-          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', color: '#374151', padding: '12px 16px', borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 600 }}>
-            This browser already has a Gweno Hub account. Only one account is allowed per browser.{' '}
-            <Link href="/login" style={{ color: '#4b5563', textDecoration: 'underline' }}>Log in instead →</Link>
           </div>
         )}
 
@@ -347,7 +327,7 @@ export default function Register() {
           <button
             type="submit"
             className="auth-btn"
-            disabled={loading || deviceUsed}
+            disabled={loading}
           >
             {loading ? (
               <span

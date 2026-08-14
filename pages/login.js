@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { loginUser, getBoundEmail, bindBrowser } from '../lib/auth';
+import { loginUser } from '../lib/auth';
 
 export default function Login() {
   const router = useRouter();
@@ -24,13 +24,7 @@ export default function Login() {
     }
     const email = form.email.trim().toLowerCase();
 
-    // One account per browser, this browser is bound to a single account
-    const bound = getBoundEmail();
-    if (bound && bound !== email) {
-      setError('This browser is already linked to a different account. Only one account can be used per browser.');
-      return;
-    }
-
+    // Multiple accounts are allowed on the same device/browser — no device binding.
     setLoading(true);
     const result = await loginUser({ email, password: form.password });
     if (!result.success) {
@@ -38,7 +32,6 @@ export default function Login() {
       setLoading(false);
       return;
     }
-    bindBrowser(email);   // bind this browser to the account on first sign-in
     router.push('/dashboard');
   }
 
