@@ -6,8 +6,19 @@
 import { useState } from 'react';
 import Icon from './Icon';
 import { sendNotify } from '../lib/notify';
+import { logTillPayment } from '../lib/auth';
 
 const SUPPORT_EMAIL = 'businesshub.comke@gmail.com';
+
+// Map a human "purpose" to a ledger payment type.
+function purposeType(p) {
+  const s = String(p || '').toLowerCase();
+  if (s.includes('premium'))                       return 'premium';
+  if (s.includes('activation') || s.includes('registration')) return 'registration';
+  if (s.includes('withdraw'))                      return 'withdrawal_fee';
+  if (s.includes('training'))                      return 'training';
+  return 'other';
+}
 
 export default function TillPay({ user, amount, purpose = 'Payment', till = '1545320', onPaid, onCancel, paidLabel = 'I Have Paid — Notify Support' }) {
   const [copied, setCopied]   = useState(false);
@@ -37,6 +48,9 @@ export default function TillPay({ user, amount, purpose = 'Payment', till = '154
 
     // Fire a server-side notification to support (best-effort, don't block).
     sendNotify({ type: `${purpose} Payment`, name: user?.fullName || '', email: user?.email || '', phone: user?.phone || '', subject, details }).catch(() => {});
+
+    // Record a pending, auditable transaction in the payment ledger (best-effort).
+    logTillPayment({ type: purposeType(purpose), amount: amt, phone: user?.phone || '' }).catch(() => {});
 
     // Open the client's email app (Gmail / default) prefilled to support.
     const body = `Hello Gweno Hub,\n\n${details}\n\nThank you.`;

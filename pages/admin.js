@@ -1352,6 +1352,90 @@ function TillSettingsBar({ secret }) {
 }
 
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
+// ─── Payments / Transactions Tab ──────────────────────────────────────────────
+function TransactionsTab({ secret }) {
+  const [rows,     setRows]     = useState([]);
+  const [loaded,   setLoaded]   = useState(false);
+  const [err,      setErr]      = useState('');
+  const [provider, setProvider] = useState('');
+  const [type,     setType]     = useState('');
+  const [status,   setStatus]   = useState('');
+
+  async function load() {
+    setLoaded(false);
+    const res = await dbProxy('adminListTransactions', {
+      adminSecret: secret,
+      provider: provider || undefined, type: type || undefined, status: status || undefined,
+    });
+    setLoaded(true);
+    if (res.error) { setErr(res.error); setRows([]); return; }
+    setErr(''); setRows(res.data || []);
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [provider, type, status]);
+
+  const providerLabel = { daraja: 'Daraja (M-Pesa)', paystack: 'Paystack', mpesa_till: 'M-Pesa Till' };
+
+  return (
+    <div style={{ padding: '20px 32px' }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
+        <select style={{ ...styles.input, maxWidth: 190, margin: 0 }} value={provider} onChange={e => setProvider(e.target.value)}>
+          <option value="">All providers</option>
+          <option value="daraja">Daraja (M-Pesa)</option>
+          <option value="paystack">Paystack</option>
+          <option value="mpesa_till">M-Pesa Till</option>
+        </select>
+        <select style={{ ...styles.input, maxWidth: 190, margin: 0 }} value={type} onChange={e => setType(e.target.value)}>
+          <option value="">All types</option>
+          <option value="registration">Registration</option>
+          <option value="premium">Premium</option>
+          <option value="withdrawal_fee">Withdrawal fee</option>
+          <option value="training">Training</option>
+          <option value="other">Other</option>
+        </select>
+        <select style={{ ...styles.input, maxWidth: 170, margin: 0 }} value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="successful">Successful</option>
+          <option value="failed">Failed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="reversed">Reversed</option>
+        </select>
+        <button style={{ ...styles.btn, width: 'auto', padding: '9px 16px' }} onClick={load}>Refresh</button>
+        <span style={{ fontSize: 13, color: '#64748B' }}>{loaded ? `${rows.length} transactions` : 'Loading…'}</span>
+      </div>
+
+      {err && (
+        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
+          Could not load transactions: <strong>{err}</strong>. If this mentions a missing table, run <code>db/payments-tables.sql</code> in your Supabase SQL editor.
+        </div>
+      )}
+
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead><tr>{['User', 'Type', 'Amount', 'Provider', 'Reference', 'Status', 'Verify', 'Date'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map(t => (
+              <tr key={t.id} style={styles.tr}>
+                <td style={{ ...styles.td, fontFamily: 'monospace', fontSize: 11 }}>{t.userId || '—'}</td>
+                <td style={styles.td}>{t.type || '—'}</td>
+                <td style={styles.td}><strong>{t.currency} {Number(t.amount).toLocaleString()}</strong></td>
+                <td style={styles.td}>{providerLabel[t.provider] || t.provider || '—'}</td>
+                <td style={{ ...styles.td, fontFamily: 'monospace', fontSize: 11, maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.reference || '—'}</td>
+                <td style={styles.td}><span style={{ ...styles.badge, background: t.status === 'successful' ? '#e5e7eb' : '#f3f4f6', color: '#111827' }}>{t.status}</span></td>
+                <td style={styles.td}><span style={{ fontSize: 11, color: '#64748B' }}>{t.verifyStatus}</span></td>
+                <td style={{ ...styles.td, fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(t.createdAt ? new Date(t.createdAt).getTime() : null)}</td>
+              </tr>
+            ))}
+            {loaded && rows.length === 0 && !err && (
+              <tr><td colSpan={8} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No transactions match these filters.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const [secret,      setSecret]      = useState('');
   const [authed,      setAuthed]      = useState(false);
@@ -1423,6 +1507,7 @@ export default function AdminPanel() {
         {[
           { key: 'users',        label: `👤 Users (${users.length})` },
           { key: 'withdrawals',  label: `💸 Withdrawals (${withdrawals.length})` },
+          { key: 'transactions', label: '💳 Transactions' },
           { key: 'tasks',        label: '📋 Tasks' },
           { key: 'applications', label: '📝 Applications' },
           { key: 'submissions',  label: '📥 Submissions' },
@@ -1439,6 +1524,7 @@ export default function AdminPanel() {
 
       {tab === 'users'        && <UsersTab        users={users}             secret={secret} onRefresh={refresh} />}
       {tab === 'withdrawals'  && <WithdrawalsTab  withdrawals={withdrawals} secret={secret} onRefresh={refresh} />}
+      {tab === 'transactions' && <TransactionsTab secret={secret} />}
       {tab === 'tasks'        && <TasksTab        secret={secret} />}
       {tab === 'applications' && <ApplicationsTab secret={secret} />}
       {tab === 'submissions'  && <SubmissionsTab  secret={secret} />}

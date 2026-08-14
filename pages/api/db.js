@@ -1240,6 +1240,63 @@ export default async function handler(req, res) {
         return res.json({ success: true, submission: normSub(updated) });
       }
 
+      // ── Payment ledger ────────────────────────────────────────────────────
+      // Record a payment attempt (idempotent by provider+reference). Used by the
+      // manual M-Pesa Till flow so every payment is persisted + auditable, not
+      // just emailed. Daraja STK/B2C keep their own detailed mpesa_transactions.
+      case 'logPayment': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+        const type     = clean(p.type, 40) || 'other';
+        const amount   = Math.max(0, Number(p.amount) || 0);
+        const provider = clean(p.provider, 30) || 'mpesa_till';
+        const phone    = clean(p.phone, 30);
+        const reference = clean(p.reference, 120) || `till:${uid}:${type}:${amount}`;
+        try {
+          const { data: ex } = await db.from('payment_events')
+            .select('id').eq('provider', provider).eq('reference', reference).maybeSingle();
+          if (ex) {
+            await db.from('payment_events').update({ status: 'pending', updated_at: new Date().toISOString() }).eq('id', ex.id);
+            return res.json({ success: true, id: ex.id, duplicate: true });
+          }
+          const { data, error } = await db.from('payment_events').insert({
+            user_id: uid, type, amount, currency: 'KES', provider, reference, phone,
+            status: 'pending', verify_status: 'unverified',
+          }).select().single();
+          if (error) return res.json({ success: false, error: error.message });
+          await logAction(db, { action: 'payment_pending', entity: 'payment', entityId: reference, detail: `${provider} ${type} KES ${amount} by:${uid}` });
+          return res.json({ success: true, id: data?.id });
+        } catch (e) {
+          return res.json({ success: false, error: e?.message || 'Ledger unavailable' });
+        }
+      }
+
+      // Admin unified transactions view (merges the Daraja ledger + payment_events).
+      case 'adminListTransactions': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const mapDStatus = s => ({ success: 'successful', pending: 'pending', failed: 'failed', timeout: 'failed', cancelled: 'cancelled' }[s] || s || 'pending');
+        let daraja = [], events = [];
+        try { const { data } = await db.from('mpesa_transactions').select('*').order('created_at', { ascending: false }).limit(500); daraja = data || []; } catch (_) {}
+        try { const { data } = await db.from('payment_events').select('*').order('created_at', { ascending: false }).limit(500); events = data || []; } catch (_) {}
+        const fromDaraja = daraja.map(r => ({
+          id: `m${r.id}`, provider: 'daraja', type: r.purpose || '', amount: Number(r.amount || 0), currency: 'KES',
+          reference: r.mpesa_receipt || r.checkout_request_id || r.conversation_id || '', phone: r.phone || '', email: '',
+          userId: r.user_id || '', status: mapDStatus(r.status),
+          verifyStatus: (String(r.result_code) === '0' || r.status === 'success') ? 'verified' : 'unverified',
+          createdAt: r.created_at,
+        }));
+        const fromEvents = events.map(r => ({
+          id: `e${r.id}`, provider: r.provider || '', type: r.type || '', amount: Number(r.amount || 0), currency: r.currency || 'KES',
+          reference: r.reference || '', phone: r.phone || '', email: r.email || '', userId: r.user_id || '',
+          status: r.status || 'pending', verifyStatus: r.verify_status || 'unverified', createdAt: r.created_at,
+        }));
+        let all = [...fromDaraja, ...fromEvents].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        if (p.provider) all = all.filter(t => t.provider === p.provider);
+        if (p.type)     all = all.filter(t => t.type === p.type);
+        if (p.status)   all = all.filter(t => t.status === p.status);
+        return res.json({ data: all.slice(0, 600) });
+      }
+
       // ── Notifications ─────────────────────────────────────────────────────
       case 'markNotificationsRead': {
         const uid = verifyToken(p.authToken);
