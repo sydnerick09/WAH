@@ -17,9 +17,13 @@ create table if not exists payment_events (
   email         text,
   status        text default 'pending',   -- pending | successful | failed | cancelled | reversed
   verify_status text default 'unverified',-- unverified | verified | mismatch
+  withdrawal_id text,                      -- links a consumed withdrawal-fee payment to its request (single-use)
   created_at    timestamptz default now(),
   updated_at    timestamptz
 );
+
+-- If the table already existed, make sure the consumption column is present.
+alter table payment_events add column if not exists withdrawal_id text;
 
 -- Idempotency: one row per (provider, reference) when a reference is present.
 create unique index if not exists payment_events_ref_idx
