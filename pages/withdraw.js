@@ -7,7 +7,7 @@ import { useUser } from '../lib/useUser';
 import { sendNotify } from '../lib/notify';
 import { createWithdrawalRequest } from '../lib/auth';
 import { bulkWithdrawalQuote, submitBulkWithdrawal } from '../lib/auth';
-import PaystackFee from '../components/PaystackFee';
+import MpesaPay from '../components/MpesaPay';   // Daraja STK is the active withdrawal-fee method (Paystack kept but disabled)
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
 import { FlowSkeleton } from '../components/Skeleton';
@@ -116,8 +116,8 @@ const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
 
 // Bank withdrawal processing fee (Postbank Kenya + all other banks), priced in
 // USD, converted to KES dynamically.
-const BANK_FEE_USD = 23;
-const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES); // = KES 2,990
+const BANK_FEE_USD = 25;   // "Other countries" fee, converted to KES at the live rate
+const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES); // fallback ≈ KES 3,250
 
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
 const BULK_THRESHOLD_KES = 25000;
@@ -225,12 +225,12 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 18 }}>
             Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to continue. You&apos;ll get a prompt on your phone, enter your PIN to confirm. The withdrawal form unlocks only after the payment is verified.
           </div>
-          <PaystackFee
-            user={user}
+          <MpesaPay
+            purpose="withdrawal_fee"
             amount={FEE_KES}
-            plan="mpesa_withdrawal_fee"
-            method="mpesa"
-            label={`Pay KES ${FEE_KES.toLocaleString()} via Paystack`}
+            defaultPhone={user?.phone || ''}
+            payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
+            onSuccess={(d) => { setFeeRef(d?.checkoutRequestId || ''); setStep('form'); }}
           />
           <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
             <Icon name="arrowLeft" size={14} /> Back to Dashboard
@@ -396,12 +396,12 @@ function PostbankFlow({ user, initialStep }) {
       )}
 
       {step === 'fee' && (
-        <PaystackFee
-          user={user}
+        <MpesaPay
+          purpose="withdrawal_fee"
           amount={BANK_FEE_KES}
-          plan="postbank_withdrawal_fee"
-          method="postbank"
-          label={`Pay KES ${BANK_FEE_KES.toLocaleString()} via Paystack`}
+          defaultPhone={user?.phone || ''}
+          payLabel={`Pay KES ${BANK_FEE_KES.toLocaleString()} via M-Pesa`}
+          onSuccess={() => setStep('form')}
         />
       )}
 
@@ -665,12 +665,12 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
               ))}
               <div style={{ ...brRow, fontWeight: 800, borderTop: '1px solid #e5e7eb', marginTop: 6, paddingTop: 10 }}><span>Amount Due</span><span>KES {quote.amountDueKes.toLocaleString()}</span></div>
             </div>
-            <PaystackFee
-              user={user}
+            <MpesaPay
+              purpose="withdrawal_fee"
               amount={quote.amountDueKes}
-              plan="international_withdrawal_fee"
-              method="international"
-              label={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via Paystack`}
+              defaultPhone={user?.phone || ''}
+              payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
+              onSuccess={(d) => { setFeeRef(d?.checkoutRequestId || ''); setGate('form'); }}
             />
             <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => { setQuote(null); setDeclaredFees(null); setQuoteErr(''); }}><Icon name="arrowLeft" size={14} /> Change M-Pesa fee count</button>
           </>
@@ -942,12 +942,12 @@ function BulkWithdrawalFlow({ user, paidRef }) {
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
             Your request is recorded. Pay the <strong>KES {quote.amountDueKes.toLocaleString()}</strong> bank withdrawal fee via M-Pesa Buy Goods, then notify support to finish processing.
           </div>
-          <PaystackFee
-            user={user}
+          <MpesaPay
+            purpose="withdrawal_fee"
             amount={quote.amountDueKes}
-            plan="bulk_withdrawal_fee"
-            method="bulk"
-            label={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via Paystack`}
+            defaultPhone={user?.phone || ''}
+            payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
+            onSuccess={() => setStep('success')}
           />
         </>
       )}
