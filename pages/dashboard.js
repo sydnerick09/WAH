@@ -41,101 +41,89 @@ function shuffle(arr) {
   return a;
 }
 
+// ─── SIMULATED / DEMO social-proof data ──────────────────────────────────────
+// IMPORTANT: the withdrawal ticker, pending list and reviews below are SIMULATED
+// demo records for social proof — they are NOT real platform transactions and are
+// never persisted to the backend. They live only in the browser (localStorage /
+// in-memory) and are clearly flagged `demo: true`. Real transactions live in the
+// database (withdrawal_requests / payment_events / mpesa_transactions).
+const DEMO_COUNTRIES = [
+  { c: 'Kenya', d: '+2547' }, { c: 'Nigeria', d: '+2348' }, { c: 'Ghana', d: '+2332' },
+  { c: 'South Africa', d: '+2771' }, { c: 'Uganda', d: '+25670' }, { c: 'Tanzania', d: '+25571' },
+  { c: 'Rwanda', d: '+25078' }, { c: 'Egypt', d: '+2010' }, { c: 'Morocco', d: '+2126' },
+  { c: 'Zambia', d: '+26097' }, { c: 'Zimbabwe', d: '+26377' }, { c: 'Cameroon', d: '+2376' },
+  { c: 'Senegal', d: '+2217' }, { c: 'Ethiopia', d: '+2519' }, { c: 'Ivory Coast', d: '+2250' },
+  { c: 'Jamaica', d: '+1876' }, { c: 'United States', d: '+1' }, { c: 'United Kingdom', d: '+447' },
+  { c: 'Canada', d: '+1' }, { c: 'India', d: '+9198' }, { c: 'Pakistan', d: '+9230' },
+  { c: 'Philippines', d: '+639' }, { c: 'Indonesia', d: '+628' }, { c: 'Bangladesh', d: '+8801' },
+  { c: 'Vietnam', d: '+849' }, { c: 'Malaysia', d: '+601' }, { c: 'Singapore', d: '+659' },
+  { c: 'Brazil', d: '+5511' }, { c: 'Mexico', d: '+5255' }, { c: 'Colombia', d: '+573' },
+  { c: 'Argentina', d: '+5411' }, { c: 'Germany', d: '+4915' }, { c: 'France', d: '+336' },
+  { c: 'Spain', d: '+346' }, { c: 'Italy', d: '+3933' }, { c: 'Netherlands', d: '+316' },
+  { c: 'UAE', d: '+9715' }, { c: 'Saudi Arabia', d: '+9665' }, { c: 'Turkey', d: '+905' },
+  { c: 'Australia', d: '+614' },
+];
+const DEMO_FIRST = ['James','Mary','John','Grace','David','Sarah','Peter','Ann','Michael','Faith','Daniel','Joyce','Samuel','Lucy','Brian','Mercy','Kevin','Diana','Paul','Esther','Chinedu','Ama','Kwame','Andre','Shanice','Aisha','Fatima','Omar','Wei','Ling','Raj','Priya','Carlos','Sofia','Luis','Marta','Hans','Pierre','Chloe','Ahmed','Yusuf','Nadia','Thabo','Zanele','Tunde','Ngozi','Kofi','Abena','Ravi','Mei'];
+const DEMO_LAST  = ['A','B','C','D','E','F','G','H','J','K','L','M','N','O','P','R','S','T','W'];
+const DEMO_REVIEW_TEXTS = [
+  'The payout hit my account faster than I expected. Everything worked smoothly.',
+  'Confirm your details before withdrawing and it goes through the first time.',
+  'I was skeptical at first, but after my first successful withdrawal I was convinced.',
+  'Consistent tasks and honest payouts. I now earn a steady side income every week.',
+  'Support helped me fix an issue within minutes. Great experience overall.',
+  'Simple to use and the tasks are actually doable. Recommended.',
+  'Double-checking my number first made the whole process painless.',
+  'Been using it for weeks now, reliable and straightforward.',
+  'The withdrawal came through clean once my details were correct.',
+  'Good variety of tasks and fair rewards. Worth trying.',
+  'Fast, transparent, and no hidden surprises. Happy with it.',
+  'Earned enough for my premium in a few days of tasks. Solid platform.',
+  'Clear instructions on every task made completing them easy.',
+  'My referral earnings add up nicely. Sharing with friends.',
+  'Professional platform. Payments arrive as promised.',
+  'Withdrew twice this week with zero problems. Legit.',
+];
+
+const dRand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const dPick = arr => arr[dRand(0, arr.length - 1)];
+
+// 100 SIMULATED payout records — country + masked number + KES 500–7,203.
 function getOrGenerateWithdrawals() {
-  const LS_KEY = 'bh_live_withdrawals_v7';
-  try {
-    const stored = localStorage.getItem(LS_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch (_) {}
-
-  const kenyaSrc   = { country: 'Kenya',   prefixes: ['+25471','+25472','+25473','+25474','+25475','+25476','+25477','+25478','+25479','+25470'] };
-  const jamaicaSrc = { country: 'Jamaica', prefixes: ['+1876','+1658'] };
-
-  const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-  const mask = p => `${p}*****${String(rand(10, 99))}`;
-
-  // 70 payouts today: 63 Kenyan (KES 2,100 to 9,300) + 7 Jamaican (KES 2,100 to 7,200)
-  const records = [
-    ...Array.from({ length: 63 }, () => {
-      const prefix = kenyaSrc.prefixes[rand(0, kenyaSrc.prefixes.length - 1)];
-      return { country: kenyaSrc.country, phone: mask(prefix), amount: rand(2100, 9300) };
-    }),
-    ...Array.from({ length: 7 }, () => {
-      const prefix = jamaicaSrc.prefixes[rand(0, jamaicaSrc.prefixes.length - 1)];
-      return { country: jamaicaSrc.country, phone: mask(prefix), amount: rand(2100, 7200) };
-    }),
-  ];
-
-  // Shuffle so Kenyan/other are mixed
-  for (let i = records.length - 1; i > 0; i--) {
-    const j = rand(0, i);
-    [records[i], records[j]] = [records[j], records[i]];
-  }
-
-  // Featured payout, a real member's successful withdrawal today. Phone masked
-  // in the same +254 style as the others; seeded frequently so it recurs in the
-  // ticker and the rotating list for strong social proof.
-  const featured = {
-    country: 'Kenya',
-    phone: '+25411*****12', amount: 6708, featured: true,
-  };
-  const withFeatured = [];
-  records.forEach((r, i) => {
-    if (i % 4 === 0) withFeatured.push({ ...featured });   // ~1 in every 5 entries
-    withFeatured.push(r);
+  const LS_KEY = 'bh_demo_withdrawals_v8';
+  try { const stored = localStorage.getItem(LS_KEY); if (stored) return JSON.parse(stored); } catch (_) {}
+  const mask = d => `${d}${dRand(10, 99)}*****${dRand(10, 99)}`;
+  const records = Array.from({ length: 100 }, () => {
+    const co = dPick(DEMO_COUNTRIES);
+    return { country: co.c, phone: mask(co.d), amount: dRand(500, 7203), demo: true };
   });
-
-  try { localStorage.setItem(LS_KEY, JSON.stringify(withFeatured)); } catch (_) {}
-  return withFeatured;
+  const shuffled = shuffle(records);   // randomize so the same order isn't shown repeatedly
+  try { localStorage.setItem(LS_KEY, JSON.stringify(shuffled)); } catch (_) {}
+  return shuffled;
 }
 
-// Pending payouts, currently being processed (shown in the Pending tab)
+// SIMULATED payouts "currently processing" (Pending tab).
 function getOrGeneratePending() {
-  const LS_KEY = 'bh_pending_withdrawals_v1';
-  try {
-    const stored = localStorage.getItem(LS_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch (_) {}
-
-  const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-  const people = [
-    { country: 'Kenya',    name: 'Brian K.'   }, { country: 'Kenya',    name: 'Mercy A.'  },
-    { country: 'Kenya',    name: 'Dennis O.'  }, { country: 'Kenya',    name: 'Faith W.'  },
-    { country: 'Kenya',    name: 'Kevin M.'   }, { country: 'Nigeria',  name: 'Chidi E.'  },
-    { country: 'Jamaica',  name: 'Andre C.'   }, { country: 'Ghana',    name: 'Kwame A.'  },
-    { country: 'Uganda',   name: 'Sarah N.'   }, { country: 'Kenya',    name: 'Purity W.' },
-  ];
-
-  const records = people.map(p => ({
-    ...p,
-    amount:    rand(2100, 8600),
-    etaMin:    rand(1, 9),
-    progress:  rand(20, 85),
-  }));
-
+  const LS_KEY = 'bh_demo_pending_v2';
+  try { const stored = localStorage.getItem(LS_KEY); if (stored) return JSON.parse(stored); } catch (_) {}
+  const records = Array.from({ length: 14 }, () => {
+    const co = dPick(DEMO_COUNTRIES);
+    return { country: co.c, name: `${dPick(DEMO_FIRST)} ${dPick(DEMO_LAST)}.`, amount: dRand(500, 7203), etaMin: dRand(1, 9), progress: dRand(20, 85), demo: true };
+  });
   try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch (_) {}
   return records;
 }
 
-// Member reviews, includes the two client-supplied testimonials verbatim.
-const REVIEWS = [
-  { name: 'James Otieno',      country: 'Nairobi, Kenya',    rating: 4,
-    text: 'I tried withdrawing once, but it failed, but I tried twice, then it went through.' },
-  { name: 'Wanjiku Maina',     country: 'Nakuru, Kenya',     rating: 5,
-    text: 'Guys, you need to have correct details before you withdraw so that you avoid the inconveniences of paying the withdrawal fee twice or thrice.' },
-  { name: 'Grace Achieng',     country: 'Kisumu, Kenya',     rating: 5,
-    text: 'The M-Pesa payout hit my phone in under two minutes. Double-checking my number first made it smooth. Gweno Hub is legit.' },
-  { name: 'Chinedu Okafor',    country: 'Lagos, Nigeria',    rating: 5,
-    text: 'I was skeptical at first, but after my very first successful withdrawal I upgraded to premium. Worth every naira.' },
-  { name: 'Ama Mensah',        country: 'Accra, Ghana',      rating: 4,
-    text: 'Accuracy is everything here, confirm your account details and the payment goes through the first time, no repeat fees.' },
-  { name: 'Andre Campbell',    country: 'Kingston, Jamaica', rating: 5,
-    text: 'From Kingston with love. Once my bank details were correct, the transfer came through clean. Professional platform.' },
-  { name: 'Sarah Nakato',      country: 'Kampala, Uganda',   rating: 5,
-    text: 'Consistent tasks and honest payouts. I now earn a steady side income every single week.' },
-  { name: 'Brian Kiptoo',      country: 'Eldoret, Kenya',    rating: 4,
-    text: 'Support helped me fix a failed withdrawal within minutes. Enter the right details and you will have zero problems.' },
-];
+// 100 SIMULATED member reviews — varied names, world countries, ratings and text.
+function generateReviews() {
+  const list = Array.from({ length: 100 }, () => {
+    const co = dPick(DEMO_COUNTRIES);
+    const roll = dRand(0, 9);
+    const rating = roll < 1 ? 3 : roll < 4 ? 4 : 5;   // mostly 5★, some 4★, a few 3★
+    return { name: `${dPick(DEMO_FIRST)} ${dPick(DEMO_LAST)}.`, country: co.c, rating, text: dPick(DEMO_REVIEW_TEXTS), demo: true };
+  });
+  return shuffle(list);
+}
+const REVIEWS = generateReviews();
 
 
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
@@ -1077,10 +1065,16 @@ export default function Dashboard() {
     router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
   }
 
-  // Use the database tasks as the source of truth whenever the DB has any,
-  // otherwise fall back to the built-in list so the dashboard is never empty
-  // (e.g. before load, offline, or after all DB tasks were cleared).
-  const source = (tasksReady && dbTasks.length) ? dbTasks : (TASKS || []);
+  // Always include the built-in task pool so every category (Data Entry, Design,
+  // Translation, Survey, Marketing, …) has available tasks; admin DB tasks are
+  // merged on top, deduped by title (a real admin task overrides a same-titled
+  // built-in one). This guarantees category filters never come up empty.
+  const source = (() => {
+    const byTitle = new Map();
+    (TASKS || []).forEach(t => byTitle.set(String(t.title || '').toLowerCase(), t));
+    if (tasksReady) (dbTasks || []).forEach(t => byTitle.set(String(t.title || '').toLowerCase(), t));
+    return Array.from(byTitle.values());
+  })();
   const allTasks = source.filter(t => {
     const sub = userSubs[String(t.id)];
     if (sub) {
