@@ -1432,7 +1432,7 @@ export default function Dashboard() {
       {/* WhatsApp Chat Button */}
       <a
         className="whatsapp-chat-button"
-        href="https://wa.me/254765772203?text=Hello%2C%20Thank%20you%20for%20being%20part%20of%20Gweno.%20How%20can%20we%20assist%20you%20today%3F"
+        href="https://wa.me/254765772203?text=Hello%20Gweno%20Support%2C%20I%20am%20contacting%20you%20through%20the%20Gweno%20website%20and%20would%20like%20assistance.%20Thank%20you."
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Chat with us on WhatsApp"

@@ -1376,8 +1376,11 @@ button.profile-row:hover { background: #F4F4F5; }
   border: 2px solid var(--black);
 }
 
-/* WhatsApp Floating Chat Button */
-.whatsapp-float {
+/* ══════════════════════════════════════════════════════════════════════════════
+   WHATSAPP FLOATING CHAT BUTTON
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.whatsapp-chat-button {
   position: fixed;
   bottom: 25px;
   right: 25px;
@@ -1389,24 +1392,61 @@ button.profile-row:hover { background: #F4F4F5; }
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
   z-index: 9999;
   text-decoration: none;
   animation: whatsappPulse 2s infinite;
+  transition: transform 0.2s ease;
 }
 
-.whatsapp-float:hover {
+.whatsapp-chat-button:hover {
   transform: scale(1.08);
+}
+
+.whatsapp-chat-icon {
+  width: 32px;
+  height: 32px;
 }
 
 @keyframes whatsappPulse {
   0% {
     transform: scale(1);
   }
+
   50% {
     transform: scale(1.08);
   }
+
   100% {
     transform: scale(1);
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .whatsapp-chat-button {
+    width: 55px;
+    height: 55px;
+    bottom: 20px;
+    right: 20px;
+  }
+
+  .whatsapp-chat-icon {
+    width: 29px;
+    height: 29px;
+  }
+}
+
+@media (max-width: 480px) {
+  .whatsapp-chat-button {
+    width: 52px;
+    height: 52px;
+    bottom: 16px;
+    right: 16px;
+  }
+
+  .whatsapp-chat-icon {
+    width: 27px;
+    height: 27px;
   }
 }
