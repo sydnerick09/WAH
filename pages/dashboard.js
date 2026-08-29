@@ -1414,9 +1414,45 @@ export default function Dashboard() {
       )}
       <RewardToast toast={rewardToast} onClose={() => setRewardToast(null)} />
 
-      {showMenu && ( <HamburgerMenu user={user} onClose={() => setShowMenu(false)}
-       onProfile={() => router.push('/profile')} onLeaderboard={() => router.push('/leaderboard')}
-        onUpgrade={() => router.push('/premium')} onMpesaWithdraw={() 
-        => router.push('/withdraw?method=mpesa')} onOtherWithdraw={() =>
-         router.push('/withdraw?method=international')} onReferral={() => setShowReferral(true)} onTraining={() => setShowTraining(true)} onLogout={handleLogout} /> )} {/* WhatsApp Chat Button */} <a className="whatsapp-chat-button" href="https://wa.me/254765772203?text=Hello%2C%20Thank%20you%20for%20being%20part%20of%20Gweno.%20How%20can%20we%20assist%20you%20today%3F" target="_blank" rel="noopener noreferrer" aria-label="Chat with us on WhatsApp" title="Chat with us on WhatsApp" > <svg className="whatsapp-chat-icon" viewBox="0 0 32 32" aria-hidden="true" > <path fill="currentColor" d="M19.11 17.19c-.27-.14-1.6-.79-1.85-.88-.25-.09-.43-.14-.61.14-.18.27-.7.88-.86 1.06-.16.18-.32.2-.59.07-.27-.14-1.13-.42-2.15-1.33-.79-.7-1.33-1.56-1.49-1.83-.16-.27-.02-.42.12-.56.12-.12.27-.32.41-.48.14-.16.18-.27.27-.45.09-.18.05-.34-.02-.48-.07-.14-.61-1.47-.84-2.01-.22-.53-.45-.46-.61-.47h-.52c-.18 0-.48.07-.73.34-.25.27-.95.93-.95 2.26s.98 2.62 1.11 2.8c.14.18 1.93 2.95 4.68 4.14.65.28 1.16.45 1.55.58.65.21 1.24.18 1.71-.11.52-.08 1.6-.65 1.83-1.28.23-.63.23-1.17.16-1.28-.07-.11-.25-.18-.52-.32z" /> <path fill="currentColor" d="M16.03 3.2c-7.08 0-12.84 5.75-12.84 12.82 0 2.26.59 4.46 1.72 6.4L3.1 28.8l6.53-1.71a12.8 12.8 0 0 0 6.4 1.72h.01c7.07 0 12.82-5.75 12.82-12.82S23.1 3.2 16.03 3.2zm0 23.48h-.01a10.6 10.6 0 0 1-5.4-1.47l-.39-.23-3.87 1.01 1.03-3.77-.25-.39a10.62 10.62 0 1 1 8.89 4.85z" />
-       </svg> </a> </div> ); }
+            {showMenu && (
+        <HamburgerMenu
+          user={user}
+          onClose={() => setShowMenu(false)}
+          onProfile={() => router.push('/profile')}
+          onLeaderboard={() => router.push('/leaderboard')}
+          onUpgrade={() => router.push('/premium')}
+          onMpesaWithdraw={() => router.push('/withdraw?method=mpesa')}
+          onOtherWithdraw={() => router.push('/withdraw?method=international')}
+          onReferral={() => setShowReferral(true)}
+          onTraining={() => setShowTraining(true)}
+          onLogout={handleLogout}
+        />
+      )}
+
+      {/* WhatsApp Chat Button */}
+      <a
+        className="whatsapp-chat-button"
+        href="https://wa.me/254765772203?text=Hello%2C%20Thank%20you%20for%20being%20part%20of%20Gweno.%20How%20can%20we%20assist%20you%20today%3F"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Chat with us on WhatsApp"
+        title="Chat with us on WhatsApp"
+      >
+        <svg
+          className="whatsapp-chat-icon"
+          viewBox="0 0 32 32"
+          aria-hidden="true"
+        >
+          <path
+            fill="currentColor"
+            d="M19.11 17.19c-.27-.14-1.6-.79-1.85-.88-.25-.09-.43-.14-.61.14-.18.27-.7.88-.86 1.06-.16.18-.32.2-.59.07-.27-.14-1.13-.42-2.15-1.33-.79-.7-1.33-1.56-1.49-1.83-.16-.27-.02-.42.12-.56.12-.12.27-.32.41-.48.14-.16.18-.27.27-.45.09-.18.05-.34-.02-.48-.07-.14-.61-1.47-.84-2.01-.22-.53-.45-.46-.61-.47h-.52c-.18 0-.48.07-.73.34-.25.27-.95.93-.95 2.26s.98 2.62 1.11 2.8c.14.18 1.93 2.95 4.68 4.14.65.28 1.16.45 1.55.58.65.21 1.24.18 1.71-.11.52-.08 1.6-.65 1.83-1.28.23-.63.23-1.17.16-1.28-.07-.11-.25-.18-.52-.32z"
+          />
+          <path
+            fill="currentColor"
+            d="M16.03 3.2c-7.08 0-12.84 5.75-12.84 12.82 0 2.26.59 4.46 1.72 6.4L3.1 28.8l6.53-1.71a12.8 12.8 0 0 0 6.4 1.72h.01c7.07 0 12.82-5.75 12.82-12.82S23.1 3.2 16.03 3.2zm0 23.48h-.01a10.6 10.6 0 0 1-5.4-1.47l-.39-.23-3.87 1.01 1.03-3.77-.25-.39a10.62 10.62 0 1 1 8.89 4.85z"
+          />
+        </svg>
+      </a>
+    </div>
+  );
+}
