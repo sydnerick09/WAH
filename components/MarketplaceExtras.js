@@ -102,5 +102,3 @@ export function NotificationsModal({ notifications, onClose }) {
     </div>
   );
 }
-
-

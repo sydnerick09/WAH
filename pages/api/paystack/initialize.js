@@ -40,5 +40,3 @@ export default async function handler(req, res) {
     return res.status(502).json({ status: false, message: 'Could not reach Paystack. Please try again.' });
   }
 }
-
-

@@ -75,5 +75,3 @@ const title = { fontFamily: 'Poppins, sans-serif', fontSize: 22, fontWeight: 800
 const text  = { fontSize: 14.5, color: '#475569', lineHeight: 1.6, margin: '0 0 14px' };
 const btn   = { display: 'block', width: '100%', padding: '12px', background: '#374151', color: '#fff', borderRadius: 10, fontWeight: 700, fontSize: 15, border: 'none', cursor: 'pointer', marginBottom: 10 };
 const btnGhost = { display: 'block', width: '100%', padding: '11px', background: 'transparent', color: '#475569', borderRadius: 10, fontWeight: 600, fontSize: 14, border: '1.5px solid #E2E8F0', cursor: 'pointer' };
-
-

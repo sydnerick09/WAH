@@ -1574,7 +1574,5 @@ const styles = {
   dateLabel:  { fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', minWidth: 72 },
   dateVal:    { fontSize: 11, color: '#374151' },
   modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
-  modalCard:    { background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.51)', width: '100%', maxWidth: 440, overflow: 'hidden' },
+  modalCard:    { background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', width: '100%', maxWidth: 440, overflow: 'hidden' },
 };
-
-

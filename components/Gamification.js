@@ -118,5 +118,3 @@ export function RewardToast({ toast, onClose }) {
     </div>
   );
 }
-
-

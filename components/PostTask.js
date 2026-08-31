@@ -135,5 +135,3 @@ export function MyPostedTasksModal({ onClose, onChanged }) {
     </div>
   );
 }
-
-

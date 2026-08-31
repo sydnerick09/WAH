@@ -20,5 +20,3 @@ const code  = { fontFamily: 'Poppins, sans-serif', fontSize: 72, fontWeight: 800
 const title = { fontSize: 22, fontWeight: 700, color: '#111827', margin: '8px 0 6px' };
 const msg   = { fontSize: 15, color: '#64748B', lineHeight: 1.6, marginBottom: 20 };
 const btn   = { display: 'inline-block', background: '#111827', color: '#fff', padding: '11px 22px', borderRadius: 8, fontWeight: 700, textDecoration: 'none' };
-
-

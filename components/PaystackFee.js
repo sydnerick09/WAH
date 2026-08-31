@@ -46,5 +46,3 @@ export default function PaystackFee({ user, amount, plan, method = '', label, no
     </>
   );
 }
-
-

@@ -164,5 +164,3 @@ export default function ActivatePage() {
     </FlowShell>
   );
 }
-
-

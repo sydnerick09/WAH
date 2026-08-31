@@ -30,5 +30,3 @@ export default function EmptyState({ icon = 'info', title, message, action }) {
     </div>
   );
 }
-
-

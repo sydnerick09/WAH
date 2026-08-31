@@ -106,5 +106,3 @@ export default function TillPay({ user, amount, purpose = 'Payment', till = '154
     </>
   );
 }
-
-
