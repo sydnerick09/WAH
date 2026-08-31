@@ -111,13 +111,14 @@ const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
 // Withdrawal processing fee, priced in USD, charged in KES via a dynamic conversion.
 const FEE_USD    = 5;
-const USD_TO_KES = 130;                              // approximate USD → KES rate
+const USD_TO_KES = 135;                              // approximate USD → KES rate
 const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
 
-// Bank withdrawal processing fee (Postbank Kenya + all other banks), priced in
-// USD, converted to KES dynamically.
-const BANK_FEE_USD = 25;   // "Other countries" fee, converted to KES at the live rate
-const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES); // fallback ≈ KES 3,250
+// Postbank Kenya withdrawal processing fee
+// Priced in USD and converted to KES.
+const BANK_FEE_USD = 51;
+const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES);
+
 
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
 const BULK_THRESHOLD_KES = 25000;
@@ -494,7 +495,7 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
   const [loadingQuote,  setLoadingQuote]  = useState(false);
   const [quoteErr,      setQuoteErr]      = useState('');
 
-  // The international fee is USD 25, converted to KES at the live rate (no deductions).
+  // The international fee is usd 51, converted to KES at the live rate (no deductions).
   async function loadQuote() {
     setLoadingQuote(true); setQuoteErr('');
     const res = await bulkWithdrawalQuote(0, 'international');
