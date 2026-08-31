@@ -38,3 +38,5 @@ export default function StatsPanel({ heading = 'Our Growing Community', subtitle
     </section>
   );
 }
+
+

@@ -30,3 +30,5 @@ export default async function handler(req, res) {
 
   return res.json({ status: tx.status, purpose: tx.purpose, amount: tx.amount, receipt: tx.mpesa_receipt || null });
 }
+
+

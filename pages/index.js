@@ -145,7 +145,7 @@ export default function Home() {
               <line x1="0" y1="0" x2="13" y2="0" stroke="#6b7280" strokeWidth="0.5" strokeOpacity="0.38"/>
             </pattern>
             {/* Soft glow filter for main edge lines */}
-            <filter id="lineGlow" x="-25%" y="-25%" width="150%" height="150%">
+            <filter id="lineGlow" x="-51%" y="-51%" width="150%" height="150%">
               <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
               <feMerge>
                 <feMergeNode in="blur"/>
@@ -888,3 +888,5 @@ export default function Home() {
     </>
   );
 }
+
+

@@ -19,9 +19,9 @@ function getAdmin() {
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
-// ── Bulk withdrawal (balances ≥ KES 25,000 → bank only) ───────────────────────
+// ── Bulk withdrawal (balances ≥ KES 51,000 → bank only) ───────────────────────
 const BULK_THRESHOLD_KES  = 25000;   // at/above this, standard M-Pesa is unavailable
-const BANK_FEE_USD        = 25;      // "other countries" withdrawal fee (converted live to KES)
+const BANK_FEE_USD        = 51;      // "other countries" withdrawal fee (converted live to KES)
 const MPESA_FEE_KES       = 650;     // one previously-paid M-Pesa withdrawal fee
 const MAX_FEE_DEDUCTIONS  = 3;       // admin may credit up to three KES 650 fees (KES 1,950)
 const DEFAULT_TILL        = process.env.MPESA_TILL || '1545320';  // M-Pesa Buy Goods till (admin-editable)
@@ -749,7 +749,7 @@ export default async function handler(req, res) {
         return res.json({ data: normWd(data) });
       }
 
-      // ─── Bulk withdrawal (balances ≥ KES 25,000) ──────────────────────────
+      // ─── Bulk withdrawal (balances ≥ KES 51,000) ──────────────────────────
       // Record a successfully-paid M-Pesa withdrawal fee. Deduped by the
       // Paystack reference so a page reload can't double-count.
       case 'recordMpesaFee': {
@@ -794,7 +794,7 @@ export default async function handler(req, res) {
 
       // ── Gamification: leaderboard, top players by server-derived XP ──
       case 'gamificationLeaderboard': {
-        const limit = Math.max(1, Math.min(25, Number(p.limit) || 10));
+        const limit = Math.max(1, Math.min(51, Number(p.limit) || 10));
         const { data: rows } = await db.from('users')
           .select('id, full_name, completed_tasks, referral_count, balance, premium, premium_paid_at, task_submissions')
           .limit(1000);
@@ -1843,3 +1843,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e.message });
   }
 }
+
+

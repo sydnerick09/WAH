@@ -98,3 +98,5 @@ export default function MpesaPay({ purpose, amount, defaultPhone = '', payLabel,
     </div>
   );
 }
+
+

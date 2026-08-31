@@ -56,7 +56,7 @@ const COUNTRY_META = {
   CA: { country: 'Canada',         ph: '0123 4567 89',           re: /^\d{7,12}$/ },
   NG: { country: 'Nigeria',        ph: '0123456789',             re: /^\d{10}$/ },
   ZA: { country: 'South Africa',   ph: '0123 4567 89',           re: /^\d{9,11}$/ },
-  GH: { country: 'Ghana',          ph: '0123 4567 8901 23',      re: /^\d{10,16}$/ },
+  GH: { country: 'Ghana',          ph: '0123 4567 8901 51',      re: /^\d{10,16}$/ },
   IN: { country: 'India',          ph: '0123 4567 8901 2345',    re: /^\d{9,18}$/ },
   CN: { country: 'China',          ph: '6212 3456 7890 1234 567', re: /^\d{16,19}$/ },
   JP: { country: 'Japan',          ph: '1234567',                re: /^\d{7,8}$/ },
@@ -187,7 +187,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
   const isLow = remaining < 30 * 1000;
   const pct   = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
 
-  // Bulk amounts (above KES 25,000) must be withdrawn through the bank, not M-Pesa.
+  // Bulk amounts (above KES 51,000) must be withdrawn through the bank, not M-Pesa.
   if (Number(user?.balance || 0) >= BULK_THRESHOLD_KES) {
     return (
       <FlowShell title="Withdraw with M-Pesa" subtitle="Bank withdrawal required" icon="smartphone" accent="var(--mpesa-green)">
@@ -479,7 +479,7 @@ function PostbankFlow({ user, initialStep }) {
 function InternationalFlow({ user, initialStep, initialFeeRef }) {
   const router = useRouter();
   // Other Countries flow: recommend M-Pesa first → confirm intent → pay the
-  // $23 USD fee → bank form. (Never jump straight to the fee.)
+  // $51 USD fee → bank form. (Never jump straight to the fee.)
   const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'explain'); // explain → pay → form
   const [loading,       setLoading]       = useState(false);
   const [accountName,   setAccountName]   = useState('');
@@ -532,7 +532,7 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
     setSending(true);
     const amount = Number(user?.balance || 0);
 
-    // Server re-verifies the $23 (KES) fee payment before recording the request.
+    // Server re-verifies the $51 (KES) fee payment before recording the request.
     let res;
     try {
       res = await createWithdrawalRequest(user.id, {
@@ -719,7 +719,7 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
   );
 }
 
-// ── Bulk withdrawal flow (balances ≥ KES 25,000 → bank transfer only) ─────────
+// ── Bulk withdrawal flow (balances ≥ KES 51,000 → bank transfer only) ─────────
 // Notice (previous M-Pesa fee?) → server-authoritative quote (live FX + capped
 // deductions) → validated bank details → submit + pay the computed amount due.
 function BulkWithdrawalFlow({ user, paidRef }) {
@@ -769,7 +769,7 @@ function BulkWithdrawalFlow({ user, paidRef }) {
     await sendNotify({
       type: 'Bulk Bank Withdrawal Request',
       name: bank.accountName.trim(), email: user?.email || '', phone: user?.phone || '',
-      subject: 'Bulk Bank Withdrawal Request (≥ KES 25,000)',
+      subject: 'Bulk Bank Withdrawal Request (≥ KES 51,000)',
       details:
         `Account Holder: ${bank.accountName.trim()}\nBank: ${bank.bankName.trim()}\nAccount Number: ${bank.accountNumber.trim()}\n` +
         `Branch: ${bank.branch.trim() || '—'}\nBank/SWIFT Code: ${bank.swift.trim() || '—'}\n\n` +
@@ -936,7 +936,7 @@ export default function WithdrawPage() {
     return <FlowSkeleton rows={3} />;
   }
 
-  // Bulk balances (≥ KES 25,000) ALWAYS use the dedicated bank-transfer workflow,
+  // Bulk balances (≥ KES 51,000) ALWAYS use the dedicated bank-transfer workflow,
   // regardless of which withdraw button was pressed (e.g. the dashboard's
   // "Withdraw with M-Pesa" links straight to ?method=mpesa). This is what makes
   // the "how many M-Pesa fees have you paid?" step reachable for bulk users.
@@ -970,3 +970,5 @@ export default function WithdrawPage() {
     </FlowShell>
   );
 }
+
+
