@@ -20,7 +20,7 @@ function getAdmin() {
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 // ── Bulk withdrawal (balances ≥ KES 25,000 → bank only) ───────────────────────
-const BULK_THRESHOLD_KES  = 25000;   // at/above this, standard M-Pesa is unavailable
+const BULK_THRESHOLD_KES  = 40000;   // at/above this, standard M-Pesa is unavailable
 const BANK_FEE_USD        = 25;      // "other countries" withdrawal fee (converted live to KES)
 const MPESA_FEE_KES       = 650;     // one previously-paid M-Pesa withdrawal fee
 const MAX_FEE_DEDUCTIONS  = 3;       // admin may credit up to three KES 650 fees (KES 1,950)

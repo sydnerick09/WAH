@@ -110,7 +110,7 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
 // Withdrawal processing fee, priced in USD, charged in KES via a dynamic conversion.
-const FEE_USD    = 5;
+const FEE_USD    = 17;
 const USD_TO_KES = 135;                              // approximate USD → KES rate
 const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
 
@@ -121,7 +121,7 @@ const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES);
 
 
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
-const BULK_THRESHOLD_KES = 25000;
+const BULK_THRESHOLD_KES = 40000;
 
 // ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
 function MpesaFlow({ user, initialStep, initialFeeRef }) {
