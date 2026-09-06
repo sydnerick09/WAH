@@ -840,35 +840,28 @@ export default function Home() {
             <div className="footer-heading">Support</div>
 
             <ul className="footer-links">
-              <li>
-  <a href="https://swastaskhub.github.io/manual/" target="_blank" rel="noopener noreferrer">Help Center</a>
-</li>
+  <li>
+    <a href="/manual">Help Center</a>
+  </li>
 
-                <li>
-  <a href="https://swastaskhub.github.io/terms-/" target="_blank" rel="noopener noreferrer">Terms of Service</a>
-</li>
+  <li>
+    <a href="/terms">Terms of Service</a>
+  </li>
 
-                 <li>
-  <a href=" https://swastaskhub.github.io/conduct/" target="_blank" rel="noopener noreferrer">conducts and policies</a>
-</li>
+  <li>
+    <a href="/conduct">Conduct and Policies</a>
+  </li>
 
-                 <li>
-  <a href="  https://swastaskhub.github.io/privacy/" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
-</li>
+  <li>
+    <a href="/privacy">Privacy Policy</a>
+  </li>
 
-
-
-
-                
-             
-
-
-              <li>
-                <a href="mailto:businesshub.comke@gmail.com">
-                  businesshub.comke@gmail.com
-                </a>
-              </li>
-            </ul>
+  <li>
+    <a href="mailto:businesshub.comke@gmail.com">
+      businesshub.comke@gmail.com
+    </a>
+  </li>
+</ul>
           </div>
         </div>
 
