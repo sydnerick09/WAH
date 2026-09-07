@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Head from "next/head";
 
 export default function ConductPage() {
@@ -160,9 +161,9 @@ export default function ConductPage() {
 
       <nav className="legal-nav" aria-label="Legal navigation">
         <div className="legal-nav-inner">
-          <a href="/terms">Terms &amp; Conditions</a>
-          <a href="/privacy">Privacy Policy</a>
-          <a href="/conduct">Conduct Policy</a>
+          <Link href="/terms">Terms &amp; Conditions</Link>
+          <Link href="/privacy">Privacy Policy</Link>
+          <Link href="/conduct">Conduct Policy</Link>
           <a href="mailto:businesshub.comke@gmail.com">Support</a>
         </div>
       </nav>
@@ -175,7 +176,7 @@ export default function ConductPage() {
 
         <p>This Customer Conduct &amp; Suspension Policy explains the standards expected from users and the actions GWENO Hub may take when users engage in fraudulent, abusive, unlawful, manipulative, disruptive, or otherwise prohibited conduct.</p>
 
-        <p>This Policy should be read together with the <a href="/terms">GWENO Hub Terms &amp; Conditions</a> and <a href="/privacy">GWENO Hub Privacy Policy</a>.</p>
+        <p>This Policy should be read together with the <Link href="/terms">GWENO Hub Terms &amp; Conditions</Link> and <Link href="/privacy">GWENO Hub Privacy Policy</Link>.</p>
 
         <h2>1. Expected Customer Conduct</h2>
         <p>Users are expected to communicate and interact with GWENO Hub honestly, responsibly, and respectfully.</p>
@@ -384,8 +385,8 @@ export default function ConductPage() {
           </a>
         </p>
         <p>
-          You may also review the <a href="/terms">Terms &amp; Conditions</a>{" "}
-          and <a href="/privacy">Privacy Policy</a>.
+          You may also review the <Link href="/terms">Terms &amp; Conditions</Link>{" "}
+          and <Link href="/privacy">Privacy Policy</Link>.
         </p>
 
         <h2>24. Acceptance</h2>
@@ -396,10 +397,10 @@ export default function ConductPage() {
         <p>© 2026 GWENO Hub. All rights reserved.</p>
 
         <ul className="footer-links">
-          <li><a href="/terms">Terms &amp; Conditions</a></li>
-          <li><a href="/privacy">Privacy Policy</a></li>
-          <li><a href="/conduct">Conduct Policy</a></li>
-          <li><a href="/manual">Help Center</a></li>
+          <li><Link href="/terms">Terms &amp; Conditions</Link></li>
+          <li><Link href="/privacy">Privacy Policy</Link></li>
+          <li><Link href="/conduct">Conduct Policy</Link></li>
+          <li><Link href="/manual">Help Center</Link></li>
         </ul>
 
         <p>

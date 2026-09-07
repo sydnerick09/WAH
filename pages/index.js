@@ -841,19 +841,19 @@ export default function Home() {
 
             <ul className="footer-links">
   <li>
-    <a href="/manual">Help Center</a>
+    <Link href="/manual">Help Center</Link>
   </li>
 
   <li>
-    <a href="/terms">Terms of Service</a>
+    <Link href="/terms">Terms of Service</Link>
   </li>
 
   <li>
-    <a href="/conduct">Conduct and Policies</a>
+    <Link href="/conduct">Conduct and Policies</Link>
   </li>
 
   <li>
-    <a href="/privacy">Privacy Policy</a>
+    <Link href="/privacy">Privacy Policy</Link>
   </li>
 
   <li>
@@ -881,3 +881,4 @@ export default function Home() {
     </>
   );
 }
+

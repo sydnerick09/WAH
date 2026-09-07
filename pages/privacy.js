@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Head from "next/head";
 
 export default function PrivacyPage() {
@@ -162,9 +163,9 @@ export default function PrivacyPage() {
 
       <nav className="legal-nav" aria-label="Legal navigation">
         <div className="legal-nav-inner">
-          <a href="/terms">Terms &amp; Conditions</a>
-          <a href="/privacy">Privacy Policy</a>
-          <a href="/conduct">Conduct Policy</a>
+          <Link href="/terms" >Terms &amp; Conditions</Link>
+          <Link href="/privacy" >Privacy Policy</Link>
+          <Link href="/conduct" >Conduct Policy</Link>
           <a href="mailto:businesshub.comke@gmail.com">Support</a>
         </div>
       </nav>
@@ -368,7 +369,7 @@ export default function PrivacyPage() {
 
         <h2>21. Restricted Countries and Locations</h2>
         <p>GWENO Hub may restrict access from certain countries or territories for legal, sanctions, security, payment, operational, or risk-management reasons.</p>
-        <p>The current list of restricted countries and territories is contained in the <a href="/terms">GWENO Hub Terms &amp; Conditions</a>.</p>
+        <p>The current list of restricted countries and territories is contained in the <Link href="/terms" >GWENO Hub Terms &amp; Conditions</Link>.</p>
         <p>Technical information such as IP address, device information, or other reasonable indicators may be processed to help enforce geographic and eligibility restrictions.</p>
 
         <h2>22. Children&apos;s Privacy</h2>
@@ -415,18 +416,18 @@ export default function PrivacyPage() {
           </a>
         </p>
         <p>
-          You may also review the <a href="/terms">Terms &amp; Conditions</a>{" "}
-          and <a href="/conduct">Customer Conduct &amp; Suspension Policy</a>.
+          You may also review the <Link href="/terms" >Terms &amp; Conditions</Link>{" "}
+          and <Link href="/conduct" >Customer Conduct &amp; Suspension Policy</Link>.
         </p>
       </main>
 
       <footer>
         <p>© 2026 GWENO Hub. All rights reserved.</p>
         <ul className="footer-links">
-          <li><a href="/terms">Terms &amp; Conditions</a></li>
-          <li><a href="/privacy">Privacy Policy</a></li>
-          <li><a href="/conduct">Conduct Policy</a></li>
-          <li><a href="/manual">Help Center</a></li>
+          <li><Link href="/terms" >Terms &amp; Conditions</Link></li>
+          <li><Link href="/privacy" >Privacy Policy</Link></li>
+          <li><Link href="/conduct" >Conduct Policy</Link></li>
+          <li><Link href="/manual" >Help Center</Link></li>
         </ul>
         <p>
           Support: <a href="mailto:businesshub.comke@gmail.com">businesshub.comke@gmail.com</a>
@@ -439,3 +440,5 @@ export default function PrivacyPage() {
     </>
   );
 }
+
+
