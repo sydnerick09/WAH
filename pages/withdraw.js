@@ -110,13 +110,13 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
 // Withdrawal processing fee, priced in USD, charged in KES via a dynamic conversion.
-const FEE_USD    = 17;
+const FEE_USD    = 5;
 const USD_TO_KES = 135;                              // approximate USD → KES rate
 const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
 
 // Postbank Kenya withdrawal processing fee
 // Priced in USD and converted to KES.
-const BANK_FEE_USD = 51;
+const BANK_FEE_USD = 27;
 const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES);
 
 
