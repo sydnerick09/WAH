@@ -172,7 +172,7 @@ export default function PrivacyPage() {
 
       <main>
         <h1>Privacy Policy</h1>
-        <p className="updated">Last updated: August 30, 2026</p>
+        <p className="updated">Last updated: September 07, 2026</p>
 
         <p>GWENO Hub respects the privacy of people who use its website and services. This Privacy Policy explains how information may be collected, used, protected, retained, disclosed, and otherwise processed when you access or use GWENO Hub.</p>
 
