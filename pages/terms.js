@@ -18,7 +18,7 @@ const TERMS_HTML = `<header>
 
   <h1>Terms & Conditions</h1>
 
-  <p class="updated">Last updated: April 1, 2026</p>
+  <p class="updated">Last updated: September 7, 2026</p>
 
   <!-- SEARCH -->
 
