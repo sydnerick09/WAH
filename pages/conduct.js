@@ -170,7 +170,7 @@ export default function ConductPage() {
 
       <main>
         <h1>Customer Conduct &amp; Suspension Policy</h1>
-        <p className="updated">Last updated: August 30, 2026</p>
+        <p className="updated">Last updated: September 07, 2026</p>
 
         <p>GWENO Hub is committed to maintaining a professional, safe, secure, fair, and respectful environment for users, customer care representatives, technical personnel, task providers, payment partners, and other individuals involved in operating or using the platform.</p>
 
