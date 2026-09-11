@@ -127,7 +127,7 @@ const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES);
 
 
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
-const BULK_THRESHOLD_KES = 40000;
+const BULK_THRESHOLD_KES = 25000;
 
 // ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
 function MpesaFlow({ user, initialStep, initialFeeRef }) {
