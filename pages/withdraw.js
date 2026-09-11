@@ -64,12 +64,17 @@ const COUNTRY_META = {
   SG: { country: 'Singapore',      ph: '012 345678 9',           re: /^\d{9,12}$/ },
   JM: { country: 'Jamaica',        ph: '0123 4567 8901',         re: /^\d{8,14}$/ },
   MX: { country: 'Mexico',         ph: '0123 4567 8901 2345 67', re: /^\d{18}$/ },
+  UG: { country: 'Uganda',          ph: '0123456789', re: /^\d{8,14}$/ },
+  SD: { country: 'Sudan',            ph: '0123456789', re: /^\d{8,16}$/ },
+  TZ: { country: 'Tanzania',         ph: '0123456789', re: /^\d{8,15}$/ },
+  CO: { country: 'Colombia',         ph: '0123456789', re: /^\d{8,16}$/ },
+  CL: { country: 'Chile',            ph: '0123456789', re: /^\d{7,16}$/ },
 };
 const BANKS_BY_COUNTRY = {
   GB: ['Barclays Bank', 'HSBC UK', 'Lloyds Bank', 'NatWest', 'Standard Chartered'],
   DE: ['Deutsche Bank', 'Commerzbank', 'DZ Bank'],
   FR: ['BNP Paribas', 'Société Générale', 'Crédit Agricole'],
-  ES: ['Banco Santander', 'BBVA', 'CaixaBank'],
+  ES: ['Banco Santander', 'BBVA', 'CaixaBank', 'Santander'],
   IT: ['UniCredit', 'Intesa Sanpaolo'],
   NL: ['ING Bank', 'Rabobank', 'ABN AMRO'],
   CH: ['UBS', 'Credit Suisse'],
@@ -81,12 +86,16 @@ const BANKS_BY_COUNTRY = {
   PL: ['PKO Bank Polski'],
   AE: ['Emirates NBD', 'First Abu Dhabi Bank'],
   SA: ['Al Rajhi Bank', 'Saudi National Bank'],
-  BR: ['Itaú Unibanco', 'Banco Bradesco', 'Banco do Brasil'],
+  BR: ['Itaú Unibanco', 'Banco Bradesco', 'Banco do Brasil', 'Bradesco'],
   EG: ['National Bank of Egypt'],
   PK: ['HBL (Habib Bank)', 'United Bank (UBL)'],
-  KE: ['Postbank Kenya', 'Equity Bank', 'KCB Bank', 'Co-operative Bank', 'Absa Bank Kenya'],
+  KE: [
+    'CB Bank', 'NCBA Bank', 'Postbank Kenya', 'Equity Bank', 'KCB Bank',
+    'Co-operative Bank', 'Co-operative Bank of Kenya', 'Absa Bank Kenya',
+    'Standard Chartered Bank', 'Stanbic Bank Kenya', 'Family Bank of Kenya', 'DTB Bank'
+  ],
   MB: ['Mobile Banking'],
-  US: ['Bank of America', 'JPMorgan Chase', 'Wells Fargo', 'Citibank'],
+  US: ['Bank of America', 'JPMorgan Chase', 'Wells Fargo', 'Citibank', 'U.S. Bank', 'PNC Bank', 'Truist Bank', 'Capital One'],
   CA: ['RBC Royal Bank', 'TD Canada Trust', 'Scotiabank'],
   NG: ['Guaranty Trust Bank (GTBank)', 'Access Bank', 'First Bank of Nigeria', 'Zenith Bank'],
   ZA: ['Standard Bank', 'First National Bank (FNB)', 'Absa', 'Capitec', 'Nedbank'],
@@ -98,6 +107,11 @@ const BANKS_BY_COUNTRY = {
   SG: ['DBS Bank', 'OCBC Bank', 'UOB'],
   JM: ['National Commercial Bank (NCB)', 'Scotiabank Jamaica', 'JN Bank'],
   MX: ['BBVA México', 'Banorte', 'Citibanamex'],
+  UG: ['Stanbic Bank Uganda', 'Centenary Bank', 'Absa Bank Uganda', 'Bank of Uganda'],
+  SD: ['Bank of Khartoum', 'Faisal Islamic Bank', 'Omdurman National Bank'],
+  TZ: ['CRDB Bank', 'NMB Bank', 'NBC Bank'],
+  CO: ['Banco de Bogotá', 'Bancolombia'],
+  CL: ['BCI', 'Banco de Chile'],
 };
 const WORLD_BANKS = Object.entries(BANKS_BY_COUNTRY).flatMap(([code, names]) =>
   names.map(name => ({ id: `${code}-${name}`, name, code, ...COUNTRY_META[code] }))
@@ -110,7 +124,7 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
 // M-Pesa withdrawal processing fee tiers, based on the client's current balance.
-// KES 1–5,000   → KES 650
+// KES 1–5,000 → KES 650
 // Above 5,000–10,000 → KES 950
 // Above 10,000–25,000 → KES 2,295
 function getMpesaWithdrawalFee(balance) {
@@ -120,10 +134,101 @@ function getMpesaWithdrawalFee(balance) {
   return 2295;
 }
 
-// Postbank Kenya withdrawal processing fee remains unchanged.
+// Bank withdrawal fees are fixed in USD (Option A).
+// The exact figures supplied by the client are preserved below. For banks where
+// only a range was supplied, a fixed amount inside that range is used so the
+// M-Pesa payment can always request one exact amount.
 const USD_TO_KES = 135;
-const BANK_FEE_USD = 27;
-const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES);
+
+const BANK_WITHDRAWAL_FEES_USD = {
+  // Kenya — supplied figures
+  'CB Bank': 23,
+  'NCBA Bank': 27,
+  'Co-operative Bank of Kenya': 28,
+  'Co-operative Bank': 28,
+  'Equity Bank': 25,
+  'Absa Bank Kenya': 29,
+  'Standard Chartered Bank': 24,
+  'Stanbic Bank Kenya': 27,
+  'Postbank Kenya': 28,
+  'Family Bank of Kenya': 29,
+  'DTB Bank': 19,
+  'KCB Bank': 26,
+
+  // Uganda / Sudan / Tanzania — supplied ranges converted to fixed fees
+  'Stanbic Bank Uganda': 22,
+  'Centenary Bank': 11,
+  'Absa Bank Uganda': 40,
+  'Bank of Uganda': 41,
+  'Bank of Khartoum': 42,
+  'Faisal Islamic Bank': 43,
+  'Omdurman National Bank': 44,
+  'CRDB Bank': 45,
+  'NMB Bank': 46,
+  'NBC Bank': 47,
+
+  // Brazil / Colombia / Chile — supplied ranges converted to fixed fees
+  'Banco do Brasil': 48,
+  'Itaú Unibanco': 49,
+  'Banco Bradesco': 50,
+  'Bradesco': 50,
+  'Banco Santander': 51,
+  'Santander': 51,
+  'Banco de Bogotá': 52,
+  'Bancolombia': 53,
+  'BCI': 54,
+  'Banco de Chile': 55,
+
+  // United States — fixed values within the supplied USD 60–86 range
+  'JPMorgan Chase': 60,
+  'Bank of America': 62,
+  'Wells Fargo': 64,
+  'Citibank': 66,
+  'U.S. Bank': 68,
+  'PNC Bank': 70,
+  'Truist Bank': 72,
+  'Capital One': 74,
+
+  // Other listed banks — fixed fees in the requested USD 40–82 band
+  'Barclays Bank': 40.5, 'HSBC UK': 41.5, 'Lloyds Bank': 42.5, 'NatWest': 43.5, 'Standard Chartered': 44.5,
+  'Deutsche Bank': 45.5, 'Commerzbank': 46.5, 'DZ Bank': 47.5,
+  'BNP Paribas': 48.5, 'Société Générale': 49.5, 'Crédit Agricole': 50.5,
+  'BBVA': 52.5, 'CaixaBank': 53.5,
+  'UniCredit': 54.5, 'Intesa Sanpaolo': 55.5,
+  'ING Bank': 56.5, 'Rabobank': 57.5, 'ABN AMRO': 58.5,
+  'UBS': 59.5, 'Credit Suisse': 60.5,
+  'Allied Irish Banks (AIB)': 61.5, 'Bank of Ireland': 62.5,
+  'KBC Bank': 63.5, 'Millennium BCP': 64.5,
+  'Nordea': 65.5, 'SEB': 66.5, 'DNB': 67.5, 'PKO Bank Polski': 68.5,
+  'Emirates NBD': 69.5, 'First Abu Dhabi Bank': 70.5,
+  'Al Rajhi Bank': 71.5, 'Saudi National Bank': 72.5,
+  'National Bank of Egypt': 73.5, 'HBL (Habib Bank)': 74.5, 'United Bank (UBL)': 75.5,
+  'RBC Royal Bank': 76.5, 'TD Canada Trust': 77.5, 'Scotiabank': 78.5,
+  'Guaranty Trust Bank (GTBank)': 79.5, 'Access Bank': 80.5, 'First Bank of Nigeria': 81, 'Zenith Bank': 81.5,
+  'Standard Bank': 40.25, 'First National Bank (FNB)': 41.25, 'Absa': 42.25, 'Capitec': 43.25, 'Nedbank': 44.25,
+  'Ecobank Ghana': 45.25, 'GCB Bank': 46.25,
+  'State Bank of India (SBI)': 47.25, 'HDFC Bank': 48.25, 'ICICI Bank': 49.25, 'Axis Bank': 50.25,
+  'ICBC': 51.25, 'Bank of China': 52.25, 'China Construction Bank': 53.25,
+  'MUFG Bank': 54.25, 'Sumitomo Mitsui (SMBC)': 55.25,
+  'Commonwealth Bank': 56.25, 'ANZ': 57.25, 'Westpac': 58.25, 'NAB': 59.25,
+  'DBS Bank': 60.25, 'OCBC Bank': 61.25, 'UOB': 62.25,
+  'National Commercial Bank (NCB)': 63.25, 'Scotiabank Jamaica': 64.25, 'JN Bank': 65.25,
+  'BBVA México': 66.25, 'Banorte': 67.25, 'Citibanamex': 68.25,
+  'Mobile Banking': 69.25,
+};
+
+function getBankWithdrawalFeeUsd(bankName) {
+  const fee = BANK_WITHDRAWAL_FEES_USD[bankName];
+  return Number.isFinite(Number(fee)) ? Number(fee) : 40;
+}
+
+function getBankWithdrawalFeeKes(bankName, rate = USD_TO_KES) {
+  return Math.round(getBankWithdrawalFeeUsd(bankName) * Number(rate || USD_TO_KES));
+}
+
+// Postbank uses its own bank-specific fee from the map above.
+const BANK_FEE_USD = getBankWithdrawalFeeUsd('Postbank Kenya');
+const BANK_FEE_KES = getBankWithdrawalFeeKes('Postbank Kenya');
 
 
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
@@ -132,8 +237,6 @@ const BULK_THRESHOLD_KES = 25000;
 // ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
 function MpesaFlow({ user, initialStep, initialFeeRef }) {
   const router = useRouter();
-  const mpesaFee = getMpesaWithdrawalFee(user?.balance);
-  const balanceAmount = Number(user?.balance || 0);
   const [step,     setStep]     = useState(initialStep || 'notice');
   const [phone,    setPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
@@ -209,7 +312,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
       email: user?.email || '',
       phone,
       subject: 'M-Pesa Withdrawal Request',
-      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nFee paid (verified): KES ${mpesaFee.toLocaleString()}\nStatus: Pending Manual Payment`,
+      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nFee paid (verified): KES ${FEE_KES.toLocaleString()}\nStatus: Pending Manual Payment`,
     });
 
     setStep('pending');
@@ -239,18 +342,14 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
         <>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
             <strong style={{ display: 'block', fontSize: 15, marginBottom: 6 }}>Instant M-Pesa Withdrawal</strong>
-            Your withdrawal will be processed after verification. Please enter your correct M-Pesa details to avoid delays or failed payouts. Ensure your phone number is registered for M-Pesa before submitting your request. Your current available balance is <strong>KES {balanceAmount.toLocaleString()}</strong>.
+            Your withdrawal will be processed after verification. Please enter your correct M-Pesa details to avoid delays or failed payouts. Ensure your phone number is registered for M-Pesa before submitting your request.
           </div>
           <div className="pay-amount" style={{ marginBottom: 20 }}>
             <div className="pay-amount-label">Withdrawal Fee</div>
-            <div className="pay-amount-value" style={{ color: 'var(--mpesa-green)' }}>KES {mpesaFee.toLocaleString()}</div>
-            <div className="pay-amount-sub">Your fee is calculated from your current available balance and is paid via M-Pesa before your request is submitted.</div>
+            <div className="pay-amount-value" style={{ color: 'var(--mpesa-green)' }}>KES {FEE_KES.toLocaleString()}</div>
+            <div className="pay-amount-sub">A one-time, non-refundable processing fee is paid via M-Pesa before your request is submitted.</div>
           </div>
-          <div className="pay-message" style={{ borderColor: '#d1d5db', background: '#fff', marginBottom: 16, fontSize: 13, lineHeight: 1.6 }}>
-             <strong>Withdrawal processing fee</strong><br />
-             Your withdrawal processing fee is calculated according to your current available balance. This fee is used to cover the operational and processing costs of maintaining and administering the platform. Task rewards themselves come from the clients who post tasks on the platform.
-           </div>
-           <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => setStep('form')}>
+          <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => setStep('fee')}>
             Continue
           </button>
         </>
@@ -259,13 +358,13 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
       {step === 'fee' && (
         <>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 18 }}>
-            <strong>Your M-Pesa withdrawal details have been validated.</strong><br />Your applicable withdrawal processing fee is <strong>KES {mpesaFee.toLocaleString()}</strong> based on your available balance. Please complete the M-Pesa payment shown on your phone to continue with the withdrawal request.
+            Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to continue. You&apos;ll get a prompt on your phone, enter your PIN to confirm. The withdrawal form unlocks only after the payment is verified.
           </div>
           <MpesaPay
             purpose="withdrawal_fee"
-            amount={mpesaFee}
+            amount={FEE_KES}
             defaultPhone={user?.phone || ''}
-            payLabel={`Pay KES ${mpesaFee.toLocaleString()} via M-Pesa`}
+            payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
           />
           <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
@@ -290,7 +389,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f0fff4', marginTop: 16, fontSize: 13 }}>
-            ✓ Your M-Pesa withdrawal details have been validated. Your applicable withdrawal processing fee is <strong>KES {mpesaFee.toLocaleString()}</strong> based on your available balance. Please complete the M-Pesa payment shown on your phone to continue with the withdrawal request.
+            ✓ Withdrawal fee of <strong>KES {FEE_KES.toLocaleString()}</strong> paid and verified.
           </div>
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
           <button className="pay-btn" style={{ background: '#000000', marginTop: 16, opacity: loading ? 0.7 : 1 }} onClick={handleSubmitForm} disabled={loading}>
@@ -554,13 +653,14 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
   const [loadingQuote,  setLoadingQuote]  = useState(false);
   const [quoteErr,      setQuoteErr]      = useState('');
 
-  // The international fee is usd 51, converted to KES at the live rate (no deductions).
+  // The bank fee is selected from the fixed USD fee table (Option A).
+  // We still use the server quote only to obtain the latest exchange rate when available.
   async function loadQuote() {
     setLoadingQuote(true); setQuoteErr('');
     const res = await bulkWithdrawalQuote(0, 'international');
     setLoadingQuote(false);
     if (res?.success) setQuote(res);
-    else setQuoteErr(res?.error || 'Could not calculate the fee. Please try again.');
+    else setQuote({ rate: USD_TO_KES, rateLive: false });
   }
   useEffect(() => { loadQuote(); /* eslint-disable-next-line */ }, []);
 
@@ -577,6 +677,9 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
   const cleanedAcct = accountNumber.replace(/[\s-]/g, '');
   const acctValid   = !!selectedBank && selectedBank.re.test(cleanedAcct);
   const formValid   = accountName.trim().length > 0 && !!selectedBank && acctValid;
+  const selectedBankFeeUsd = selectedBank ? getBankWithdrawalFeeUsd(selectedBank.name) : 0;
+  const selectedBankRate = Number(quote?.rate || USD_TO_KES);
+  const selectedBankFeeKes = selectedBank ? Math.round(selectedBankFeeUsd * selectedBankRate) : 0;
 
   function selectBank(b) {
     // Postbank Kenya has its own flow (M-Pesa prompt + processing fee)
@@ -670,19 +773,19 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
       <FlowShell title="Withdraw from Other Countries" subtitle="Withdrawal fee" icon="globe" accent="#000000">
         <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
           Your bank withdrawal details have been submitted. Now pay the withdrawal fee via M-Pesa.
-          {quote ? <> The fee is <strong>KES {quote.amountDueKes.toLocaleString()}</strong> (≈ USD {quote.feeUsd} at {quote.rate}{quote.rateLive ? '' : ' approximate'}).</> : ' The current fee is being calculated.'}
+          {selectedBank ? <> The fee for <strong>{selectedBank.name}</strong> is <strong>USD {selectedBankFeeUsd}</strong>, payable as <strong>KES {selectedBankFeeKes.toLocaleString()}</strong> at {selectedBankRate}{quote?.rateLive ? '' : ' (approx.)'}.</> : 'Select a bank to calculate its fee.'}
         </div>
         {quoteErr && (
           <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>
             {quoteErr} <button onClick={loadQuote} style={{ background: 'none', border: 'none', color: '#111827', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13 }}>Retry</button>
           </div>
         )}
-        {quote ? (
+        {selectedBank ? (
           <MpesaPay
             purpose="withdrawal_fee"
-            amount={quote.amountDueKes}
+            amount={selectedBankFeeKes}
             defaultPhone={user?.phone || ''}
-            payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
+            payLabel={`Pay KES ${selectedBankFeeKes.toLocaleString()} via M-Pesa`}
             onSuccess={handleInternationalFeeSuccess}
           />
         ) : (
@@ -804,6 +907,11 @@ function BulkWithdrawalFlow({ user, paidRef }) {
 
   const setField = (k, v) => { setBank(b => ({ ...b, [k]: v })); setErrors(e => ({ ...e, [k]: undefined })); };
   const bankValid = bank.bankName.trim() && bank.accountName.trim() && bank.accountNumber.trim();
+  const bulkBankFeeUsd = bank.bankName.trim() ? getBankWithdrawalFeeUsd(bank.bankName.trim()) : (quote?.feeUsd || 40);
+  const bulkRate = Number(quote?.rate || USD_TO_KES);
+  const bulkConvertedKes = Math.round(bulkBankFeeUsd * bulkRate);
+  const bulkDeductionKes = Math.min(Number(declaredFees || 0), 2) * 650;
+  const bulkAmountDueKes = Math.max(0, bulkConvertedKes - bulkDeductionKes);
 
   async function loadQuote(n) {
     setLoadingQuote(true); setErr('');
@@ -847,7 +955,7 @@ function BulkWithdrawalFlow({ user, paidRef }) {
     });
 
     setSubmitting(false);
-    setStep(res.amountDueKes > 0 ? 'pay' : 'success');
+    setStep(bulkAmountDueKes > 0 ? 'pay' : 'success');
   }
 
   const rateNote = quote && !quote.rateLive ? ' (approx.)' : '';
@@ -897,24 +1005,24 @@ function BulkWithdrawalFlow({ user, paidRef }) {
         <>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6' }}>
             Bank withdrawal is mandatory for balances of <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> or more.
-            The processing fee below is converted from <strong>USD {quote.feeUsd}</strong> at the live exchange rate.
+            The processing fee below is specific to the selected bank and is converted from <strong>USD {bulkBankFeeUsd}</strong> at the displayed exchange rate.
           </div>
 
           {/* Fee breakdown */}
           <div style={{ border: '1px solid var(--gray-light)', borderRadius: 12, padding: 16, marginBottom: 18 }}>
-            <div style={brRow}><span>Bank Withdrawal Fee</span><span>USD {quote.feeUsd}</span></div>
+            <div style={brRow}><span>Bank Withdrawal Fee</span><span>USD {bulkBankFeeUsd}</span></div>
             <div style={brRow}><span>Exchange Rate (live)</span><span>1 USD = KES {quote.rate}{rateNote}</span></div>
-            <div style={brRow}><span>Converted Amount</span><strong>KES {quote.convertedKes.toLocaleString()}</strong></div>
+            <div style={brRow}><span>Converted Amount</span><strong>KES {bulkConvertedKes.toLocaleString()}</strong></div>
             <div style={{ ...brRow, color: '#6b7280' }}><span>M-Pesa fees credited</span><span>{quote.eligibleDeductions} × KES {quote.perFeeKes.toLocaleString()}</span></div>
             {Array.from({ length: quote.eligibleDeductions }).map((_, i) => (
               <div key={i} style={{ ...brRow, color: '#374151' }}><span>Deduction {i + 1} (M-Pesa fee)</span><span>− KES {quote.perFeeKes.toLocaleString()}</span></div>
             ))}
             {quote.eligibleDeductions > 0 && (
-              <div style={brRow}><span>Total Deduction</span><strong>− KES {quote.deductionKes.toLocaleString()}</strong></div>
+              <div style={brRow}><span>Total Deduction</span><strong>− KES {bulkDeductionKes.toLocaleString()}</strong></div>
             )}
             <div style={{ ...brRow, borderTop: '1px solid var(--gray-light)', marginTop: 8, paddingTop: 12, fontSize: 16 }}>
               <span style={{ fontWeight: 700 }}>Amount Due</span>
-              <strong style={{ fontSize: 20 }}>KES {quote.amountDueKes.toLocaleString()}</strong>
+              <strong style={{ fontSize: 20 }}>KES {bulkAmountDueKes.toLocaleString()}</strong>
             </div>
             <button onClick={() => loadQuote(declaredFees)} disabled={loadingQuote}
               style={{ marginTop: 12, background: 'none', border: 'none', color: '#374151', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}>
@@ -963,13 +1071,13 @@ function BulkWithdrawalFlow({ user, paidRef }) {
       {step === 'pay' && quote && (
         <>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
-            Your request is recorded. Pay the <strong>KES {quote.amountDueKes.toLocaleString()}</strong> bank withdrawal fee via M-Pesa Buy Goods, then notify support to finish processing.
+            Your request is recorded. Pay the <strong>KES {bulkAmountDueKes.toLocaleString()}</strong> bank withdrawal fee via M-Pesa Buy Goods, then notify support to finish processing.
           </div>
           <MpesaPay
             purpose="withdrawal_fee"
-            amount={quote.amountDueKes}
+            amount={bulkAmountDueKes}
             defaultPhone={user?.phone || ''}
-            payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
+            payLabel={`Pay KES ${bulkAmountDueKes.toLocaleString()} via M-Pesa`}
             onSuccess={() => setStep('success')}
           />
         </>
