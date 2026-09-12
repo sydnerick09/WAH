@@ -18,7 +18,6 @@ export default function ActivatePage() {
   const { user, ready } = useUser();
 
   const [step,     setStep]     = useState(null);   // set once user loads
-  const [password, setPassword] = useState('');
   const [phone,    setPhone]    = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
@@ -47,15 +46,22 @@ export default function ActivatePage() {
     setStep('success');
   }
 
-  async function submitPassword() {
-    if (!password) { setError('Please enter your password.'); return; }
-    if (password !== user.password) { setError('Incorrect password. Please try again.'); return; }
+  async function activateDirectly() {
     setError('');
     setLoading(true);
-    const updated = await activateWithBalance(user.id);
-    setLoading(false);
-    if (updated) { setDoneUser(updated); setStep('success'); }
-    else setError('Activation failed. Please try again.');
+    try {
+      const updated = await activateWithBalance(user.id);
+      if (updated) {
+        setDoneUser(updated);
+        setStep('success');
+      } else {
+        setError('Activation failed. Please try again.');
+      }
+    } catch (err) {
+      setError(err?.message || 'Activation failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!ready || !user || !step) {
@@ -75,33 +81,16 @@ export default function ActivatePage() {
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>
             Are you sure you want to use your balance to activate your account? <strong>KES 50</strong> will be deducted from your balance as the activation fee.
           </div>
+          {error && <div style={{ color: '#4b5563', fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="pay-btn" style={{ flex: 1, background: '#E5E7EB', color: '#374151' }} onClick={() => router.push('/dashboard')}>Cancel</button>
-            <button className="pay-btn" style={{ flex: 2 }} onClick={() => { setError(''); setStep('password'); }}><Icon name="check" size={16} /> Yes, activate</button>
+            <button className="pay-btn" style={{ flex: 1, background: '#E5E7EB', color: '#374151' }} onClick={() => router.push('/dashboard')} disabled={loading}>Cancel</button>
+            <button className="pay-btn" style={{ flex: 2 }} onClick={activateDirectly} disabled={loading}>
+              {loading ? <><span className="spinner" /> Activating…</> : <><Icon name="check" size={16} /> Yes, activate</>}
+            </button>
           </div>
-        </>
-      )}
-
-      {step === 'password' && (
-        <>
-          <div className="pay-message" style={{ marginBottom: 16 }}>
-            For your security, enter your account password to confirm activation using your balance.
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+            <Icon name="lock" size={13} /> KES 50 will be deducted from your balance
           </div>
-          <div className="pay-phone-label">Password</div>
-          <input
-            className="pay-phone-input"
-            type="password"
-            value={password}
-            onChange={e => { setPassword(e.target.value); setError(''); }}
-            placeholder="Enter your password"
-            onKeyDown={e => { if (e.key === 'Enter') submitPassword(); }}
-            style={{ borderColor: error ? '#4b5563' : undefined }}
-          />
-          {error && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{error}</div>}
-          <button className="pay-btn" style={{ marginTop: 18 }} onClick={submitPassword} disabled={loading}>
-            {loading ? <><span className="spinner" /> Activating…</> : <><Icon name="lock" size={16} /> Confirm & Activate</>}
-          </button>
-          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> KES 50 will be deducted from your balance</div>
         </>
       )}
 
