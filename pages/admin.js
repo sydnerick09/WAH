@@ -127,6 +127,127 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
   );
 }
 
+
+// ─── Individual Client Email Modal ────────────────────────────────────────────
+function SendEmailModal({ modal, secret, onClose }) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (modal) {
+      setSubject('');
+      setBody('');
+      setResult(null);
+    }
+  }, [modal]);
+
+  if (!modal) return null;
+
+  async function sendEmail(e) {
+    e.preventDefault();
+    if (!subject.trim() || !body.trim()) {
+      setResult({ ok: false, text: 'Subject and message cannot be empty.' });
+      return;
+    }
+
+    setSending(true);
+    setResult(null);
+
+    try {
+      const r = await fetch('/api/admin/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminSecret: secret,
+          to: modal.user.email,
+          name: modal.user.fullName || '',
+          subject: subject.trim(),
+          body: body.trim(),
+        }),
+      });
+
+      const data = await r.json();
+      if (data.success) {
+        setResult({ ok: true, text: `Email sent successfully to ${modal.user.email}.` });
+        setTimeout(() => onClose(), 1200);
+      } else {
+        setResult({ ok: false, text: data.message || data.error || 'Failed to send email.' });
+      }
+    } catch (err) {
+      setResult({ ok: false, text: err.message || 'Network error.' });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div style={styles.modalOverlay}>
+      <div style={{ ...styles.modalCard, maxWidth: 560 }}>
+        <div style={{ background: '#111827', borderRadius: '12px 12px 0 0', padding: '20px 24px', color: '#fff' }}>
+          <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17 }}>
+            ✉️ Email Client
+          </div>
+          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 5 }}>
+            {modal.user.fullName || 'Client'} · {modal.user.email}
+          </div>
+        </div>
+
+        <form onSubmit={sendEmail} style={{ padding: 24 }}>
+          <label style={styles.fieldLabel}>Recipient</label>
+          <input
+            style={{ ...styles.input, background: '#F1F5F9' }}
+            value={modal.user.email || ''}
+            readOnly
+          />
+
+          <label style={styles.fieldLabel}>Subject</label>
+          <input
+            style={styles.input}
+            value={subject}
+            onChange={e => setSubject(e.target.value)}
+            placeholder="Email subject"
+            autoFocus
+          />
+
+          <label style={styles.fieldLabel}>Message</label>
+          <textarea
+            style={{ ...styles.input, minHeight: 220, resize: 'vertical', fontFamily: 'Manrope, sans-serif', lineHeight: 1.6 }}
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder="Write your message to this client..."
+          />
+
+          {result && (
+            <p style={{ margin: '10px 0 0', fontSize: 13, fontWeight: 600, color: result.ok ? '#166534' : '#b91c1c' }}>
+              {result.text}
+            </p>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+            <button
+              type="submit"
+              style={{ ...styles.btn, flex: 1 }}
+              disabled={sending || !!result?.ok}
+            >
+              {sending ? 'Sending…' : '✉️ Send Email'}
+            </button>
+            <button
+              type="button"
+              style={{ ...styles.btn, background: '#64748B', flex: 1 }}
+              disabled={sending}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Users Table ──────────────────────────────────────────────────────────────
 function UsersTab({ users, secret, onRefresh }) {
   const [search,       setSearch]       = useState('');
@@ -135,6 +256,7 @@ function UsersTab({ users, secret, onRefresh }) {
   const [msg,          setMsg]          = useState({});
   const [suspendModal, setSuspendModal] = useState(null);
   const [suspendReason, setSuspendReason] = useState('');
+  const [emailModal, setEmailModal] = useState(null);
 
   function setEdit(uid, field, val) {
     setEdits(prev => ({ ...prev, [uid]: { ...(prev[uid] || {}), [field]: val } }));
@@ -233,6 +355,8 @@ function UsersTab({ users, secret, onRefresh }) {
 
   return (
     <>
+      <SendEmailModal modal={emailModal} secret={secret} onClose={() => setEmailModal(null)} />
+
       <SuspendModal
         modal={suspendModal}
         reason={suspendReason}
@@ -392,6 +516,13 @@ function UsersTab({ users, secret, onRefresh }) {
                     <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%' }}
                       disabled={isSaving} onClick={() => saveUser(user)}>
                       {isSaving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#4b5563', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                      disabled={isSaving || !user.email}
+                      onClick={() => setEmailModal({ user })}
+                    >
+                      ✉️ Send Email
                     </button>
                     <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#374151', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                       disabled={isSaving}

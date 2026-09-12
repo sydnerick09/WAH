@@ -1,14 +1,11 @@
 // pages/api/broadcast.js
 // Admin-only: emails a message to EVERY registered client in the database.
-// Protected by ADMIN_SECRET. Fetches all user emails from Supabase (service
-// role) and sends them the given subject/body via the Gmail SMTP account.
-//   ADMIN_SECRET                 = same secret used by the admin panel
-//   SUPABASE_SERVICE_ROLE_KEY    = server-side Supabase key (see /api/db)
-//   SMTP_USER / SMTP_PASS        = Gmail address + App Password (see /api/notify)
+// Protected by ADMIN_SECRET.
+// Uses SUPABASE_SERVICE_ROLE_KEY to fetch users and SMTP_USER/SMTP_PASS for Gmail.
+
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
-// Default message, the Gweno Hub welcome / announcement.
 const DEFAULT_SUBJECT = 'Welcome to Gweno Hub';
 const DEFAULT_BODY = `Dear Client,
 
@@ -29,7 +26,6 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Turn a plain-text body into simple HTML paragraphs.
 function bodyToHtml(body, name) {
   const greetingDone = /dear\s/i.test(body.slice(0, 40));
   const intro = greetingDone ? '' : `<p>Hi ${esc(name) || 'there'},</p>`;
@@ -63,7 +59,6 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
 
   const { adminSecret, subject, body, test } = req.body || {};
-
   if (!process.env.ADMIN_SECRET || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ success: false, message: 'Unauthorized' });
   }
@@ -80,15 +75,13 @@ export default async function handler(req, res) {
   }
 
   const db = createClient(url, key, { auth: { persistSession: false } });
-  // Prefer excluding opted-out users; fall back gracefully if the `unsubscribed`
-  // column hasn't been added yet (db/admin-tables.sql not run).
+
   let { data: rows, error } = await db.from('users').select('email, full_name, unsubscribed');
   if (error) {
     ({ data: rows, error } = await db.from('users').select('email, full_name'));
   }
   if (error) return res.status(500).json({ success: false, message: error.message });
 
-  // Unique, valid, lower-cased recipient list, excluding opted-out users
   const seen = new Set();
   let recipients = (rows || [])
     .filter(r => !r.unsubscribed)
@@ -99,15 +92,14 @@ export default async function handler(req, res) {
       return true;
     });
 
-  // `test: true` sends only to the admin's own inbox for a dry run.
   if (test) {
     const adminEmail = (process.env.NOTIFY_EMAIL || process.env.SMTP_USER || '').toLowerCase();
     recipients = adminEmail ? [{ email: adminEmail, name: 'Admin (test)' }] : [];
   }
 
-  const subj    = (subject && String(subject).trim()) || DEFAULT_SUBJECT;
+  const subj = (subject && String(subject).trim()) || DEFAULT_SUBJECT;
   const rawBody = (body && String(body).trim()) || DEFAULT_BODY;
-  const from    = `"Gweno Hub" <${process.env.SMTP_USER}>`;
+  const from = `"Gweno Hub" <${process.env.SMTP_USER}>`;
 
   let sent = 0;
   let failed = 0;
