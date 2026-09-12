@@ -13,6 +13,28 @@ import { useMpesaEnabled } from '../lib/useMpesaEnabled';
 
 const FEE = 50;
 
+async function sendActivationEmail(activatedUser) {
+  if (!activatedUser?.email) return;
+
+  try {
+    await fetch('/api/send-activation-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: activatedUser.email,
+        name:
+          activatedUser.full_name ||
+          activatedUser.fullName ||
+          activatedUser.name ||
+          'Client',
+      }),
+    });
+  } catch (err) {
+    // Do not undo successful activation if email sending fails.
+    console.error('[activation-email]', err);
+  }
+}
+
 export default function ActivatePage() {
   const router = useRouter();
   const { user, ready } = useUser();
@@ -40,11 +62,17 @@ export default function ActivatePage() {
 
   // Called after a successful STK payment: refresh the user (the server already
   // activated the account in the callback) and show the success screen.
-  async function onMpesaPaid() {
-    const u = await getCurrentUser().catch(() => null);
-    if (u) { setCurrentUser(u); setDoneUser(u); }
-    setStep('success');
+ async function onMpesaPaid() {
+  const u = await getCurrentUser().catch(() => null);
+
+  if (u) {
+    setCurrentUser(u);
+    setDoneUser(u);
+    await sendActivationEmail(u);
   }
+
+  setStep('success');
+}
 
   async function activateDirectly() {
     setError('');
@@ -52,9 +80,10 @@ export default function ActivatePage() {
     try {
       const updated = await activateWithBalance(user.id);
       if (updated) {
-        setDoneUser(updated);
-        setStep('success');
-      } else {
+  setDoneUser(updated);
+  await sendActivationEmail(updated);
+  setStep('success');
+} else {
         setError('Activation failed. Please try again.');
       }
     } catch (err) {
