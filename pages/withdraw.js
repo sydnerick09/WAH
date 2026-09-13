@@ -186,7 +186,7 @@ const BANK_FEE_KES = Math.round(BANK_FEE_USD * USD_TO_KES);
 
 
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
-const BULK_THRESHOLD_KES = 40000;
+const BULK_THRESHOLD_KES = 15000;
 
 // ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
 function MpesaFlow({ user, initialStep, initialFeeRef }) {
@@ -275,7 +275,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
   const isLow = remaining < 30 * 1000;
   const pct   = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
 
-  // Bulk amounts (above KES 25,000) must be withdrawn through the bank, not M-Pesa.
+  // Bulk amounts (above KES 15,000) must be withdrawn through the bank, not M-Pesa.
   if (Number(user?.balance || 0) >= BULK_THRESHOLD_KES) {
     return (
       <FlowShell title="Withdraw with M-Pesa" subtitle="Bank withdrawal required" icon="smartphone" accent="var(--mpesa-green)">
