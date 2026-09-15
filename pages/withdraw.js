@@ -244,6 +244,10 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
   const [loading,  setLoading]  = useState(false);
   const [feeRef,   setFeeRef]   = useState(initialFeeRef || '');   // verified Paystack fee reference
 
+  // Use the current account balance to determine the M-Pesa withdrawal fee.
+  // This fixes the undefined FEE_KES value used throughout the M-Pesa flow.
+  const FEE_KES = getMpesaWithdrawalFee(user?.balance);
+
   // countdown
   const DURATION = 92 * 1000;
   const deadlineRef = useRef(0);
