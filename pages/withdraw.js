@@ -232,7 +232,7 @@ const BANK_FEE_KES = getBankWithdrawalFeeKes('Postbank Kenya');
 
 
 // Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
-const BULK_THRESHOLD_KES = 15000;
+const BULK_THRESHOLD_KES = 40000;
 
 // ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
 function MpesaFlow({ user, initialStep, initialFeeRef }) {
