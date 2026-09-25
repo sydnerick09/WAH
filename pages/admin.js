@@ -420,13 +420,39 @@ function UsersTab({ users, secret, onRefresh }) {
                       onChange={e => setEdit(user.id, 'email', e.target.value)}
                       placeholder="Email"
                     />
-                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Phone</div>
-                    <input
-                      style={{ ...styles.numInput, width: '100%' }}
-                      value={getEdit(user.id, 'phone', user.phone || '')}
-                      onChange={e => setEdit(user.id, 'phone', e.target.value)}
-                      placeholder="Phone"
-                    />
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                       <input
+                         style={{ ...styles.numInput, width: '100%' }}
+                         value={getEdit(user.id, 'phone', user.phone || '')}
+                         onChange={e => setEdit(user.id, 'phone', e.target.value)}
+                         placeholder="Phone"
+                       />
+                       {user.phone && (
+                         <a
+                           href={`https://wa.me/${String(user.phone).replace(/\D/g, '').replace(/^0/, '254')}`}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           title="Chat on WhatsApp"
+                           aria-label={`Chat with ${user.fullName || user.phone} on WhatsApp`}
+                           style={{
+                             width: 34,
+                             height: 34,
+                             minWidth: 34,
+                             borderRadius: 6,
+                             background: '#25D366',
+                             color: '#fff',
+                             display: 'inline-flex',
+                             alignItems: 'center',
+                             justifyContent: 'center',
+                             textDecoration: 'none',
+                           }}
+                         >
+                           <svg viewBox="0 0 32 32" width="18" height="18" fill="currentColor" aria-hidden="true">
+                             <path d="M16 3C8.82 3 3 8.82 3 16c0 2.29.59 4.45 1.71 6.37L3.05 29l6.82-1.63A12.94 12.94 0 0 0 16 29c7.18 0 13-5.82 13-13S23.18 3 16 3zm0 23.5c-2.04 0-4.03-.55-5.76-1.59l-.41-.24-4.05.97.99-3.95-.27-.43A10.46 10.46 0 1 1 16 26.5zm5.73-7.84c-.31-.16-1.84-.91-2.12-1.01-.28-.1-.49-.16-.7.16-.21.31-.8 1.01-.98 1.22-.18.21-.36.23-.67.08-.31-.16-1.31-.48-2.5-1.53-.92-.82-1.54-1.83-1.72-2.14-.18-.31-.02-.48.14-.64.14-.14.31-.36.47-.54.16-.18.21-.31.31-.52.1-.21.05-.39-.03-.54-.08-.16-.7-1.69-.96-2.31-.25-.6-.51-.52-.7-.53h-.6c-.21 0-.54.08-.83.39-.28.31-1.08 1.05-1.08 2.56s1.11 2.97 1.26 3.18c.16.21 2.18 3.33 5.28 4.67.74.32 1.32.51 1.77.65.74.23 1.41.2 1.94.12.59-.09 1.84-.75 2.1-1.48.26-.73.26-1.36.18-1.49-.08-.13-.28-.21-.59-.36z"/>
+                           </svg>
+                         </a>
+                       )}
+                     </div>
                     <div style={{ fontSize: 11, color: '#64748B', margin: '6px 0 2px' }}>🔑 Reset password</div>
                     <input
                       type="password"
