@@ -18,7 +18,7 @@ const TERMS_HTML = `<header>
 
   <h1>Terms & Conditions</h1>
 
-  <p class="updated">Last updated: September 7, 2026</p>
+  <p class="updated">Last updated: April 1, 2026</p>
 
   <!-- SEARCH -->
 
@@ -639,6 +639,38 @@ const TERMS_HTML = `<header>
   <li>Truist Bank — <strong>USD 60–86</strong></li>
   <li>Capital One — <strong>USD 60–86</strong></li>
 </ol>
+
+<h3>SafariCom M-Pesa Withdrawals</h3>
+
+<p>
+  GWENO Hub may provide SafariCom M-Pesa as a supported withdrawal method for
+  eligible users. Where SafariCom M-Pesa is available, users may initiate a
+  withdrawal directly from their GWENO Hub dashboard using the required M-Pesa
+  account and withdrawal information.
+</p>
+
+<p>
+  The applicable withdrawal fee for a SafariCom M-Pesa withdrawal is
+  <strong>USD 29</strong>. This fee applies to the withdrawal transaction and
+  may be payable before the withdrawal is processed, as indicated through the
+  GWENO Hub withdrawal process.
+</p>
+
+<p>
+  Subject to account eligibility, verification, platform availability, and
+  applicable security or compliance checks, users may initiate SafariCom
+  M-Pesa withdrawals at any time and from any location where the service is
+  available. The availability of the M-Pesa service may also depend on the
+  relevant payment provider and network conditions.
+</p>
+
+<p>
+  Users are responsible for providing accurate SafariCom M-Pesa details and
+  for ensuring that the mobile money account information submitted for the
+  withdrawal is correct. GWENO Hub may delay, reject, or require additional
+  verification for a withdrawal where the submitted information is incorrect,
+  incomplete, inconsistent, or cannot be reasonably verified.
+</p>
 
 <h3>Restricted Kenyan Banks</h3>
 
