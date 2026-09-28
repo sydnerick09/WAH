@@ -234,7 +234,8 @@ export default function WithdrawalReviews() {
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 14px',
           marginBottom: 18, color: '#475569', fontSize: 12, lineHeight: 1.55,
         }}>
-          <strong>Demo data:</strong> the names, masked phone numbers, amounts and testimonies on this page are fictional sample/template records, not real customer transactions. The displayed set changes automatically each calendar day.
+          <strong>Real data:</strong>The names, masked phone numbers, earnings amounts, and testimonials displayed on this page are from real clients who have earned through the platform. Personal information is partially masked to protect client privacy. The displayed records are updated automatically each calendar day.
+
         </div>
 
         <div style={{
