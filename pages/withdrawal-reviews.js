@@ -1,47 +1,47 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Icon from '../components/Icon';
 
 // These are fictional sample/template records. They are not real customer transactions.
 const DEMO_REVIEW_PEOPLE = [
   { name: 'Brian Otieno', country: 'Kenya', prefix: '+25471' },
-  { name: 'Mary Wanjiku', country: 'Kenya', prefix: '+25472' },
+  { name: 'Mary Wanjiku', country: 'Kenya', prefix: '+25410' },
   { name: 'Kevin Mwangi', country: 'Kenya', prefix: '+25479' },
-  { name: 'Grace Akinyi', country: 'Kenya', prefix: '+25470' },
+  { name: 'Grace Akinyi', country: 'Kenya', prefix: '+25411' },
   { name: 'Daniel Kiptoo', country: 'Kenya', prefix: '+25474' },
-  { name: 'Faith Njeri', country: 'Kenya', prefix: '+25475' },
+  { name: 'Faith Njeri', country: 'Kenya', prefix: '+25412' },
   { name: 'Peter Kamau', country: 'Kenya', prefix: '+25476' },
-  { name: 'Mercy Wambui', country: 'Kenya', prefix: '+25477' },
+  { name: 'Mercy Wambui', country: 'Kenya', prefix: '+25410' },
   { name: 'Samuel Odhiambo', country: 'Kenya', prefix: '+25478' },
-  { name: 'Joyce Atieno', country: 'Kenya', prefix: '+25471' },
+  { name: 'Joyce Atieno', country: 'Kenya', prefix: '+25411' },
   { name: 'David Kibet', country: 'Kenya', prefix: '+25472' },
-  { name: 'Lucy Muthoni', country: 'Kenya', prefix: '+25479' },
+  { name: 'Lucy Muthoni', country: 'Kenya', prefix: '+25412' },
   { name: 'Michael Ochieng', country: 'Kenya', prefix: '+25470' },
-  { name: 'Sarah Wairimu', country: 'Kenya', prefix: '+25474' },
+  { name: 'Sarah Wairimu', country: 'Kenya', prefix: '+25410' },
   { name: 'John Kamau', country: 'Kenya', prefix: '+25475' },
-  { name: 'Esther Nyambura', country: 'Kenya', prefix: '+25476' },
+  { name: 'Esther Nyambura', country: 'Kenya', prefix: '+25411' },
   { name: 'James Kariuki', country: 'Kenya', prefix: '+25477' },
-  { name: 'Diana Chebet', country: 'Kenya', prefix: '+25478' },
+  { name: 'Diana Chebet', country: 'Kenya', prefix: '+25412' },
   { name: 'Paul Maina', country: 'Kenya', prefix: '+25471' },
-  { name: 'Ann Wambui', country: 'Kenya', prefix: '+25472' },
+  { name: 'Ann Wambui', country: 'Kenya', prefix: '+25410' },
   { name: 'Samuel Kipchoge', country: 'Kenya', prefix: '+25479' },
-  { name: 'Mercy Auma', country: 'Kenya', prefix: '+25470' },
+  { name: 'Mercy Auma', country: 'Kenya', prefix: '+25411' },
   { name: 'Brian Kamau', country: 'Kenya', prefix: '+25474' },
-  { name: 'Faith Chepkirui', country: 'Kenya', prefix: '+25475' },
+  { name: 'Faith Chepkirui', country: 'Kenya', prefix: '+25412' },
   { name: 'Kevin Ouma', country: 'Kenya', prefix: '+25476' },
-  { name: 'Grace Wanjiru', country: 'Kenya', prefix: '+25477' },
+  { name: 'Grace Wanjiru', country: 'Kenya', prefix: '+25410' },
   { name: 'Peter Njoroge', country: 'Kenya', prefix: '+25478' },
-  { name: 'Mary Akinyi', country: 'Kenya', prefix: '+25471' },
+  { name: 'Mary Akinyi', country: 'Kenya', prefix: '+25411' },
   { name: 'Daniel Mutua', country: 'Kenya', prefix: '+25472' },
-  { name: 'Lucy Nyokabi', country: 'Kenya', prefix: '+25479' },
+  { name: 'Lucy Nyokabi', country: 'Kenya', prefix: '+25412' },
   { name: 'David Onyango', country: 'Kenya', prefix: '+25470' },
-  { name: 'Sarah Chebet', country: 'Kenya', prefix: '+25474' },
+  { name: 'Sarah Chebet', country: 'Kenya', prefix: '+25410' },
   { name: 'John Mwangi', country: 'Kenya', prefix: '+25475' },
-  { name: 'Esther Achieng', country: 'Kenya', prefix: '+25476' },
+  { name: 'Esther Achieng', country: 'Kenya', prefix: '+25411' },
   { name: 'James Kiplagat', country: 'Kenya', prefix: '+25477' },
-  { name: 'Diana Wanjiku', country: 'Kenya', prefix: '+25478' },
+  { name: 'Diana Wanjiku', country: 'Kenya', prefix: '+25412' },
   { name: 'Paul Otieno', country: 'Kenya', prefix: '+25471' },
-  { name: 'Ann Njeri', country: 'Kenya', prefix: '+25472' },
+  { name: 'Ann Njeri', country: 'Kenya', prefix: '+25410' },
   { name: 'Collins Kiptoo', country: 'Kenya', prefix: '+25473' },
   { name: 'Chantal Nakato', country: 'Uganda', prefix: '+25670' },
   { name: 'Moses Okello', country: 'Uganda', prefix: '+25675' },
@@ -53,63 +53,54 @@ const DEMO_REVIEW_PEOPLE = [
   { name: 'Jeanette Uwase', country: 'Rwanda', prefix: '+25078' },
   { name: 'Eric Habimana', country: 'Rwanda', prefix: '+25072' },
   { name: 'Liya Tesfaye', country: 'Ethiopia', prefix: '+25191' },
-  { name: 'Ahmed Hassan', country: 'Kenya', prefix: '+25473' },
+  { name: 'Ahmed Hassan', country: 'Kenya', prefix: '+25411' },
 ]
 
 const DEMO_REVIEW_TEXTS = [
-  'I found Gweno Hub on TikTok and decided to give it a try. So far, my experience has been good.',
-  'The platform is easy to understand once you get started. I have already completed some tasks and withdrawn.',
-  'I was not sure about it at first, but I decided to try it and see how it works for myself.',
-  'My first experience with Gweno Hub has been quite good. The process was straightforward.',
-  'I came across Gweno Hub online and decided to give it a chance. I am happy that I tried it.',
-  'The tasks are simple to understand, and I like being able to track my earnings.',
-  'I have been using Gweno Hub for some time now and I like how the platform is organized.',
-  'I honestly did not expect much when I first joined, but my experience has been better than I expected.',
-  'I found this platform through TikTok and decided to test it. So far, so good.',
-  'The withdrawal process was clear to me, and I received my money after completing the required process.',
-  'I like the fact that I can work on tasks and see my balance building up.',
-  'Gweno Hub has given me something productive to do in my free time.',
-  'At first I was skeptical, but after trying the platform myself, I understood how everything works.',
-  'The platform is fairly simple once you understand the different sections.',
-  'I have enjoyed completing the tasks and seeing my earnings increase.',
-  'I joined recently and I am still learning, but so far the experience has been positive.',
-  'I discovered Gweno Hub on social media and decided to try it instead of just watching other people talk about it.',
-  'I like that the platform gives me tasks to work on instead of just sitting idle.',
-  'My experience has been good so far. I will continue using the platform and see how it goes.',
-  'I gave Gweno Hub a try and I am glad I did. The experience has been interesting so far.',
-  'Niliipata Gweno Hub kupitia TikTok, lakini sasa nimeanza kujaribu na experience yangu iko poa.',
-  'Mwanzoni sikuamini sana, lakini nilisema ngoja nijaribu mwenyewe. Mpaka sasa mambo iko sawa.',
-  'Nimeanza kufanya tasks na kuona earnings zangu zikiongezeka. So far so good.',
-  'Asante Gweno Hub. Niliiona online na nikasema ngoja nijaribu, sasa nimeanza kuelewa vile platform inafanya kazi.',
-  'Nilikuwa na doubts mwanzoni, lakini baada ya kujaribu mwenyewe nimeona si complicated kama nilivyofikiria.',
-  'Tasks ni rahisi kuelewa ukishaelekezwa vizuri. Mimi nimeanza polepole na experience imekuwa poa.',
-  'Nilipata Gweno Hub TikTok siku moja, nikasema wacha nijaribu. Sasa nimeanza ku-an na kuona results.',
-  'Kwa sasa experience yangu na Gweno Hub iko vizuri. Nimekuwa nikifanya tasks wakati niko free.',
-  'Nilikuwa naona watu wakisema kuhusu Gweno Hub, lakini sikujua kama ni yangu mpaka nilipojaribu mwenyewe.',
-  'Nimefurahia kuona balance yangu ikiongezeka baada ya kufanya tasks. Inanipa motivation ya kuendelea.',
-  'Gweno Hub imenisaidia kutumia free time yangu kufanya kitu productive. Mpaka sasa niko sawa nayo.',
-  'Niliingia bila expectations mingi, lakini sasa nimeanza kuzoea platform na vile tasks zinafanywa.',
-  'Niliona review fulani kuhusu Gweno Hub online, nikasema ngoja ni-test. So far nimeipenda.',
-  'Mwanzoni nilichanganyikiwa kidogo, lakini baada ya kuelewa process everything became easier.',
-  'Nimeanza na tasks chache, lakini nimefurahia experience yangu mpaka sasa.',
-  'Nilidhani itakuwa complicated, kumbe ukifuata instructions ni rahisi kuelewa.',
-  'Nimekuwa nikitumia platform wakati niko free na nimefurahia kuona earnings zikiendelea kuongezeka.',
-  'Nilipata Gweno Hub kupitia social media, lakini sasa nimeanza kuendelea nayo mwenyewe.',
-  'Experience yangu imekuwa poa mpaka sasa. Kuna vitu bado najifunza, lakini naendelea.',
-  'Niliamua kuacha kuskia tu watu wakisema na nijaribu mwenyewe. Sasa naelewa vile Gweno Hub inafanya kazi.',
-  'Niliiona Gweno Hub TikTok nikasema wacha ni-test. Sai nimeanza ku-an nayo na iko fiti.',
-  'Nilikua na doubt mob, lakini nikasema wacha nijaribu mwenyewe. Sai niko sawa nayo.',
-  'Hii platform nilipata online, nikasema wacha niingie nijionee. So far mambo iko fresh.',
-  'Tasks ziko straight-forward ukishika vile inafanywa. Sai nimeanza kuzoea system.',
-  'Niliingia nikidhani itakuwa complicated, kumbe ukipewa instructions una-catch haraka.',
-  'My first withdrawal did not go through, so I was disappointed at first. I tried a second withdrawal later and that one went through successfully.',
-  'The withdrawal fee feels quite expensive. I think it would be more convenient if the fee could be deducted directly from the money someone has earned.',
-  'Why is there a withdrawal fee? I understand that there may be costs involved, but I would prefer a lower fee or a different way of handling it.',
-  'Sometimes the tasks I complete take a while before the client reviews them. It can be frustrating when you are waiting for a task to be checked.',
-  'Nilipata challenge kidogo na withdrawal yangu ya kwanza haikuenda through. Nilijaribu tena mara ya pili na ika-work, lakini ningependa process iwe smoother.',
-]
+  // Positive — 70%
+  { text: 'I found Gweno Hub online and decided to try it. So far, the experience has been good.', negative: false },
+  { text: 'The platform is easy to understand once you get started. I like being able to track my progress.', negative: false },
+  { text: 'Mwanzoni nilikuwa na doubt, lakini nilijaribu mwenyewe na experience yangu iko poa.', negative: false },
+  { text: 'Nimeanza kufanya tasks na kuelewa vile platform inafanya kazi. So far so good.', negative: false },
+  { text: 'Tasks ni rahisi kuelewa ukishaelekezwa vizuri. Sai niko comfortable na system.', negative: false },
+  { text: 'Niliona Gweno Hub online nikasema wacha ni-test. Mpaka sasa mambo iko fiti.', negative: false },
+  { text: 'I like that I can see my progress while completing tasks. The layout is straightforward.', negative: false },
+  { text: 'Nimefurahia kutumia platform wakati niko free. Everything imekuwa easy kuelewa.', negative: false },
+  { text: 'My first experience has been positive. I am still learning some sections, but the process is clear.', negative: false },
+  { text: 'Niliingia bila expectations mingi, lakini nimezoea platform na vile tasks zinafanywa.', negative: false },
+  { text: 'The instructions are fairly clear and I have enjoyed learning how the different sections work.', negative: false },
+  { text: 'Kwa upande yangu experience imekuwa poa. Kuna vitu bado najifunza, but niko sawa nayo.', negative: false },
+  { text: 'Nilikuwa naona watu wakisema kuhusu platform, nikasema nijionee mwenyewe. Sai naelewa vile inafanya kazi.', negative: false },
+  { text: 'I like the simple layout and being able to follow what I have completed.', negative: false },
+  { text: 'Niliipata kupitia social media nikasema wacha nijaribu. Sai nimeanza ku-catch vile system iko.', negative: false },
+  { text: 'The process became much easier after I understood the instructions.', negative: false },
+  { text: 'Nilidhani itakuwa complicated, kumbe uki-follow instructions una-catch haraka.', negative: false },
+  { text: 'I have enjoyed the experience so far and I am taking time to understand each step.', negative: false },
+  { text: 'Sai nimeanza kuzoea platform. Tasks ziko straight-forward ukishika process.', negative: false },
+  { text: 'My experience has been okay so far. I like having a clear place to follow my activity.', negative: false },
+  { text: 'Nimekuwa nikitumia platform wakati niko free na experience imekuwa fresh mpaka sasa.', negative: false },
+  { text: 'I decided to stop just hearing about it and try it myself. The platform is fairly easy to navigate.', negative: false },
+  { text: 'Niliiona TikTok nikasema wacha ni-test. Mpaka sasa niko sawa nayo.', negative: false },
+  { text: 'The sections make more sense once you spend some time using the platform.', negative: false },
+  { text: 'Nilikuwa na doubt mob, lakini baada ya kujaribu mwenyewe nimeanza kuelewa system.', negative: false },
 
-const NEGATIVE_START = 45;
+  // Negative / critical — 30%
+  { text: 'The withdrawal fee feels expensive. I would prefer a lower fee or a clearer fee structure.', negative: true },
+  { text: 'Withdrawal fee ni expensive kidogo. Ningependa fee iwe lower ama ionyeshwe clearly kabla ya withdrawal.', negative: true },
+  { text: 'Hii withdrawal fee iko juu kiasi. Kama ingeweza kupunguzwa ingekuwa poa zaidi.', negative: true },
+  { text: 'Sometimes my withdrawal stays pending for a long time. It would help if pending withdrawals were processed faster.', negative: true },
+  { text: 'Wakati mwingine withdrawal inakaa pending for long. Ingekuwa poa kama processing ingekuwa faster.', negative: true },
+  { text: 'Withdrawal yangu ilikaa pending sana. Nilikuwa najiuliza kama imekwama ama bado ina-process.', negative: true },
+  { text: 'Using a bank account for withdrawal requires a business bank account, which can be difficult for some users.', negative: true },
+  { text: 'Kwa bank withdrawal, nimeona inahitaji business bank account. Hiyo inaweza kuwa challenge kwa mtu hana.', negative: true },
+  { text: 'Bank account withdrawal inahitaji business account? Hiyo requirement inaweza kuwa ngumu kwa baadhi ya users.', negative: true },
+  { text: 'My first withdrawal did not go through. I tried again later, but I would like the process to be more reliable.', negative: true },
+  { text: 'Nilijaribu withdrawal lakini haikuenda through. Ninge-prefer process iwe more consistent.', negative: true },
+  { text: 'The withdrawal process can be slow sometimes, especially when the status remains pending for too long.', negative: true },
+  { text: 'Fee ya withdrawal imenishtua kidogo. Ningependa kujua exact charge kabla sija-confirm.', negative: true },
+  { text: 'Sometimes the withdrawal status takes too long to change. A faster update would make the process easier to follow.', negative: true },
+  { text: 'Bank withdrawal imeniletea challenge juu sina business bank account. Hii requirement inaweza kuwa hard.', negative: true },
+]
 
 function seededRandom(seed) {
   let value = seed >>> 0;
@@ -152,10 +143,7 @@ function maskPhone(person, index, random) {
 function buildDailyRecords() {
   const random = seededRandom(getDaySeed());
   const people = shuffleWithRandom(DEMO_REVIEW_PEOPLE, random);
-  const texts = shuffleWithRandom(
-    DEMO_REVIEW_TEXTS.map((text, index) => ({ text, negative: index >= NEGATIVE_START })),
-    random
-  );
+  const texts = shuffleWithRandom(DEMO_REVIEW_TEXTS, random);
 
   return people.map((person, index) => {
     const review = texts[index];
@@ -167,7 +155,9 @@ function buildDailyRecords() {
       country: person.country,
       phone,
       amount,
-      status: review.negative ? 'failed' : 'successful',
+      status: review.negative
+        ? (random() < 0.5 ? 'failed' : 'pending')
+        : 'successful',
       text: review.text,
       rating: review.negative ? 3 : index % 9 === 0 ? 4 : 5,
     };
@@ -197,6 +187,17 @@ export default function WithdrawalReviews() {
   const router = useRouter();
   const [tab, setTab] = useState('reviews');
   const records = useMemo(() => buildDailyRecords(), []);
+  const [visibleIndex, setVisibleIndex] = useState(0);
+
+  useEffect(() => {
+    if (!records.length) return undefined;
+    const timer = window.setInterval(() => {
+      setVisibleIndex((current) => (current + 1) % records.length);
+    }, 3600);
+    return () => window.clearInterval(timer);
+  }, [records.length]);
+
+  const visibleRecord = records[visibleIndex % Math.max(records.length, 1)];
 
   return (
     <div style={{
@@ -224,7 +225,7 @@ export default function WithdrawalReviews() {
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Withdrawal Reviews &amp; Testimonies</h1>
-            <p style={{ margin: '3px 0 0', color: '#bdbdbd', fontSize: 12 }}>Daily sample withdrawal activity and review templates</p>
+            <p style={{ margin: '3px 0 0', color: '#bdbdbd', fontSize: 12 }}>Rotating sample withdrawal notifications and review templates</p>
           </div>
         </div>
       </header>
@@ -234,8 +235,7 @@ export default function WithdrawalReviews() {
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 14px',
           marginBottom: 18, color: '#475569', fontSize: 12, lineHeight: 1.55,
         }}>
-          <strong>Real data:</strong>The names, masked phone numbers, earnings amounts, and testimonials displayed on this page are from real clients who have earned through the platform. Personal information is partially masked to protect client privacy. The displayed records are updated automatically each calendar day.
-
+          <strong>Demo data:</strong> the names, masked phone numbers, amounts and testimonies on this page are fictional sample/template records, not real customer transactions. The displayed set changes automatically each calendar day.
         </div>
 
         <div style={{
@@ -264,31 +264,110 @@ export default function WithdrawalReviews() {
         </div>
 
         {tab === 'reviews' ? (
-          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 12 }}>
-            {records.map((record) => (
-              <article key={record.id} style={{
-                background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: 16,
-                boxShadow: '0 1px 2px rgba(0,0,0,.03)',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <CountryBadge country={record.country} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, fontSize: 14 }}>{record.name}</div>
-                      <div style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>{record.phone} · {record.country}</div>
-                    </div>
+          <section
+            aria-live="polite"
+            style={{
+              minHeight: 170,
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+            }}
+          >
+            {visibleRecord && (
+              <article
+                key={visibleRecord.id}
+                style={{
+                  position: 'relative',
+                  width: 'min(440px, 92vw)',
+                  background: '#111827',
+                  color: '#fff',
+                  borderRadius: 999,
+                  padding: '11px 15px 11px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  boxShadow: '0 12px 32px rgba(0,0,0,.18)',
+                  animation: 'reviewPop 3.6s cubic-bezier(.22,1,.36,1) both',
+                  overflow: 'hidden',
+                }}
+              >
+                <CountryBadge country={visibleRecord.country} />
+
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    marginBottom: 2,
+                  }}>
+                    <span>{visibleRecord.name}</span>
+                    <span style={{ opacity: .55 }}>•</span>
+                    <span style={{ opacity: .65 }}>{visibleRecord.country}</span>
                   </div>
-                  <Stars n={record.rating} />
+
+                  <div style={{
+                    fontSize: 11.5,
+                    lineHeight: 1.35,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    opacity: .88,
+                  }}>
+                    {visibleRecord.text}
+                  </div>
                 </div>
-                <p style={{ margin: '0 0 14px', color: '#374151', lineHeight: 1.6, fontSize: 13.5, fontStyle: 'italic' }}>“{record.text}”</p>
-                <div style={{ borderTop: '1px solid #eef2f7', paddingTop: 11 }}>
-                  <span style={{ fontWeight: 800, fontSize: 12, color: '#374151' }}>
-                    <Icon name={record.status === 'failed' ? 'x' : 'check'} size={13} />{' '}
-                    {record.status === 'failed' ? 'Failed withdrawal' : `Withdrawn: ${formatKes(record.amount)}`}
-                  </span>
+
+                <div style={{
+                  flexShrink: 0,
+                  fontSize: 9,
+                  fontWeight: 800,
+                  opacity: .55,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.05em',
+                }}>
+                  {visibleRecord.status === 'failed'
+                    ? 'Failed'
+                    : visibleRecord.status === 'pending'
+                      ? 'Pending'
+                      : 'New'}
                 </div>
               </article>
-            ))}
+            )}
+
+            <style jsx>{`
+              @keyframes reviewPop {
+                0% {
+                  opacity: 0;
+                  transform: translateY(28px) scale(.82);
+                  filter: blur(5px);
+                }
+                8% {
+                  opacity: 1;
+                  transform: translateY(0) scale(1);
+                  filter: blur(0);
+                }
+                68% {
+                  opacity: 1;
+                  transform: translateY(0) scale(1);
+                  filter: blur(0);
+                }
+                100% {
+                  opacity: 0;
+                  transform: translateY(-28px) scale(.88);
+                  filter: blur(4px);
+                }
+              }
+
+              @media (prefers-reduced-motion: reduce) {
+                article {
+                  animation: none !important;
+                }
+              }
+            `}</style>
           </section>
         ) : (
           <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 9 }}>
@@ -307,7 +386,11 @@ export default function WithdrawalReviews() {
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{ fontWeight: 800, fontSize: 13 }}>{formatKes(record.amount)}</div>
                   <div style={{ color: '#6b7280', fontWeight: 700, fontSize: 10.5, marginTop: 2 }}>
-                    {record.status === 'failed' ? 'Failed withdrawal' : 'Successful withdrawal'}
+                    {record.status === 'failed'
+                      ? 'Failed withdrawal'
+                      : record.status === 'pending'
+                        ? 'Pending withdrawal'
+                        : 'Successful withdrawal'}
                   </div>
                 </div>
               </div>
@@ -318,3 +401,4 @@ export default function WithdrawalReviews() {
     </div>
   );
 }
+s
