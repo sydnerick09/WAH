@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Icon from '../components/Icon';
+import { getCurrentUser, getToken } from '../lib/auth';
 
 // These are fictional sample/template records. They are not real customer transactions.
 const DEMO_REVIEW_PEOPLE = [
@@ -164,6 +165,11 @@ function buildDailyRecords() {
   });
 }
 
+function shuffleRealAndDemo(items, seed) {
+  const random = seededRandom(seed >>> 0);
+  return shuffleWithRandom(items, random);
+}
+
 function Stars({ n }) {
   return (
     <span aria-label={`${n} out of 5 stars`} style={{ color: '#6b7280', fontSize: 13, letterSpacing: 1 }}>
@@ -187,17 +193,90 @@ export default function WithdrawalReviews() {
   const router = useRouter();
   const [tab, setTab] = useState('reviews');
   const records = useMemo(() => buildDailyRecords(), []);
+  const [approvedReviews, setApprovedReviews] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewSending, setReviewSending] = useState(false);
+  const [reviewMessage, setReviewMessage] = useState(null);
   const [visibleIndex, setVisibleIndex] = useState(0);
 
+  const mixedRecords = useMemo(() => {
+    const genuine = approvedReviews.map((review) => ({
+      ...review,
+      kind: 'real',
+      status: 'approved',
+      rating: 5,
+    }));
+    return shuffleRealAndDemo([...records, ...genuine], getDaySeed() ^ 0x9e3779b9);
+  }, [records, approvedReviews]);
+
   useEffect(() => {
-    if (!records.length) return undefined;
+    let cancelled = false;
+    async function loadReviews() {
+      try {
+        const response = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op: 'listApprovedReviews' }),
+        });
+        const data = await response.json();
+        if (!cancelled && Array.isArray(data.data)) setApprovedReviews(data.data);
+      } catch (_) {}
+    }
+    async function loadUser() {
+      try {
+        const user = await getCurrentUser();
+        if (!cancelled) setCurrentUser(user || null);
+      } catch (_) {
+        if (!cancelled) setCurrentUser(null);
+      }
+    }
+    loadReviews();
+    loadUser();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!mixedRecords.length) return undefined;
     const timer = window.setInterval(() => {
-      setVisibleIndex((current) => (current + 1) % records.length);
+      setVisibleIndex((current) => (current + 1) % mixedRecords.length);
     }, 3600);
     return () => window.clearInterval(timer);
-  }, [records.length]);
+  }, [mixedRecords.length]);
 
-  const visibleRecord = records[visibleIndex % Math.max(records.length, 1)];
+  const visibleRecord = mixedRecords[visibleIndex % Math.max(mixedRecords.length, 1)];
+
+  async function submitReview() {
+    const text = reviewText.trim();
+    if (!currentUser) {
+      setReviewMessage({ type: 'err', text: 'Please log in as a client before submitting a review.' });
+      return;
+    }
+    if (!text) {
+      setReviewMessage({ type: 'err', text: 'Please write your review first.' });
+      return;
+    }
+    setReviewSending(true);
+    setReviewMessage(null);
+    try {
+      const response = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'submitReview', authToken: getToken(), reviewText: text }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setReviewText('');
+        setReviewMessage({ type: 'ok', text: 'Review sent. It is now pending admin approval.' });
+      } else {
+        setReviewMessage({ type: 'err', text: data.error || data.message || 'Could not submit the review.' });
+      }
+    } catch (_) {
+      setReviewMessage({ type: 'err', text: 'Network error. Please try again.' });
+    } finally {
+      setReviewSending(false);
+    }
+  }
 
   return (
     <div style={{
@@ -225,7 +304,7 @@ export default function WithdrawalReviews() {
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Withdrawal Reviews &amp; Testimonies</h1>
-            <p style={{ margin: '3px 0 0', color: '#bdbdbd', fontSize: 12 }}>Rotating sample withdrawal notifications and review templates</p>
+            <p style={{ margin: '3px 0 0', color: '#bdbdbd', fontSize: 12 }}>Rotating withdrawal notifications and approved client reviews</p>
           </div>
         </div>
       </header>
@@ -235,7 +314,7 @@ export default function WithdrawalReviews() {
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 14px',
           marginBottom: 18, color: '#475569', fontSize: 12, lineHeight: 1.55,
         }}>
-          <strong>Demo data:</strong> the names, masked phone numbers, amounts and testimonies on this page are fictional sample/template records, not real customer transactions. The displayed set changes automatically each calendar day.
+          <strong>Sample data:</strong> the rotating withdrawal records are fictional sample/template records. Genuine client reviews appear only after the client submits them and an admin approves them.
         </div>
 
         <div style={{
@@ -262,6 +341,46 @@ export default function WithdrawalReviews() {
             </button>
           ))}
         </div>
+
+        {tab === 'reviews' && (
+          <section style={{
+            background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12,
+            padding: 16, marginBottom: 18,
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 5 }}>Share your experience</div>
+            {currentUser ? (
+              <>
+                <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 10 }}>
+                  Your account name, phone number and country are taken automatically from your client account. Only the phone number is masked publicly.
+                </div>
+                <textarea
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  maxLength={1200}
+                  rows={3}
+                  placeholder="Write your review…"
+                  style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', border: '1px solid #d1d5db', borderRadius: 9, padding: 11, fontSize: 13, fontFamily: 'inherit', color: '#111827', outline: 'none' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>Reviews are published only after admin approval.</span>
+                  <button
+                    type="button"
+                    onClick={submitReview}
+                    disabled={reviewSending}
+                    style={{ border: 'none', borderRadius: 8, padding: '9px 14px', background: '#111827', color: '#fff', fontWeight: 800, fontSize: 12, cursor: reviewSending ? 'wait' : 'pointer', opacity: reviewSending ? .65 : 1 }}
+                  >
+                    {reviewSending ? 'Sending…' : 'Send Review'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12.5, color: '#475569' }}>Log in as a client to submit a review.</div>
+            )}
+            {reviewMessage && (
+              <div style={{ marginTop: 10, fontSize: 12, color: '#374151' }}>{reviewMessage.text}</div>
+            )}
+          </section>
+        )}
 
         {tab === 'reviews' ? (
           <section
