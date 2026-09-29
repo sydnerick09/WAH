@@ -819,6 +819,116 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
   );
 }
 
+// ─── Client Reviews Tab ─────────────────────────────────────────────────────
+function ReviewsTab({ secret }) {
+  const [reviews, setReviews] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState({});
+  const [filter, setFilter] = useState('pending');
+  const [msg, setMsg] = useState({});
+
+  async function load() {
+    const res = await dbProxy('adminListReviews', { adminSecret: secret });
+    setLoaded(true);
+    if (res.error) { setErr(res.error); setReviews([]); return; }
+    setErr(''); setReviews(res.data || []);
+  }
+
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  async function updateStatus(review, status) {
+    setBusy(p => ({ ...p, [review.id]: true }));
+    setMsg(p => { const n = { ...p }; delete n[review.id]; return n; });
+    const res = await dbProxy('adminUpdateReview', {
+      adminSecret: secret,
+      reviewId: review.id,
+      status,
+    });
+    setBusy(p => ({ ...p, [review.id]: false }));
+    if (res.success) {
+      setMsg(p => ({ ...p, [review.id]: { ok: true, text: `Review ${status}.` } }));
+      await load();
+    } else {
+      setMsg(p => ({ ...p, [review.id]: { ok: false, text: res.error || 'Failed.' } }));
+    }
+  }
+
+  const counts = reviews.reduce((m, r) => { m[r.status] = (m[r.status] || 0) + 1; return m; }, {});
+  const filtered = filter === 'all' ? reviews : reviews.filter(r => r.status === filter);
+
+  return (
+    <div style={{ padding: '20px 32px' }}>
+      {err && (
+        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
+          ⚠️ Could not load reviews: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {[['all', 'All'], ['pending', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected']].map(([k, label]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            style={{ padding: '7px 14px', borderRadius: 999, border: '1.5px solid ' + (filter === k ? '#111827' : '#E2E8F0'),
+              background: filter === k ? '#111827' : '#fff', color: filter === k ? '#fff' : '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            {label}{k !== 'all' && counts[k] ? ` (${counts[k]})` : ''}
+          </button>
+        ))}
+        <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 13, width: 'auto', marginLeft: 'auto' }} onClick={load}>Refresh</button>
+      </div>
+
+      <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
+        {loaded ? `${filtered.length} review${filtered.length === 1 ? '' : 's'}` : 'Loading…'} · approved reviews are shown on the public withdrawal/reviews page.
+      </div>
+
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead><tr>{['Client', 'Country', 'Phone', 'Review', 'Submitted', 'Status', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {filtered.map(r => {
+              const b = busy[r.id];
+              const m = msg[r.id];
+              return (
+                <tr key={r.id} style={styles.tr}>
+                  <td style={styles.td}>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{r.name || '—'}</div>
+                    <div style={{ fontSize: 10, color: '#94A3B8' }}>ID: {r.userId || '—'}</div>
+                  </td>
+                  <td style={styles.td}>{r.country || '—'}</td>
+                  <td style={{ ...styles.td, whiteSpace: 'nowrap' }}>{r.phone || '—'}</td>
+                  <td style={{ ...styles.td, maxWidth: 420, whiteSpace: 'pre-wrap', fontSize: 12.5, color: '#334155' }}>{r.text || '—'}</td>
+                  <td style={{ ...styles.td, whiteSpace: 'nowrap', fontSize: 12 }}>{fmtDate(r.createdAt ? new Date(r.createdAt).getTime() : null)}</td>
+                  <td style={styles.td}><span style={{ ...styles.badge, background: STATUS_COLORS[r.status]?.bg || '#f3f4f6', color: STATUS_COLORS[r.status]?.color || '#374151' }}>{r.status}</span></td>
+                  <td style={{ ...styles.td, minWidth: 160 }}>
+                    {r.status !== 'approved' && (
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 11, width: 'auto', marginRight: 6 }} disabled={b} onClick={() => updateStatus(r, 'approved')}>
+                        {b ? 'Saving…' : 'Approve'}
+                      </button>
+                    )}
+                    {r.status !== 'rejected' && (
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 11, width: 'auto', background: '#6b7280' }} disabled={b} onClick={() => updateStatus(r, 'rejected')}>
+                        Reject
+                      </button>
+                    )}
+                    {r.status !== 'pending' && (
+                      <button style={{ ...styles.btn, padding: '6px 10px', fontSize: 11, width: 'auto', background: '#9ca3af', marginLeft: 6 }} disabled={b} onClick={() => updateStatus(r, 'pending')}>
+                        Pending
+                      </button>
+                    )}
+                    {m && <div style={{ marginTop: 6, fontSize: 11, color: '#374151' }}>{m.text}</div>}
+                  </td>
+                </tr>
+              );
+            })}
+            {loaded && filtered.length === 0 && !err && (
+              <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No reviews with this status.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Broadcast Email Tab ──────────────────────────────────────────────────────
 function BroadcastTab({ secret, userCount }) {
   const [subject, setSubject] = useState(BROADCAST_DEFAULT_SUBJECT);
@@ -1664,6 +1774,7 @@ export default function AdminPanel() {
         {[
           { key: 'users',        label: `👤 Users (${users.length})` },
           { key: 'withdrawals',  label: `💸 Withdrawals (${withdrawals.length})` },
+          { key: 'reviews',      label: '⭐ Reviews' },
           { key: 'transactions', label: '💳 Transactions' },
           { key: 'tasks',        label: '📋 Tasks' },
           { key: 'applications', label: '📝 Applications' },
@@ -1681,6 +1792,7 @@ export default function AdminPanel() {
 
       {tab === 'users'        && <UsersTab        users={users}             secret={secret} onRefresh={refresh} />}
       {tab === 'withdrawals'  && <WithdrawalsTab  withdrawals={withdrawals} secret={secret} onRefresh={refresh} />}
+      {tab === 'reviews'      && <ReviewsTab      secret={secret} />}
       {tab === 'transactions' && <TransactionsTab secret={secret} />}
       {tab === 'tasks'        && <TasksTab        secret={secret} />}
       {tab === 'applications' && <ApplicationsTab secret={secret} />}
