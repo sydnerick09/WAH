@@ -146,7 +146,7 @@ function buildDailyRecords() {
   const texts = shuffleWithRandom(DEMO_REVIEW_TEXTS, random);
 
   return people.map((person, index) => {
-    const review = texts[index];
+    const review = texts[index % texts.length];
     const amount = 6000 + Math.floor(random() * 16001); // KES 6,000–22,000
     const phone = maskPhone(person, index, random);
     return {
@@ -523,3 +523,4 @@ export default function WithdrawalReviews() {
     </div>
   );
 }
+s
