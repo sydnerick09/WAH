@@ -25,7 +25,7 @@ const DEMO_REVIEW_PEOPLE = [
   { name: 'Paul Maina', country: 'Kenya', prefix: '+25471' },
   { name: 'Ann Wambui', country: 'Kenya', prefix: '+25410' },
   { name: 'Samuel Kipchoge', country: 'Kenya', prefix: '+25479' },
-  { name: 'Mercy Auma', country: 'Kenya', prefix: '+25411' },
+  { name: 'Erick omondi', country: 'Kenya', prefix: '+25411' },
   { name: 'Brian Kamau', country: 'Kenya', prefix: '+25474' },
   { name: 'Faith Chepkirui', country: 'Kenya', prefix: '+25412' },
   { name: 'Kevin Ouma', country: 'Kenya', prefix: '+25476' },
