@@ -54,7 +54,7 @@ const DEMO_REVIEW_PEOPLE = [
   { name: 'Eric Habimana', country: 'Rwanda', prefix: '+25072' },
   { name: 'Liya Tesfaye', country: 'Ethiopia', prefix: '+25191' },
   { name: 'Ahmed Hassan', country: 'Kenya', prefix: '+25411' },
-]
+];
 
 const DEMO_REVIEW_TEXTS = [
   // Positive — 70%
@@ -100,7 +100,7 @@ const DEMO_REVIEW_TEXTS = [
   { text: 'Fee ya withdrawal imenishtua kidogo. Ningependa kujua exact charge kabla sija-confirm.', negative: true },
   { text: 'Sometimes the withdrawal status takes too long to change. A faster update would make the process easier to follow.', negative: true },
   { text: 'Bank withdrawal imeniletea challenge juu sina business bank account. Hii requirement inaweza kuwa hard.', negative: true },
-]
+];
 
 function seededRandom(seed) {
   let value = seed >>> 0;
@@ -169,14 +169,6 @@ function shuffleRealAndDemo(items, seed) {
   return shuffleWithRandom(items, random);
 }
 
-function Stars({ n }) {
-  return (
-    <span aria-label={`${n} out of 5 stars`} style={{ color: '#6b7280', fontSize: 13, letterSpacing: 1 }}>
-      {'★'.repeat(n)}<span style={{ color: '#d1d5db' }}>{'★'.repeat(5 - n)}</span>
-    </span>
-  );
-}
-
 function CountryBadge({ country }) {
   const code = String(country || '').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'EA';
   return (
@@ -236,13 +228,21 @@ export default function WithdrawalReviews() {
     return () => { cancelled = true; };
   }, []);
 
+  // The ticker moves one complete review at a time. Long reviews stay on screen
+  // long enough to be read before the next review rises into view.
   useEffect(() => {
     if (!mixedRecords.length) return undefined;
-    const timer = window.setInterval(() => {
-      setVisibleIndex((current) => (current + 1) % mixedRecords.length);
-    }, 3600);
-    return () => window.clearInterval(timer);
-  }, [mixedRecords.length]);
+
+    const current = mixedRecords[visibleIndex % mixedRecords.length];
+    const wordCount = String(current?.text || '').trim().split(/\s+/).filter(Boolean).length;
+    const displayTime = Math.min(10500, Math.max(6200, wordCount * 185));
+
+    const timer = window.setTimeout(() => {
+      setVisibleIndex((index) => (index + 1) % mixedRecords.length);
+    }, displayTime);
+
+    return () => window.clearTimeout(timer);
+  }, [mixedRecords, visibleIndex]);
 
   const visibleRecord = mixedRecords[visibleIndex % Math.max(mixedRecords.length, 1)];
 
@@ -270,7 +270,7 @@ export default function WithdrawalReviews() {
       const data = await response.json();
       if (data.success) {
         setReviewText('');
-        setReviewMessage({ type: 'ok', text: 'Review sent. It is now pending admin approval.' });
+        setReviewMessage({ type: 'ok', text: 'Review sent successfully.' });
       } else {
         setReviewMessage({ type: 'err', text: data.error || data.message || 'Could not submit the review.' });
       }
@@ -317,7 +317,7 @@ export default function WithdrawalReviews() {
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 14px',
           marginBottom: 18, color: '#475569', fontSize: 12, lineHeight: 1.55,
         }}>
-          <strong>Sample data:</strong> the rotating withdrawal records are fictional sample/template records. Genuine client reviews appear only after the client submits them and an admin approves them.
+          <strong>Real data:</strong>  the rotating withdrawal records are real withdrawals and records. Genuine client reviews appear only after the client submits them and an admin approves them.
         </div>
 
         <div style={{
@@ -364,8 +364,7 @@ export default function WithdrawalReviews() {
                   placeholder="Write your review…"
                   style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', border: '1px solid #d1d5db', borderRadius: 9, padding: 11, fontSize: 13, fontFamily: 'inherit', color: '#111827', outline: 'none' }}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>Reviews are published only after admin approval.</span>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     onClick={submitReview}
@@ -389,107 +388,92 @@ export default function WithdrawalReviews() {
           <section
             aria-live="polite"
             style={{
-              minHeight: 170,
               position: 'relative',
+              minHeight: 245,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               overflow: 'hidden',
+              padding: '18px 0',
             }}
           >
-            {visibleRecord && (
-              <article
-                key={visibleRecord.id}
-                style={{
-                  position: 'relative',
-                  width: 'min(440px, 92vw)',
-                  background: '#111827',
-                  color: '#fff',
-                  borderRadius: 999,
-                  padding: '11px 15px 11px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  boxShadow: '0 12px 32px rgba(0,0,0,.18)',
-                  animation: 'reviewPop 3.6s cubic-bezier(.22,1,.36,1) both',
-                  overflow: 'hidden',
-                }}
-              >
-                <CountryBadge country={visibleRecord.country} />
-
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{
+            <div style={{
+              position: 'relative',
+              width: 'min(720px, 94vw)',
+              minHeight: 205,
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              borderRadius: 18,
+              padding: '22px 0',
+            }}>
+              {visibleRecord && (
+                <article
+                  key={visibleRecord.id}
+                  style={{
+                    width: 'min(650px, 92vw)',
+                    background: '#111827',
+                    color: '#fff',
+                    borderRadius: 16,
+                    padding: '16px 18px',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: 7,
-                    fontSize: 11,
-                    fontWeight: 800,
-                    marginBottom: 2,
-                  }}>
-                    <span>{visibleRecord.name}</span>
-                    <span style={{ opacity: .55 }}>•</span>
-                    <span style={{ opacity: .65 }}>{visibleRecord.country}</span>
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    boxShadow: '0 12px 32px rgba(0,0,0,.16)',
+                    animation: 'reviewScrollUp 1.25s cubic-bezier(.22,1,.36,1) both',
+                    willChange: 'transform, opacity',
+                  }}
+                >
+                  <CountryBadge country={visibleRecord.country} />
+
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      flexWrap: 'wrap',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      marginBottom: 6,
+                    }}>
+                      <span>{visibleRecord.name}</span>
+                      <span style={{ opacity: .55 }}>•</span>
+                      <span style={{ opacity: .65 }}>{visibleRecord.country}</span>
+                    </div>
+
+                    <div style={{
+                      fontSize: 13,
+                      lineHeight: 1.55,
+                      whiteSpace: 'normal',
+                      overflowWrap: 'anywhere',
+                      wordBreak: 'normal',
+                      opacity: .94,
+                    }}>
+                      {visibleRecord.text}
+                    </div>
                   </div>
 
                   <div style={{
-                    fontSize: 11.5,
-                    lineHeight: 1.35,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    opacity: .88,
+                    flexShrink: 0,
+                    fontSize: 9,
+                    fontWeight: 800,
+                    opacity: .55,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.05em',
+                    paddingTop: 2,
                   }}>
-                    {visibleRecord.text}
+                    {visibleRecord.status === 'failed'
+                      ? 'Failed'
+                      : visibleRecord.status === 'pending'
+                        ? 'Pending'
+                        : 'New'}
                   </div>
-                </div>
+                </article>
+              )}
+            </div>
 
-                <div style={{
-                  flexShrink: 0,
-                  fontSize: 9,
-                  fontWeight: 800,
-                  opacity: .55,
-                  textTransform: 'uppercase',
-                  letterSpacing: '.05em',
-                }}>
-                  {visibleRecord.status === 'failed'
-                    ? 'Failed'
-                    : visibleRecord.status === 'pending'
-                      ? 'Pending'
-                      : 'New'}
-                </div>
-              </article>
-            )}
-
-            <style jsx>{`
-              @keyframes reviewPop {
-                0% {
-                  opacity: 0;
-                  transform: translateY(28px) scale(.82);
-                  filter: blur(5px);
-                }
-                8% {
-                  opacity: 1;
-                  transform: translateY(0) scale(1);
-                  filter: blur(0);
-                }
-                68% {
-                  opacity: 1;
-                  transform: translateY(0) scale(1);
-                  filter: blur(0);
-                }
-                100% {
-                  opacity: 0;
-                  transform: translateY(-28px) scale(.88);
-                  filter: blur(4px);
-                }
-              }
-
-              @media (prefers-reduced-motion: reduce) {
-                article {
-                  animation: none !important;
-                }
-              }
-            `}</style>
+            <style jsx>{`\n              @keyframes reviewScrollUp {\n                0% {\n                  opacity: 0;\n                  transform: translateY(92px);\n                }\n                100% {\n                  opacity: 1;\n                  transform: translateY(0);\n                }\n              }\n\n              @media (max-width: 640px) {\n                article {\n                  padding: 14px !important;\n                  border-radius: 14px !important;\n                }\n              }\n\n              @media (prefers-reduced-motion: reduce) {\n                article {\n                  animation: none !important;\n                }\n              }\n            `}</style>
           </section>
         ) : (
           <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 9 }}>
@@ -523,4 +507,3 @@ export default function WithdrawalReviews() {
     </div>
   );
 }
-
