@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Icon from '../components/Icon';
-import { getCurrentUser, getToken } from '../lib/auth';
 
 // These are fictional sample/template records. They are not real customer transactions.
 const DEMO_REVIEW_PEOPLE = [
@@ -225,7 +224,8 @@ export default function WithdrawalReviews() {
     }
     async function loadUser() {
       try {
-        const user = await getCurrentUser();
+        const auth = await import('../lib/auth');
+        const user = await auth.getCurrentUser();
         if (!cancelled) setCurrentUser(user || null);
       } catch (_) {
         if (!cancelled) setCurrentUser(null);
@@ -259,10 +259,13 @@ export default function WithdrawalReviews() {
     setReviewSending(true);
     setReviewMessage(null);
     try {
+      const auth = await import('../lib/auth');
+      const token = auth.getToken();
+
       const response = await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ op: 'submitReview', authToken: getToken(), reviewText: text }),
+        body: JSON.stringify({ op: 'submitReview', authToken: token, reviewText: text }),
       });
       const data = await response.json();
       if (data.success) {
@@ -520,4 +523,3 @@ export default function WithdrawalReviews() {
     </div>
   );
 }
-
