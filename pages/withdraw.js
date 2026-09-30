@@ -147,16 +147,16 @@ const BANK_WITHDRAWAL_FEES_USD = {
   // Kenya — supplied figures
   'CB Bank': 23,
   'NCBA Bank': 27,
-  'Co-operative Bank of Kenya': 28,
-  'Co-operative Bank': 28,
+  'Co-operative Bank of Kenya': 38,
+  'Co-operative Bank': 48,
   'Equity Bank': 25,
   'Absa Bank Kenya': 29,
   'Standard Chartered Bank': 24,
-  'Stanbic Bank Kenya': 27,
-  'Postbank Kenya': 28,
-  'Family Bank of Kenya': 29,
-  'DTB Bank': 19,
-  'KCB Bank': 26,
+  'Stanbic Bank Kenya': 49,
+  'Postbank Kenya': 38,
+  'Family Bank of Kenya': 39,
+  'DTB Bank': 29,
+  'KCB Bank': 36,
 
   // Uganda / Sudan / Tanzania — supplied ranges converted to fixed fees
   'Stanbic Bank Uganda': 22,
