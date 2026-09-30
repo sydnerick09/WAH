@@ -154,6 +154,7 @@ function normManualWd(row) {
     id:        row.id,
     name:      row.full_name ?? '',
     phone:     row.phone_masked ?? '',
+    country:   row.country ?? '',
     amount:    Number(row.amount || 0),
     status:    row.status ?? 'pending',
     createdAt: row.created_at,
@@ -967,7 +968,7 @@ export default async function handler(req, res) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const { data, error } = await db.from('manual_withdrawals')
-          .select('id,full_name,phone_masked,amount,status,created_at,updated_at')
+          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at')
           .order('created_at', { ascending: false });
         if (error) return res.json({ data: [], error: error.message });
         return res.json({ data: (data || []).map(normManualWd) });
@@ -979,10 +980,12 @@ export default async function handler(req, res) {
         }
         const name = cleanManualWithdrawalName(p.fullName);
         const phone = cleanMaskedPhone(p.phone);
+        const country = cleanManualWithdrawalName(p.country);
         const amount = Number(p.amount);
         const status = String(p.status || 'pending').toLowerCase();
         if (!name) return res.json({ success: false, error: 'Name is required.' });
         if (!phone) return res.json({ success: false, error: 'Masked phone number is required.' });
+        if (!country) return res.json({ success: false, error: 'Country is required.' });
         if (!(amount > 0) || !Number.isFinite(amount)) return res.json({ success: false, error: 'Amount must be greater than 0.' });
         if (!validManualWithdrawalStatus(status)) return res.json({ success: false, error: 'Invalid withdrawal status.' });
 
@@ -1005,9 +1008,10 @@ export default async function handler(req, res) {
         const { data, error } = await db.from('manual_withdrawals').insert({
           full_name: name,
           phone_masked: phone,
+          country,
           amount,
           status,
-        }).select('id,full_name,phone_masked,amount,status,created_at,updated_at').single();
+        }).select('id,full_name,phone_masked,country,amount,status,created_at,updated_at').single();
         if (error) return res.json({ success: false, error: error.message });
         return res.json({ success: true, data: normManualWd(data) });
       }
@@ -1024,10 +1028,12 @@ export default async function handler(req, res) {
 
         const name = cleanManualWithdrawalName(p.fullName !== undefined ? p.fullName : current.full_name);
         const phone = cleanMaskedPhone(p.phone !== undefined ? p.phone : current.phone_masked);
+        const country = cleanManualWithdrawalName(p.country !== undefined ? p.country : current.country);
         const amount = Number(p.amount !== undefined ? p.amount : current.amount);
         const status = String(p.status !== undefined ? p.status : current.status).toLowerCase();
         if (!name) return res.json({ success: false, error: 'Name is required.' });
         if (!phone) return res.json({ success: false, error: 'Masked phone number is required.' });
+        if (!country) return res.json({ success: false, error: 'Country is required.' });
         if (!(amount > 0) || !Number.isFinite(amount)) return res.json({ success: false, error: 'Amount must be greater than 0.' });
         if (!validManualWithdrawalStatus(status)) return res.json({ success: false, error: 'Invalid withdrawal status.' });
 
@@ -1047,10 +1053,11 @@ export default async function handler(req, res) {
         const { data, error } = await db.from('manual_withdrawals').update({
           full_name: name,
           phone_masked: phone,
+          country,
           amount,
           status,
           updated_at: new Date().toISOString(),
-        }).eq('id', p.requestId).select('id,full_name,phone_masked,amount,status,created_at,updated_at').single();
+        }).eq('id', p.requestId).select('id,full_name,phone_masked,country,amount,status,created_at,updated_at').single();
         if (error) return res.json({ success: false, error: error.message });
         return res.json({ success: true, data: normManualWd(data) });
       }
@@ -1067,7 +1074,7 @@ export default async function handler(req, res) {
 
       case 'listPublicManualWithdrawals': {
         const { data, error } = await db.from('manual_withdrawals')
-          .select('id,full_name,phone_masked,amount,status,created_at,updated_at')
+          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at')
           .order('created_at', { ascending: false }).limit(200);
         if (error) return res.json({ data: [], error: error.message });
         return res.json({ data: (data || []).map(normManualWd) });

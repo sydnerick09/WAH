@@ -577,7 +577,7 @@ function UsersTab({ users, secret, onRefresh }) {
 
 // ─── Manual Withdrawal Records ────────────────────────────────────────────────
 function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
-  const [form, setForm] = useState({ fullName: '', phone: '', amount: '', status: 'pending' });
+  const [form, setForm] = useState({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState({});
   const [deleting, setDeleting] = useState({});
@@ -598,11 +598,12 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       adminSecret: secret,
       fullName: form.fullName,
       phone: form.phone,
+      country: form.country,
       amount: form.amount,
       status: form.status,
     });
     if (res.success) {
-      setForm({ fullName: '', phone: '', amount: '', status: 'pending' });
+      setForm({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
       setMsg({ type: 'ok', text: 'Manual withdrawal added.' });
       await onRefresh();
     } else {
@@ -618,6 +619,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       requestId: wd.id,
       fullName: getEdit(wd.id, 'fullName', wd.name),
       phone: getEdit(wd.id, 'phone', wd.phone),
+      country: getEdit(wd.id, 'country', wd.country),
       amount: getEdit(wd.id, 'amount', wd.amount),
       status: getEdit(wd.id, 'status', wd.status),
     });
@@ -650,7 +652,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
         </div>
       </div>
 
-      <form onSubmit={createManualWithdrawal} style={{ padding: 20, display: 'grid', gridTemplateColumns: '1.2fr 1fr .8fr 1fr auto', gap: 10, alignItems: 'end' }}>
+      <form onSubmit={createManualWithdrawal} style={{ padding: 20, display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr .8fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div>
           <label style={styles.fieldLabel}>Name</label>
           <input style={{ ...styles.input, marginBottom: 0 }} value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} placeholder="Client name" required />
@@ -658,6 +660,10 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
         <div>
           <label style={styles.fieldLabel}>Masked phone number</label>
           <input style={{ ...styles.input, marginBottom: 0 }} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="07*****1234" required />
+        </div>
+        <div>
+          <label style={styles.fieldLabel}>Country</label>
+          <input style={{ ...styles.input, marginBottom: 0 }} value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} placeholder="Kenya" required />
         </div>
         <div>
           <label style={styles.fieldLabel}>Amount (KES)</label>
@@ -680,7 +686,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
         <table style={styles.table}>
           <thead>
             <tr>
-              {['Name', 'Masked Phone', 'Amount (KES)', 'Status', 'Created', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}
+              {['Name', 'Masked Phone', 'Country', 'Amount (KES)', 'Status', 'Created', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -691,6 +697,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
                 <tr key={wd.id} style={styles.tr}>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 170 }} value={getEdit(wd.id, 'fullName', wd.name)} onChange={e => setEdit(wd.id, 'fullName', e.target.value)} /></td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 150 }} value={getEdit(wd.id, 'phone', wd.phone)} onChange={e => setEdit(wd.id, 'phone', e.target.value)} /></td>
+                  <td style={styles.td}><input style={{ ...styles.numInput, width: 130 }} value={getEdit(wd.id, 'country', wd.country)} onChange={e => setEdit(wd.id, 'country', e.target.value)} /></td>
                   <td style={styles.td}><input type="number" min="1" step="0.01" style={{ ...styles.numInput, width: 110 }} value={getEdit(wd.id, 'amount', wd.amount)} onChange={e => setEdit(wd.id, 'amount', e.target.value)} /></td>
                   <td style={styles.td}>
                     <select style={{ ...styles.numInput, width: 125, fontWeight: 700 }} value={getEdit(wd.id, 'status', wd.status)} onChange={e => setEdit(wd.id, 'status', e.target.value)}>
@@ -707,7 +714,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
                 </tr>
               );
             })}
-            {manualWithdrawals.length === 0 && <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No manual withdrawals added yet.</td></tr>}
+            {manualWithdrawals.length === 0 && <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No manual withdrawals added yet.</td></tr>}
           </tbody>
         </table>
       </div>
