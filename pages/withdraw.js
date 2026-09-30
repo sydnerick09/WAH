@@ -131,9 +131,17 @@ const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 // Above KES 40,000 → M-Pesa is unavailable; use the bank withdrawal flow.
 function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
-  if (amount <= 10000) return 650;
-  if (amount <= 20000) return 2000;
-  if (amount <= 30000) return 3000;
+
+  // M-Pesa withdrawal fee brackets:
+  // Below KES 5,000       -> KES 650
+  // KES 5,000 - 10,000    -> KES 1,000
+  // KES 10,001 - 20,000   -> KES 1,500
+  // KES 20,001 - 30,000   -> KES 2,200
+  // Above KES 30,000      -> KES 3,800
+  if (amount < 5000) return 650;
+  if (amount <= 10000) return 1000;
+  if (amount <= 20000) return 1500;
+  if (amount <= 30000) return 2200;
   return 3800;
 }
 
