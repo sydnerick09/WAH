@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { TASKS } from '../../lib/tasks';
 import { verifyUnsubToken } from '../../lib/unsubToken';
@@ -147,6 +146,31 @@ function normWd(row) {
     requestedAt: row.requested_at,
     updatedAt:   row.updated_at  ?? null,
   };
+}
+
+function normManualWd(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    name:      row.full_name ?? '',
+    phone:     row.phone_masked ?? '',
+    amount:    Number(row.amount || 0),
+    status:    row.status ?? 'pending',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
+function validManualWithdrawalStatus(status) {
+  return ['pending', 'successful', 'failed'].includes(String(status || '').toLowerCase());
+}
+
+function cleanManualWithdrawalName(value) {
+  return clean(value, 80).trim();
+}
+
+function cleanMaskedPhone(value) {
+  return clean(value, 30).trim();
 }
 
 // Always show a recent-looking posted date (within the last 6 days), stable
@@ -936,6 +960,117 @@ export default async function handler(req, res) {
           .update(updates).eq('id', userId).select().single();
         if (updErr) return res.json({ success: false, error: updErr.message });
         return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'adminListManualWithdrawals': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { data, error } = await db.from('manual_withdrawals')
+          .select('id,full_name,phone_masked,amount,status,created_at,updated_at')
+          .order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normManualWd) });
+      }
+
+      case 'adminCreateManualWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const name = cleanManualWithdrawalName(p.fullName);
+        const phone = cleanMaskedPhone(p.phone);
+        const amount = Number(p.amount);
+        const status = String(p.status || 'pending').toLowerCase();
+        if (!name) return res.json({ success: false, error: 'Name is required.' });
+        if (!phone) return res.json({ success: false, error: 'Masked phone number is required.' });
+        if (!(amount > 0) || !Number.isFinite(amount)) return res.json({ success: false, error: 'Amount must be greater than 0.' });
+        if (!validManualWithdrawalStatus(status)) return res.json({ success: false, error: 'Invalid withdrawal status.' });
+
+        // A client cannot have another non-failed manual withdrawal within 24 hours.
+        // A failed withdrawal may be followed by one new attempt; after that attempt,
+        // the new pending/successful record blocks another withdrawal until 24 hours pass.
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: recent, error: recentErr } = await db.from('manual_withdrawals')
+          .select('id,status,created_at').eq('phone_masked', phone)
+          .gte('created_at', since).order('created_at', { ascending: false }).limit(1);
+        if (recentErr) return res.json({ success: false, error: recentErr.message });
+        const latest = recent?.[0];
+        if (latest && latest.status !== 'failed') {
+          return res.json({ success: false, error: 'This masked phone number already has a withdrawal within the last 24 hours. It cannot be withdrawn twice in one day.' });
+        }
+        if (latest && latest.status === 'failed' && status === 'failed') {
+          return res.json({ success: false, error: 'A failed withdrawal cannot be recorded twice within 24 hours. The next attempt must be pending or successful.' });
+        }
+
+        const { data, error } = await db.from('manual_withdrawals').insert({
+          full_name: name,
+          phone_masked: phone,
+          amount,
+          status,
+        }).select('id,full_name,phone_masked,amount,status,created_at,updated_at').single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, data: normManualWd(data) });
+      }
+
+      case 'adminUpdateManualWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        if (!p.requestId) return res.json({ success: false, error: 'Missing manual withdrawal ID.' });
+        const { data: current, error: currentErr } = await db.from('manual_withdrawals')
+          .select('*').eq('id', p.requestId).maybeSingle();
+        if (currentErr) return res.json({ success: false, error: currentErr.message });
+        if (!current) return res.json({ success: false, error: 'Manual withdrawal not found.' });
+
+        const name = cleanManualWithdrawalName(p.fullName !== undefined ? p.fullName : current.full_name);
+        const phone = cleanMaskedPhone(p.phone !== undefined ? p.phone : current.phone_masked);
+        const amount = Number(p.amount !== undefined ? p.amount : current.amount);
+        const status = String(p.status !== undefined ? p.status : current.status).toLowerCase();
+        if (!name) return res.json({ success: false, error: 'Name is required.' });
+        if (!phone) return res.json({ success: false, error: 'Masked phone number is required.' });
+        if (!(amount > 0) || !Number.isFinite(amount)) return res.json({ success: false, error: 'Amount must be greater than 0.' });
+        if (!validManualWithdrawalStatus(status)) return res.json({ success: false, error: 'Invalid withdrawal status.' });
+
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: recent, error: recentErr } = await db.from('manual_withdrawals')
+          .select('id,status,created_at').eq('phone_masked', phone).neq('id', p.requestId)
+          .gte('created_at', since).order('created_at', { ascending: false }).limit(1);
+        if (recentErr) return res.json({ success: false, error: recentErr.message });
+        const latest = recent?.[0];
+        if (latest && latest.status !== 'failed') {
+          return res.json({ success: false, error: 'This masked phone number already has another withdrawal within the last 24 hours.' });
+        }
+        if (latest && latest.status === 'failed' && status === 'failed') {
+          return res.json({ success: false, error: 'A failed withdrawal cannot be recorded twice within 24 hours.' });
+        }
+
+        const { data, error } = await db.from('manual_withdrawals').update({
+          full_name: name,
+          phone_masked: phone,
+          amount,
+          status,
+          updated_at: new Date().toISOString(),
+        }).eq('id', p.requestId).select('id,full_name,phone_masked,amount,status,created_at,updated_at').single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, data: normManualWd(data) });
+      }
+
+      case 'adminDeleteManualWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        if (!p.requestId) return res.json({ success: false, error: 'Missing manual withdrawal ID.' });
+        const { error } = await db.from('manual_withdrawals').delete().eq('id', p.requestId);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true });
+      }
+
+      case 'listPublicManualWithdrawals': {
+        const { data, error } = await db.from('manual_withdrawals')
+          .select('id,full_name,phone_masked,amount,status,created_at,updated_at')
+          .order('created_at', { ascending: false }).limit(200);
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normManualWd) });
       }
 
       case 'adminListWithdrawals': {

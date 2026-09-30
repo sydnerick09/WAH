@@ -185,6 +185,7 @@ export default function WithdrawalReviews() {
   const [tab, setTab] = useState('reviews');
   const records = useMemo(() => buildDailyRecords(), []);
   const [approvedReviews, setApprovedReviews] = useState([]);
+  const [manualWithdrawals, setManualWithdrawals] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [reviewText, setReviewText] = useState('');
   const [reviewSending, setReviewSending] = useState(false);
@@ -198,7 +199,18 @@ export default function WithdrawalReviews() {
       status: 'approved',
       rating: 5,
     }));
-    return shuffleRealAndDemo([...records, ...genuine], getDaySeed() ^ 0x9e3779b9);
+    const manual = manualWithdrawals.map((withdrawal) => ({
+      id: `manual-withdrawal-${withdrawal.id}`,
+      name: withdrawal.name || 'Client',
+      phone: withdrawal.phone || '',
+      country: '',
+      amount: Number(withdrawal.amount || 0),
+      status: withdrawal.status || 'pending',
+      text: `${formatKes(Number(withdrawal.amount || 0))} withdrawal • ${withdrawal.phone || 'masked number'}`,
+      rating: 5,
+      kind: 'manual',
+    }));
+    return shuffleRealAndDemo([...records, ...genuine, ...manual], getDaySeed() ^ 0x9e3779b9);
   }, [records, approvedReviews]);
 
   useEffect(() => {
@@ -214,6 +226,17 @@ export default function WithdrawalReviews() {
         if (!cancelled && Array.isArray(data.data)) setApprovedReviews(data.data);
       } catch (_) {}
     }
+    async function loadManualWithdrawals() {
+      try {
+        const response = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op: 'listPublicManualWithdrawals' }),
+        });
+        const data = await response.json();
+        if (!cancelled && Array.isArray(data.data)) setManualWithdrawals(data.data);
+      } catch (_) {}
+    }
     async function loadUser() {
       try {
         const auth = await import('../lib/auth');
@@ -224,6 +247,7 @@ export default function WithdrawalReviews() {
       }
     }
     loadReviews();
+    loadManualWithdrawals();
     loadUser();
     return () => { cancelled = true; };
   }, []);
@@ -467,7 +491,7 @@ export default function WithdrawalReviews() {
                       ? 'Failed'
                       : visibleRecord.status === 'pending'
                         ? 'Pending'
-                        : 'New'}
+                        : 'Successful'}
                   </div>
                 </article>
               )}
@@ -477,7 +501,15 @@ export default function WithdrawalReviews() {
           </section>
         ) : (
           <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 9 }}>
-            {records.map((record) => (
+            {[...records, ...manualWithdrawals.map((withdrawal) => ({
+              id: `manual-withdrawal-${withdrawal.id}`,
+              name: withdrawal.name || 'Client',
+              phone: withdrawal.phone || '',
+              country: '',
+              amount: Number(withdrawal.amount || 0),
+              status: withdrawal.status || 'pending',
+              kind: 'manual',
+            }))].map((record) => (
               <div key={record.id} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
                 background: '#fff', border: '1px solid #e5e7eb', borderRadius: 11, padding: '12px 14px',
@@ -486,7 +518,7 @@ export default function WithdrawalReviews() {
                   <CountryBadge country={record.country} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 750, fontSize: 13 }}>{record.name}</div>
-                    <div style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>{record.phone} · {record.country}</div>
+                    <div style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>{record.phone}{record.country ? ` · ${record.country}` : ''}</div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>

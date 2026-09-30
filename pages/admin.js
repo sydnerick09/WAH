@@ -575,8 +575,148 @@ function UsersTab({ users, secret, onRefresh }) {
   );
 }
 
+// ─── Manual Withdrawal Records ────────────────────────────────────────────────
+function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
+  const [form, setForm] = useState({ fullName: '', phone: '', amount: '', status: 'pending' });
+  const [edits, setEdits] = useState({});
+  const [saving, setSaving] = useState({});
+  const [deleting, setDeleting] = useState({});
+  const [msg, setMsg] = useState(null);
+
+  function setEdit(id, field, value) {
+    setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
+  }
+  function getEdit(id, field, fallback) {
+    const e = edits[id];
+    return e && field in e ? e[field] : fallback;
+  }
+
+  async function createManualWithdrawal(e) {
+    e.preventDefault();
+    setMsg(null);
+    const res = await dbProxy('adminCreateManualWithdrawal', {
+      adminSecret: secret,
+      fullName: form.fullName,
+      phone: form.phone,
+      amount: form.amount,
+      status: form.status,
+    });
+    if (res.success) {
+      setForm({ fullName: '', phone: '', amount: '', status: 'pending' });
+      setMsg({ type: 'ok', text: 'Manual withdrawal added.' });
+      await onRefresh();
+    } else {
+      setMsg({ type: 'err', text: res.error || 'Could not add manual withdrawal.' });
+    }
+  }
+
+  async function saveManualWithdrawal(wd) {
+    const e = edits[wd.id] || {};
+    setSaving(prev => ({ ...prev, [wd.id]: true }));
+    const res = await dbProxy('adminUpdateManualWithdrawal', {
+      adminSecret: secret,
+      requestId: wd.id,
+      fullName: getEdit(wd.id, 'fullName', wd.name),
+      phone: getEdit(wd.id, 'phone', wd.phone),
+      amount: getEdit(wd.id, 'amount', wd.amount),
+      status: getEdit(wd.id, 'status', wd.status),
+    });
+    setSaving(prev => ({ ...prev, [wd.id]: false }));
+    if (res.success) {
+      setEdits(prev => { const n = { ...prev }; delete n[wd.id]; return n; });
+      setMsg({ type: 'ok', text: 'Manual withdrawal updated.' });
+      await onRefresh();
+    } else {
+      setMsg({ type: 'err', text: res.error || 'Could not update manual withdrawal.' });
+    }
+  }
+
+  async function deleteManualWithdrawal(wd) {
+    if (!confirm(`Delete manual withdrawal for ${wd.name}?`)) return;
+    setDeleting(prev => ({ ...prev, [wd.id]: true }));
+    const res = await dbProxy('adminDeleteManualWithdrawal', { adminSecret: secret, requestId: wd.id });
+    setDeleting(prev => ({ ...prev, [wd.id]: false }));
+    if (!res.success) setMsg({ type: 'err', text: res.error || 'Could not delete manual withdrawal.' });
+    else setMsg({ type: 'ok', text: 'Manual withdrawal deleted.' });
+    await onRefresh();
+  }
+
+  return (
+    <section style={{ margin: '20px 32px 0', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ padding: '18px 20px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 16 }}>Manual Withdrawal Records</div>
+        <div style={{ marginTop: 4, color: '#64748B', fontSize: 12 }}>
+          Add withdrawals that you have handled manually. These records also appear on the public withdrawal reviews page.
+        </div>
+      </div>
+
+      <form onSubmit={createManualWithdrawal} style={{ padding: 20, display: 'grid', gridTemplateColumns: '1.2fr 1fr .8fr 1fr auto', gap: 10, alignItems: 'end' }}>
+        <div>
+          <label style={styles.fieldLabel}>Name</label>
+          <input style={{ ...styles.input, marginBottom: 0 }} value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} placeholder="Client name" required />
+        </div>
+        <div>
+          <label style={styles.fieldLabel}>Masked phone number</label>
+          <input style={{ ...styles.input, marginBottom: 0 }} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="07*****1234" required />
+        </div>
+        <div>
+          <label style={styles.fieldLabel}>Amount (KES)</label>
+          <input type="number" min="1" step="0.01" style={{ ...styles.input, marginBottom: 0 }} value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="5000" required />
+        </div>
+        <div>
+          <label style={styles.fieldLabel}>Status</label>
+          <select style={{ ...styles.input, marginBottom: 0 }} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+            <option value="pending">Pending</option>
+            <option value="successful">Successful</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+        <button type="submit" style={{ ...styles.btn, height: 44, padding: '10px 16px', whiteSpace: 'nowrap' }}>+ Add Withdrawal</button>
+      </form>
+
+      {msg && <div style={{ padding: '0 20px 14px', fontSize: 12, fontWeight: 700, color: msg.type === 'ok' ? '#166534' : '#b91c1c' }}>{msg.text}</div>}
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              {['Name', 'Masked Phone', 'Amount (KES)', 'Status', 'Created', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {manualWithdrawals.map(wd => {
+              const isSaving = saving[wd.id];
+              const isDeleting = deleting[wd.id];
+              return (
+                <tr key={wd.id} style={styles.tr}>
+                  <td style={styles.td}><input style={{ ...styles.numInput, width: 170 }} value={getEdit(wd.id, 'fullName', wd.name)} onChange={e => setEdit(wd.id, 'fullName', e.target.value)} /></td>
+                  <td style={styles.td}><input style={{ ...styles.numInput, width: 150 }} value={getEdit(wd.id, 'phone', wd.phone)} onChange={e => setEdit(wd.id, 'phone', e.target.value)} /></td>
+                  <td style={styles.td}><input type="number" min="1" step="0.01" style={{ ...styles.numInput, width: 110 }} value={getEdit(wd.id, 'amount', wd.amount)} onChange={e => setEdit(wd.id, 'amount', e.target.value)} /></td>
+                  <td style={styles.td}>
+                    <select style={{ ...styles.numInput, width: 125, fontWeight: 700 }} value={getEdit(wd.id, 'status', wd.status)} onChange={e => setEdit(wd.id, 'status', e.target.value)}>
+                      <option value="pending">Pending</option>
+                      <option value="successful">Successful</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </td>
+                  <td style={{ ...styles.td, whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(wd.createdAt ? new Date(wd.createdAt).getTime() : null)}</td>
+                  <td style={styles.td}>
+                    <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, marginBottom: 6 }} disabled={isSaving || isDeleting} onClick={() => saveManualWithdrawal(wd)}>{isSaving ? 'Saving…' : 'Save'}</button>
+                    <button style={{ ...styles.btn, padding: '7px 10px', fontSize: 12, background: '#4b5563' }} disabled={isSaving || isDeleting} onClick={() => deleteManualWithdrawal(wd)}>{isDeleting ? 'Deleting…' : 'Delete'}</button>
+                  </td>
+                </tr>
+              );
+            })}
+            {manualWithdrawals.length === 0 && <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No manual withdrawals added yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 // ─── Withdrawals Table ────────────────────────────────────────────────────────
-function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
+function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
   const [search,  setSearch]  = useState('');
   const [edits,   setEdits]   = useState({});
   const [saving,  setSaving]  = useState({});
@@ -688,6 +828,7 @@ function WithdrawalsTab({ withdrawals, secret, onRefresh }) {
 
   return (
     <>
+      <ManualWithdrawalsSection manualWithdrawals={manualWithdrawals} secret={secret} onRefresh={onRefresh} />
       <div style={styles.searchWrap}>
         <input
           style={{ ...styles.input, maxWidth: 360, margin: 0 }}
@@ -1709,6 +1850,7 @@ export default function AdminPanel() {
   const [authErr,     setAuthErr]     = useState('');
   const [users,       setUsers]       = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
+  const [manualWithdrawals, setManualWithdrawals] = useState([]);
   const [loading,     setLoading]     = useState(false);
   const [tab,         setTab]         = useState('users');
 
@@ -1716,24 +1858,28 @@ export default function AdminPanel() {
     e.preventDefault();
     setLoading(true);
     setAuthErr('');
-    const [uRes, wRes] = await Promise.all([
-      dbProxy('listUsers',             { adminSecret: secret }),
-      dbProxy('adminListWithdrawals',  { adminSecret: secret }),
+    const [uRes, wRes, mwRes] = await Promise.all([
+      dbProxy('listUsers',                 { adminSecret: secret }),
+      dbProxy('adminListWithdrawals',      { adminSecret: secret }),
+      dbProxy('adminListManualWithdrawals',{ adminSecret: secret }),
     ]);
     setLoading(false);
     if (uRes.error === 'Unauthorized') { setAuthErr('Wrong admin password.'); return; }
     setUsers(uRes.data || []);
     setWithdrawals(wRes.data || []);
+    setManualWithdrawals(mwRes.data || []);
     setAuthed(true);
   }
 
   async function refresh() {
-    const [uRes, wRes] = await Promise.all([
-      dbProxy('listUsers',            { adminSecret: secret }),
-      dbProxy('adminListWithdrawals', { adminSecret: secret }),
+    const [uRes, wRes, mwRes] = await Promise.all([
+      dbProxy('listUsers',                 { adminSecret: secret }),
+      dbProxy('adminListWithdrawals',      { adminSecret: secret }),
+      dbProxy('adminListManualWithdrawals',{ adminSecret: secret }),
     ]);
     if (uRes.data)  setUsers(uRes.data);
     if (wRes.data)  setWithdrawals(wRes.data);
+    if (mwRes.data) setManualWithdrawals(mwRes.data);
   }
 
   if (!authed) {
@@ -1791,7 +1937,7 @@ export default function AdminPanel() {
       </div>
 
       {tab === 'users'        && <UsersTab        users={users}             secret={secret} onRefresh={refresh} />}
-      {tab === 'withdrawals'  && <WithdrawalsTab  withdrawals={withdrawals} secret={secret} onRefresh={refresh} />}
+      {tab === 'withdrawals'  && <WithdrawalsTab  withdrawals={withdrawals} manualWithdrawals={manualWithdrawals} secret={secret} onRefresh={refresh} />}
       {tab === 'reviews'      && <ReviewsTab      secret={secret} />}
       {tab === 'transactions' && <TransactionsTab secret={secret} />}
       {tab === 'tasks'        && <TasksTab        secret={secret} />}
