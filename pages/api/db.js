@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { TASKS } from '../../lib/tasks';
 import { verifyUnsubToken } from '../../lib/unsubToken';
@@ -328,6 +329,7 @@ const USER_SCOPED = new Set([
   'createApplication',
   'updateProfile', 'updateAvatar', 'changeContact', 'deleteAccount',
   'recordMpesaFee', 'bulkWithdrawalQuote', 'submitBulkWithdrawal',
+  'submitReview',
 ]);
 
 export default async function handler(req, res) {
@@ -1457,6 +1459,123 @@ export default async function handler(req, res) {
         const { data, error } = await query.order('created_at', { ascending: false });
         if (error) return res.json({ data: [], error: error.message });
         return res.json({ data: (data || []).map(normApp) });
+      }
+
+
+      // ── Client reviews ─────────────────────────────────────────────────────
+      case 'submitReview': {
+        const reviewText = clean(p.reviewText, 1200);
+        if (!nonEmpty(reviewText)) return res.json({ success: false, error: 'Review text is required.' });
+        if (reviewText.length < 10) return res.json({ success: false, error: 'Please write a little more about your experience.' });
+
+        // Identity is always taken from the authenticated database user. The
+        // client never supplies or controls the public name/phone/country.
+        const { data: u, error: userErr } = await db.from('users')
+          .select('id,full_name,phone,country').eq('id', p.userId).maybeSingle();
+        if (userErr || !u) return res.json({ success: false, error: 'User account could not be found.' });
+
+        const { data, error } = await db.from('reviews').insert({
+          user_id:    u.id,
+          full_name:  clean(u.full_name, 80),
+          phone:      clean(u.phone, 30),
+          country:    clean(u.country, 60),
+          review_text: reviewText,
+          status:     'pending',
+        }).select('id,status,created_at').single();
+
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, {
+          action: 'review_submitted', entity: 'review', entityId: data.id,
+          detail: `${u.full_name || ''}, ${u.country || ''}`,
+        });
+        return res.json({ success: true, review: {
+          id: data.id, status: data.status, createdAt: data.created_at,
+        }});
+      }
+
+      case 'listApprovedReviews': {
+        const { data: rows, error } = await db.from('reviews')
+          .select('id,user_id,full_name,phone,country,review_text,status,created_at,approved_at')
+          .eq('status', 'approved')
+          .order('approved_at', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (error) return res.json({ data: [], error: error.message });
+
+        // Return only the fields the public page needs. Phone numbers are masked
+        // on the server so the raw number never reaches the browser.
+        const maskPublicPhone = (phone) => {
+          const raw = String(phone || '').replace(/[^0-9+]/g, '');
+          if (!raw) return '';
+          const digits = raw.replace(/\D/g, '');
+          if (digits.length <= 6) return raw.replace(/\d/g, '*');
+          const prefix = raw.startsWith('+') ? '+' : '';
+          const visibleStart = digits.slice(0, Math.min(5, digits.length - 4));
+          const ending = digits.slice(-2);
+          return `${prefix}${visibleStart}*****${ending}`;
+        };
+
+        return res.json({ data: (rows || []).map(r => ({
+          id: r.id,
+          name: r.full_name || 'Client',
+          phone: maskPublicPhone(r.phone),
+          country: r.country || '',
+          text: r.review_text || '',
+          status: 'approved',
+          createdAt: r.created_at,
+          approvedAt: r.approved_at,
+          kind: 'real',
+        })) });
+      }
+
+
+      case 'adminListReviews': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('reviews')
+          .select('id,user_id,full_name,phone,country,review_text,status,created_at,approved_at,approved_by')
+          .order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(r => ({
+          id: r.id,
+          userId: r.user_id,
+          name: r.full_name || '—',
+          phone: r.phone || '—',
+          country: r.country || '—',
+          text: r.review_text || '',
+          status: r.status || 'pending',
+          createdAt: r.created_at,
+          approvedAt: r.approved_at,
+          approvedBy: r.approved_by,
+        })) });
+      }
+
+      case 'adminUpdateReview': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const reviewId = clean(p.reviewId, 100);
+        const status = clean(p.status, 20);
+        const allowed = ['pending', 'approved', 'rejected'];
+        if (!reviewId) return res.json({ success: false, error: 'Missing review ID.' });
+        if (!allowed.includes(status)) return res.json({ success: false, error: 'Invalid review status.' });
+
+        const updates = { status };
+        if (status === 'approved') {
+          updates.approved_at = new Date().toISOString();
+          updates.approved_by = 'admin';
+        } else {
+          updates.approved_at = null;
+          updates.approved_by = null;
+        }
+
+        const { data, error } = await db.from('reviews')
+          .update(updates).eq('id', reviewId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, {
+          action: `review_${status}`, entity: 'review', entityId: reviewId,
+          detail: `${data?.full_name || ''}, ${data?.country || ''}`,
+        });
+        return res.json({ success: true, review: {
+          id: data.id, status: data.status, approvedAt: data.approved_at,
+        }});
       }
 
       case 'adminListApplications': {
