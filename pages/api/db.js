@@ -159,6 +159,7 @@ function normManualWd(row) {
     status:    row.status ?? 'pending',
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,
+    isDemo:   Boolean(row.is_demo),
   };
 }
 
@@ -968,7 +969,7 @@ export default async function handler(req, res) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const { data, error } = await db.from('manual_withdrawals')
-          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at')
+          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo')
           .order('created_at', { ascending: false });
         if (error) return res.json({ data: [], error: error.message });
         return res.json({ data: (data || []).map(normManualWd) });
@@ -1062,6 +1063,58 @@ export default async function handler(req, res) {
         return res.json({ success: true, data: normManualWd(data) });
       }
 
+      case 'adminGenerateDemoManualWithdrawals': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const count = Math.max(1, Math.min(50, Math.floor(Number(p.count) || 10)));
+        const intervalMinutes = Math.max(1, Math.min(1440, Math.floor(Number(p.intervalMinutes) || 30)));
+        const minAmount = Math.max(1, Number(p.minAmount) || 1000);
+        const maxAmount = Math.max(minAmount, Number(p.maxAmount) || 10000);
+
+        // These are explicitly synthetic records. They are kept out of the
+        // public withdrawal-review feed by the listPublicManualWithdrawals query.
+        const people = [
+          ['Brian Otieno', 'Kenya', '07'], ['Mary Wanjiku', 'Kenya', '07'],
+          ['Kevin Mwangi', 'Kenya', '07'], ['Faith Njeri', 'Kenya', '07'],
+          ['Daniel Ouma', 'Kenya', '07'], ['Amina Hassan', 'Kenya', '07'],
+          ['Samuel Kato', 'Uganda', '07'], ['Sarah Namukasa', 'Uganda', '07'],
+          ['Joseph Okello', 'Uganda', '07'], ['Diana Achieng', 'Uganda', '07'],
+          ['Juma Said', 'Tanzania', '07'], ['Neema Mushi', 'Tanzania', '07'],
+          ['Baraka John', 'Tanzania', '07'], ['Asha Mrema', 'Tanzania', '07'],
+          ['Eric Habimana', 'Rwanda', '07'], ['Grace Uwase', 'Rwanda', '07'],
+          ['Patrick Niyonzima', 'Rwanda', '07'], ['Claudine Mukamana', 'Rwanda', '07'],
+          ['Jean Ndayisenga', 'Burundi', '07'], ['Alice Nkurunziza', 'Burundi', '07'],
+          ['James Deng', 'South Sudan', '09'], ['Mary Nyandeng', 'South Sudan', '09'],
+        ];
+
+        const rows = [];
+        const base = Date.now();
+        for (let i = 0; i < count; i++) {
+          const person = people[i % people.length];
+          const suffix = String(100000 + ((i * 7919 + base) % 900000)).slice(-6);
+          const phone = `${person[2]}*****${suffix.slice(-4)}`;
+          const amount = Math.round((minAmount + ((i * 1379) % Math.max(1, Math.floor(maxAmount - minAmount + 1)))) * 100) / 100;
+          rows.push({
+            full_name: person[0],
+            phone_masked: phone,
+            country: person[1],
+            amount,
+            status: 'pending',
+            is_demo: true,
+            created_at: new Date(base - (count - 1 - i) * intervalMinutes * 60 * 1000).toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        const { data, error } = await db.from('manual_withdrawals')
+          .insert(rows)
+          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo');
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, data: (data || []).map(normManualWd), count: data?.length || 0 });
+      }
+
       case 'adminDeleteManualWithdrawal': {
         if (p.adminSecret !== process.env.ADMIN_SECRET) {
           return res.status(403).json({ error: 'Unauthorized' });
@@ -1074,7 +1127,8 @@ export default async function handler(req, res) {
 
       case 'listPublicManualWithdrawals': {
         const { data, error } = await db.from('manual_withdrawals')
-          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at')
+          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo')
+          .eq('is_demo', false)
           .order('created_at', { ascending: false }).limit(200);
         if (error) return res.json({ data: [], error: error.message });
         return res.json({ data: (data || []).map(normManualWd) });

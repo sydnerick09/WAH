@@ -578,9 +578,11 @@ function UsersTab({ users, secret, onRefresh }) {
 // ─── Manual Withdrawal Records ────────────────────────────────────────────────
 function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
   const [form, setForm] = useState({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
+  const [demoForm, setDemoForm] = useState({ count: 10, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000 });
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState({});
   const [deleting, setDeleting] = useState({});
+  const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState(null);
 
   function setEdit(id, field, value) {
@@ -608,6 +610,26 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       await onRefresh();
     } else {
       setMsg({ type: 'err', text: res.error || 'Could not add manual withdrawal.' });
+    }
+  }
+
+  async function generateDemoWithdrawals(e) {
+    e.preventDefault();
+    setMsg(null);
+    setGenerating(true);
+    const res = await dbProxy('adminGenerateDemoManualWithdrawals', {
+      adminSecret: secret,
+      count: demoForm.count,
+      intervalMinutes: demoForm.intervalMinutes,
+      minAmount: demoForm.minAmount,
+      maxAmount: demoForm.maxAmount,
+    });
+    setGenerating(false);
+    if (res.success) {
+      setMsg({ type: 'ok', text: `${res.count || demoForm.count} demo withdrawal records generated. They are not shown publicly.` });
+      await onRefresh();
+    } else {
+      setMsg({ type: 'err', text: res.error || 'Could not generate demo withdrawals.' });
     }
   }
 
@@ -680,6 +702,30 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
         <button type="submit" style={{ ...styles.btn, height: 44, padding: '10px 16px', whiteSpace: 'nowrap' }}>+ Add Withdrawal</button>
       </form>
 
+      <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>Demo Client Generator</div>
+          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Creates clearly marked synthetic East African withdrawal records for admin testing. They are excluded from the public reviews.</div>
+        </div>
+        <div>
+          <label style={styles.fieldLabel}>Clients</label>
+          <input type="number" min="1" max="50" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.count} onChange={e => setDemoForm({ ...demoForm, count: e.target.value })} />
+        </div>
+        <div>
+          <label style={styles.fieldLabel}>Interval (minutes)</label>
+          <input type="number" min="1" max="1440" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.intervalMinutes} onChange={e => setDemoForm({ ...demoForm, intervalMinutes: e.target.value })} />
+        </div>
+        <div>
+          <label style={styles.fieldLabel}>Min amount (KES)</label>
+          <input type="number" min="1" step="1" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.minAmount} onChange={e => setDemoForm({ ...demoForm, minAmount: e.target.value })} />
+        </div>
+        <div>
+          <label style={styles.fieldLabel}>Max amount (KES)</label>
+          <input type="number" min="1" step="1" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.maxAmount} onChange={e => setDemoForm({ ...demoForm, maxAmount: e.target.value })} />
+        </div>
+        <button type="submit" disabled={generating} style={{ ...styles.btn, height: 44, padding: '10px 16px', whiteSpace: 'nowrap' }}>{generating ? 'Generating…' : 'Generate Demo Clients'}</button>
+      </form>
+
       {msg && <div style={{ padding: '0 20px 14px', fontSize: 12, fontWeight: 700, color: msg.type === 'ok' ? '#166534' : '#b91c1c' }}>{msg.text}</div>}
 
       <div style={{ overflowX: 'auto' }}>
@@ -695,7 +741,10 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
               const isDeleting = deleting[wd.id];
               return (
                 <tr key={wd.id} style={styles.tr}>
-                  <td style={styles.td}><input style={{ ...styles.numInput, width: 170 }} value={getEdit(wd.id, 'fullName', wd.name)} onChange={e => setEdit(wd.id, 'fullName', e.target.value)} /></td>
+                  <td style={styles.td}>
+                    <input style={{ ...styles.numInput, width: 170 }} value={getEdit(wd.id, 'fullName', wd.name)} onChange={e => setEdit(wd.id, 'fullName', e.target.value)} />
+                    {wd.isDemo && <div style={{ marginTop: 3, fontSize: 10, fontWeight: 700, color: '#92400E' }}>DEMO / SAMPLE</div>}
+                  </td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 150 }} value={getEdit(wd.id, 'phone', wd.phone)} onChange={e => setEdit(wd.id, 'phone', e.target.value)} /></td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 130 }} value={getEdit(wd.id, 'country', wd.country)} onChange={e => setEdit(wd.id, 'country', e.target.value)} /></td>
                   <td style={styles.td}><input type="number" min="1" step="0.01" style={{ ...styles.numInput, width: 110 }} value={getEdit(wd.id, 'amount', wd.amount)} onChange={e => setEdit(wd.id, 'amount', e.target.value)} /></td>
