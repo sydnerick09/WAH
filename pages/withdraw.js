@@ -142,7 +142,7 @@ function getMpesaWithdrawalFee(balance) {
   if (amount <= 10000) return 1000;
   if (amount <= 20000) return 1500;
   if (amount <= 30000) return 2200;
-  return 3800;
+  return 4800;
 }
 
 // Bank withdrawal fees are fixed in USD (Option A).
