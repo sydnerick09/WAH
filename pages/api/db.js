@@ -131,20 +131,57 @@ function norm(row) {
   };
 }
 
+function maskWithdrawalPhone(phone, country = '') {
+  const raw = String(phone || '').trim();
+  if (!raw) return '';
+  const prefix = raw.startsWith('+') ? '+' : '';
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  const visibleStart = String(country || '').trim().toLowerCase() === 'kenya' ? 2 : 3;
+  if (digits.length <= visibleStart + 2) return `${prefix}${'*'.repeat(Math.max(1, digits.length - 2))}`;
+  return `${prefix}${digits.slice(0, visibleStart)}*****${digits.slice(-2)}`;
+}
+
+function maskBankAccount(accountNumber) {
+  const raw = String(accountNumber || '').trim();
+  if (!raw) return '';
+  const chars = raw.replace(/\s+/g, '');
+  if (chars.length <= 4) return '*'.repeat(chars.length);
+  return `${chars.slice(0, 2)}****${chars.slice(-2)}`;
+}
+
+function parseBankWithdrawal(row) {
+  const raw = String(row?.id_number || '');
+  if (!raw.startsWith('__BANK_WITHDRAWAL__')) return null;
+  try {
+    const bank = JSON.parse(raw.slice('__BANK_WITHDRAWAL__'.length));
+    if (bank && bank.kind === 'bank') return bank;
+  } catch (_) { /* legacy/non-bank value */ }
+  return null;
+}
+
 function normWd(row) {
   if (!row) return null;
+  const bank = parseBankWithdrawal(row);
+  const country = bank?.country || row.country || '';
   return {
     id:          row.id,
     userId:      row.user_id,
     fullName:    row.full_name,
-    phone:       row.phone,
-    idNumber:    row.id_number,
+    phone:       maskWithdrawalPhone(row.phone, country),
+    rawPhone:    row.phone || '',
+    idNumber:    bank ? '' : row.id_number,
     amount:      Number(row.amount || 0),
     status:      row.status      ?? 'pending',
     rejectReason: row.reject_reason ?? '',
     deadline:    row.deadline,
     requestedAt: row.requested_at,
     updatedAt:   row.updated_at  ?? null,
+    withdrawalMethod: bank ? 'bank' : 'mpesa',
+    bankName: bank?.bankName || '',
+    accountName: bank?.accountName || '',
+    accountNumber: bank ? maskBankAccount(bank.accountNumber) : '',
+    country,
   };
 }
 
@@ -159,7 +196,7 @@ function normManualWd(row) {
     status:    row.status ?? 'pending',
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,
-    isDemo:   Boolean(row.is_demo),
+    isDemo:   false,
   };
 }
 
@@ -904,9 +941,25 @@ export default async function handler(req, res) {
           return res.json({ success: false, error: 'Bank name, account name and account number are required.' });
         }
         const q = await computeBulkQuote(u, p.declaredFees);
-        await logAction(db, { action: 'bulk_withdrawal_request', entity: 'user', entityId: p.userId,
+        const bankPayload = {
+          kind: 'bank',
+          bankName, accountName, accountNumber, branch, swift,
+          country: isIntl ? (clean(p.country, 80) || 'International') : 'Kenya',
+        };
+        const { data: bankWd, error: bankWdErr } = await db.from('withdrawal_requests').insert({
+          user_id: p.userId,
+          full_name: accountName,
+          phone: clean(p.phone, 40),
+          id_number: `__BANK_WITHDRAWAL__${JSON.stringify(bankPayload)}`,
+          amount: Number(p.amount || q.amountDueKes || 0),
+          status: 'pending',
+          deadline: Date.now() + 2 * 60 * 60 * 1000,
+          requested_at: new Date().toISOString(),
+        }).select().single();
+        if (bankWdErr) return res.json({ success: false, error: bankWdErr.message });
+        await logAction(db, { action: 'bulk_withdrawal_request', entity: 'user', entityId: p.userId, entityRef: bankWd.id,
           detail: `bank:${bankName} acct:${accountName}/${accountNumber}${branch ? ` branch:${branch}` : ''}${swift ? ` swift:${swift}` : ''} | bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} converted:${q.convertedKes} declared:${q.declaredFees} recorded:${q.recordedFees} deductions:${q.eligibleDeductions}x${q.perFeeKes} due:${q.amountDueKes}` });
-        return res.json({ success: true, ...q, bank: { bankName, accountName, accountNumber, branch, swift } });
+        return res.json({ success: true, withdrawalId: bankWd.id, ...q, bank: { bankName, accountName, accountNumber, branch, swift } });
       }
 
       case 'listUsers': {
@@ -1073,20 +1126,19 @@ export default async function handler(req, res) {
         const minAmount = Math.max(1, Number(p.minAmount) || 1000);
         const maxAmount = Math.max(minAmount, Number(p.maxAmount) || 10000);
 
-        // Generated records are posted the same way as manually added withdrawals.
-        // They therefore use the public withdrawal-review feed and can be deleted from admin.
+        // Generated records are posted publicly in the same feed as manual records.
         const people = [
-          ['Brian Otieno', 'Kenya', '+2547'], ['Mary Wanjiku', 'Kenya', '+2547'],
-          ['Kevin Mwangi', 'Kenya', '+2547'], ['Faith Njeri', 'Kenya', '+2547'],
-          ['Daniel Ouma', 'Kenya', '+2547'], ['Amina Hassan', 'Kenya', '+2547'],
-          ['Samuel Kato', 'Uganda', '+2567'], ['Sarah Namukasa', 'Uganda', '+2567'],
-          ['Joseph Okello', 'Uganda', '+2567'], ['Diana Achieng', 'Uganda', '+2567'],
-          ['Juma Said', 'Tanzania', '+2557'], ['Neema Mushi', 'Tanzania', '+2557'],
-          ['Baraka John', 'Tanzania', '+2557'], ['Asha Mrema', 'Tanzania', '+2557'],
-          ['Eric Habimana', 'Rwanda', '+2507'], ['Grace Uwase', 'Rwanda', '+2507'],
-          ['Patrick Niyonzima', 'Rwanda', '+2507'], ['Claudine Mukamana', 'Rwanda', '+2507'],
-          ['Jean Ndayisenga', 'Burundi', '+2577'], ['Alice Nkurunziza', 'Burundi', '+2577'],
-          ['James Deng', 'South Sudan', '+2119'], ['Mary Nyandeng', 'South Sudan', '+2119'],
+          ['Brian Otieno', 'Kenya', '+254'], ['Mary Wanjiku', 'Kenya', '+254'],
+          ['Kevin Mwangi', 'Kenya', '+254'], ['Faith Njeri', 'Kenya', '+254'],
+          ['Daniel Ouma', 'Kenya', '+254'], ['Amina Hassan', 'Kenya', '+254'],
+          ['Samuel Kato', 'Uganda', '+256'], ['Sarah Namukasa', 'Uganda', '+256'],
+          ['Joseph Okello', 'Uganda', '+256'], ['Diana Achieng', 'Uganda', '+256'],
+          ['Juma Said', 'Tanzania', '+255'], ['Neema Mushi', 'Tanzania', '+255'],
+          ['Baraka John', 'Tanzania', '+255'], ['Asha Mrema', 'Tanzania', '+255'],
+          ['Eric Habimana', 'Rwanda', '+250'], ['Grace Uwase', 'Rwanda', '+250'],
+          ['Patrick Niyonzima', 'Rwanda', '+250'], ['Claudine Mukamana', 'Rwanda', '+250'],
+          ['Jean Ndayisenga', 'Burundi', '+257'], ['Alice Nkurunziza', 'Burundi', '+257'],
+          ['James Deng', 'South Sudan', '+211'], ['Mary Nyandeng', 'South Sudan', '+211'],
         ];
 
         const rows = [];
@@ -1094,8 +1146,9 @@ export default async function handler(req, res) {
         for (let i = 0; i < count; i++) {
           const person = people[i % people.length];
           const suffix = String(100000 + ((i * 7919 + base) % 900000)).slice(-6);
-          // Keep the country code and mobile prefix visible while masking the rest.
-          const phone = `${person[2]}****${suffix.slice(-3)}`;
+          const localDigits = suffix;
+          const visibleStart = person[1] === 'Kenya' ? 2 : 3;
+          const phone = `${person[2]}${localDigits.slice(0, visibleStart)}*****${localDigits.slice(-2)}`;
           const amount = Math.round((minAmount + ((i * 1379) % Math.max(1, Math.floor(maxAmount - minAmount + 1)))) * 100) / 100;
           rows.push({
             full_name: person[0],
