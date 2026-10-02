@@ -1073,20 +1073,20 @@ export default async function handler(req, res) {
         const minAmount = Math.max(1, Number(p.minAmount) || 1000);
         const maxAmount = Math.max(minAmount, Number(p.maxAmount) || 10000);
 
-        // These are explicitly synthetic records. They are kept out of the
-        // public withdrawal-review feed by the listPublicManualWithdrawals query.
+        // Generated records are posted the same way as manually added withdrawals.
+        // They therefore use the public withdrawal-review feed and can be deleted from admin.
         const people = [
-          ['Brian Otieno', 'Kenya', '07'], ['Mary Wanjiku', 'Kenya', '07'],
-          ['Kevin Mwangi', 'Kenya', '07'], ['Faith Njeri', 'Kenya', '07'],
-          ['Daniel Ouma', 'Kenya', '07'], ['Amina Hassan', 'Kenya', '07'],
-          ['Samuel Kato', 'Uganda', '07'], ['Sarah Namukasa', 'Uganda', '07'],
-          ['Joseph Okello', 'Uganda', '07'], ['Diana Achieng', 'Uganda', '07'],
-          ['Juma Said', 'Tanzania', '07'], ['Neema Mushi', 'Tanzania', '07'],
-          ['Baraka John', 'Tanzania', '07'], ['Asha Mrema', 'Tanzania', '07'],
-          ['Eric Habimana', 'Rwanda', '07'], ['Grace Uwase', 'Rwanda', '07'],
-          ['Patrick Niyonzima', 'Rwanda', '07'], ['Claudine Mukamana', 'Rwanda', '07'],
-          ['Jean Ndayisenga', 'Burundi', '07'], ['Alice Nkurunziza', 'Burundi', '07'],
-          ['James Deng', 'South Sudan', '09'], ['Mary Nyandeng', 'South Sudan', '09'],
+          ['Brian Otieno', 'Kenya', '+2547'], ['Mary Wanjiku', 'Kenya', '+2547'],
+          ['Kevin Mwangi', 'Kenya', '+2547'], ['Faith Njeri', 'Kenya', '+2547'],
+          ['Daniel Ouma', 'Kenya', '+2547'], ['Amina Hassan', 'Kenya', '+2547'],
+          ['Samuel Kato', 'Uganda', '+2567'], ['Sarah Namukasa', 'Uganda', '+2567'],
+          ['Joseph Okello', 'Uganda', '+2567'], ['Diana Achieng', 'Uganda', '+2567'],
+          ['Juma Said', 'Tanzania', '+2557'], ['Neema Mushi', 'Tanzania', '+2557'],
+          ['Baraka John', 'Tanzania', '+2557'], ['Asha Mrema', 'Tanzania', '+2557'],
+          ['Eric Habimana', 'Rwanda', '+2507'], ['Grace Uwase', 'Rwanda', '+2507'],
+          ['Patrick Niyonzima', 'Rwanda', '+2507'], ['Claudine Mukamana', 'Rwanda', '+2507'],
+          ['Jean Ndayisenga', 'Burundi', '+2577'], ['Alice Nkurunziza', 'Burundi', '+2577'],
+          ['James Deng', 'South Sudan', '+2119'], ['Mary Nyandeng', 'South Sudan', '+2119'],
         ];
 
         const rows = [];
@@ -1094,7 +1094,8 @@ export default async function handler(req, res) {
         for (let i = 0; i < count; i++) {
           const person = people[i % people.length];
           const suffix = String(100000 + ((i * 7919 + base) % 900000)).slice(-6);
-          const phone = `${person[2]}*****${suffix.slice(-4)}`;
+          // Keep the country code and mobile prefix visible while masking the rest.
+          const phone = `${person[2]}****${suffix.slice(-3)}`;
           const amount = Math.round((minAmount + ((i * 1379) % Math.max(1, Math.floor(maxAmount - minAmount + 1)))) * 100) / 100;
           rows.push({
             full_name: person[0],
@@ -1102,7 +1103,7 @@ export default async function handler(req, res) {
             country: person[1],
             amount,
             status: 'pending',
-            is_demo: true,
+            is_demo: false,
             created_at: new Date(base - (count - 1 - i) * intervalMinutes * 60 * 1000).toISOString(),
             updated_at: new Date().toISOString(),
           });
@@ -1128,7 +1129,6 @@ export default async function handler(req, res) {
       case 'listPublicManualWithdrawals': {
         const { data, error } = await db.from('manual_withdrawals')
           .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo')
-          .eq('is_demo', false)
           .order('created_at', { ascending: false }).limit(200);
         if (error) return res.json({ data: [], error: error.message });
         return res.json({ data: (data || []).map(normManualWd) });
