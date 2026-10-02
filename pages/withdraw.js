@@ -132,7 +132,8 @@ const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
 
-  // M-Pesa withdrawal fee brackets:
+
+  // M-Pesa withdrawal fee brackets:it is working please don't interrupt the code because it just worked.
   // Up to KES 10,000              -> KES 650
   // Above KES 10,000 - 20,000     -> KES 2,000
   // Above KES 20,000 - 30,000     -> KES 4,800
