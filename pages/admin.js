@@ -626,7 +626,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
     });
     setGenerating(false);
     if (res.success) {
-      setMsg({ type: 'ok', text: `${res.count || demoForm.count} demo withdrawal records generated. They are not shown publicly.` });
+      setMsg({ type: 'ok', text: `${res.count || demoForm.count} withdrawal records generated and posted publicly.` });
       await onRefresh();
     } else {
       setMsg({ type: 'err', text: res.error || 'Could not generate demo withdrawals.' });
@@ -705,7 +705,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Demo Client Generator</div>
-          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Creates withdrawal records and posts them publicly the same way as manual withdrawals. You can edit or delete them below.</div>
+          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Publishes generated withdrawal records publicly using the same format as manually posted withdrawals.</div>
         </div>
         <div>
           <label style={styles.fieldLabel}>Clients</label>
@@ -743,7 +743,6 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
                 <tr key={wd.id} style={styles.tr}>
                   <td style={styles.td}>
                     <input style={{ ...styles.numInput, width: 170 }} value={getEdit(wd.id, 'fullName', wd.name)} onChange={e => setEdit(wd.id, 'fullName', e.target.value)} />
-                    
                   </td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 150 }} value={getEdit(wd.id, 'phone', wd.phone)} onChange={e => setEdit(wd.id, 'phone', e.target.value)} /></td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 130 }} value={getEdit(wd.id, 'country', wd.country)} onChange={e => setEdit(wd.id, 'country', e.target.value)} /></td>
@@ -779,6 +778,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
   const [msg,     setMsg]     = useState({});
   const [deleting, setDeleting] = useState({});
   const [b2cEnabled, setB2cEnabled] = useState(false);   // true once Daraja B2C is live
+  const [methodFilter, setMethodFilter] = useState('all');
 
   // While B2C is pending approval, admins pay manually + Mark as Paid. Once B2C
   // is configured, the automatic "Pay via M-Pesa" (B2C) button appears instead.
@@ -802,8 +802,6 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
       requestId:   wd.id,
       status:       getEdit(wd.id, 'status',   wd.status),
       amount:       getEdit(wd.id, 'amount',   wd.amount),
-      phone:        getEdit(wd.id, 'phone',    wd.phone),
-      idNumber:     getEdit(wd.id, 'idNumber', wd.idNumber),
       fullName:     getEdit(wd.id, 'fullName', wd.fullName),
       rejectReason: getEdit(wd.id, 'rejectReason', wd.rejectReason || ''),
     });
@@ -879,7 +877,8 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
 
   const filtered = withdrawals.filter(w => {
     const q = search.toLowerCase();
-    return !q || w.fullName?.toLowerCase().includes(q) || w.phone?.includes(q) || w.status?.includes(q);
+    const methodOk = methodFilter === 'all' || w.withdrawalMethod === methodFilter;
+    return methodOk && (!q || w.fullName?.toLowerCase().includes(q) || w.phone?.includes(q) || w.status?.includes(q) || w.bankName?.toLowerCase().includes(q) || w.accountNumber?.includes(q));
   });
 
   return (
@@ -893,13 +892,22 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
           onChange={e => setSearch(e.target.value)}
         />
         <span style={{ fontSize: 13, color: '#64748B', marginLeft: 12 }}>{filtered.length} requests</span>
+        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+          {[['all', 'All withdrawals'], ['mpesa', 'M-Pesa'], ['bank', 'Bank']].map(([key, label]) => (
+            <button key={key} onClick={() => setMethodFilter(key)} style={{
+              ...styles.btn, width: 'auto', padding: '7px 12px', fontSize: 12,
+              background: methodFilter === key ? '#111827' : '#E5E7EB',
+              color: methodFilter === key ? '#fff' : '#374151'
+            }}>{label}</button>
+          ))}
+        </div>
       </div>
 
       <div style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>
-              {['Client Name', 'Phone / National ID', 'Amount (KES)', 'Status', 'Dates', 'Actions'].map(h => (
+              {['Client Name', 'Withdrawal Details', 'Amount (KES)', 'Status', 'Dates', 'Actions'].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
             </tr>
@@ -921,16 +929,25 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>ID: {wd.userId}</div>
                   </td>
 
-                  {/* Phone / ID */}
+                  {/* Withdrawal details: phone is masked; bank account is masked */}
                   <td style={styles.td}>
-                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Phone</div>
-                    <input style={{ ...styles.numInput, width: 160, marginBottom: 6 }}
-                      value={getEdit(wd.id, 'phone', wd.phone || '')}
-                      onChange={e => setEdit(wd.id, 'phone', e.target.value)} />
-                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>National ID</div>
-                    <input style={{ ...styles.numInput, width: 160 }}
-                      value={getEdit(wd.id, 'idNumber', wd.idNumber || '')}
-                      onChange={e => setEdit(wd.id, 'idNumber', e.target.value)} />
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Method</div>
+                    <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6 }}>{wd.withdrawalMethod === 'bank' ? 'Bank' : 'M-Pesa'}</div>
+                    {wd.withdrawalMethod === 'bank' ? (
+                      <>
+                        <div style={{ fontSize: 11, color: '#64748B' }}>Bank</div>
+                        <div style={{ fontSize: 12, marginBottom: 5 }}>{wd.bankName || '—'}</div>
+                        <div style={{ fontSize: 11, color: '#64748B' }}>Account number</div>
+                        <div style={{ fontWeight: 700, letterSpacing: 1 }}>{wd.accountNumber || '—'}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 11, color: '#64748B' }}>Phone</div>
+                        <div style={{ fontWeight: 700 }}>{wd.phone || '—'}</div>
+                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 5 }}>National ID</div>
+                        <div style={{ fontSize: 12 }}>{wd.idNumber || '—'}</div>
+                      </>
+                    )}
                   </td>
 
                   {/* Amount */}
