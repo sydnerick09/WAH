@@ -705,7 +705,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Demo Client Generator</div>
-          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Creates clearly marked synthetic East African withdrawal records for admin testing. They are excluded from the public reviews.</div>
+          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Creates withdrawal records and posts them publicly the same way as manual withdrawals. You can edit or delete them below.</div>
         </div>
         <div>
           <label style={styles.fieldLabel}>Clients</label>
@@ -743,7 +743,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
                 <tr key={wd.id} style={styles.tr}>
                   <td style={styles.td}>
                     <input style={{ ...styles.numInput, width: 170 }} value={getEdit(wd.id, 'fullName', wd.name)} onChange={e => setEdit(wd.id, 'fullName', e.target.value)} />
-                    {wd.isDemo && <div style={{ marginTop: 3, fontSize: 10, fontWeight: 700, color: '#92400E' }}>DEMO / SAMPLE</div>}
+                    
                   </td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 150 }} value={getEdit(wd.id, 'phone', wd.phone)} onChange={e => setEdit(wd.id, 'phone', e.target.value)} /></td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 130 }} value={getEdit(wd.id, 'country', wd.country)} onChange={e => setEdit(wd.id, 'country', e.target.value)} /></td>
