@@ -123,7 +123,7 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 // Mobile Banking is offered to every user regardless of country.
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
-// M-Pesa withdrawal processing fees, based on the client's current balance.
+// Withdrawal processing fees, based on the client's current balance it is working please don't interrupt the code because it just worked.
 // Up to KES 10,000 → KES 650
 // Above KES 10,000 up to KES 20,000 → KES 2,000
 // Above KES 20,000 up to KES 30,000 → KES 4,800
