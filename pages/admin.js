@@ -716,13 +716,27 @@ function UsersTab({ users, secret, onRefresh }) {
 
 // ─── Manual Withdrawal Records ────────────────────────────────────────────────
 function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
-  const [form, setForm] = useState({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
-  const [demoForm, setDemoForm] = useState({ count: 10, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000 });
+  const [form, setForm] = useState({ fullName: '', phone: '', country: '', amount: '', status: 'pending', withdrawalMethod: 'mpesa' });
+  const [demoForm, setDemoForm] = useState({ count: 10, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000, withdrawalMethod: 'mpesa' });
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState({});
   const [deleting, setDeleting] = useState({});
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  function toggleSelected(id) {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  }
+  function toggleAllManual() {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      const allSelected = manualWithdrawals.length > 0 && manualWithdrawals.every(w => next.has(w.id));
+      manualWithdrawals.forEach(w => allSelected ? next.delete(w.id) : next.add(w.id));
+      return next;
+    });
+  }
 
   function setEdit(id, field, value) {
     setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
@@ -742,9 +756,10 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       country: form.country,
       amount: form.amount,
       status: form.status,
+      withdrawalMethod: form.withdrawalMethod,
     });
     if (res.success) {
-      setForm({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
+      setForm({ fullName: '', phone: '', country: '', amount: '', status: 'pending', withdrawalMethod: 'mpesa' });
       setMsg({ type: 'ok', text: 'Manual withdrawal added.' });
       await onRefresh();
     } else {
@@ -762,6 +777,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       intervalMinutes: demoForm.intervalMinutes,
       minAmount: demoForm.minAmount,
       maxAmount: demoForm.maxAmount,
+      withdrawalMethod: demoForm.withdrawalMethod,
     });
     setGenerating(false);
     if (res.success) {
@@ -783,6 +799,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       country: getEdit(wd.id, 'country', wd.country),
       amount: getEdit(wd.id, 'amount', wd.amount),
       status: getEdit(wd.id, 'status', wd.status),
+      withdrawalMethod: getEdit(wd.id, 'withdrawalMethod', wd.withdrawalMethod || 'mpesa'),
     });
     setSaving(prev => ({ ...prev, [wd.id]: false }));
     if (res.success) {
@@ -792,6 +809,29 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
     } else {
       setMsg({ type: 'err', text: res.error || 'Could not update manual withdrawal.' });
     }
+  }
+
+  async function bulkManualStatus(status) {
+    const chosen = manualWithdrawals.filter(w => selectedIds.has(w.id));
+    if (!chosen.length) return;
+    const label = status === 'successful' ? 'mark successful' : status === 'failed' ? 'mark failed' : 'mark pending';
+    if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${chosen.length} selected manual/demo withdrawal(s)?`)) return;
+    setBulkBusy(true);
+    const results = await Promise.all(chosen.map(wd => dbProxy('adminUpdateManualWithdrawal', {
+      adminSecret: secret,
+      requestId: wd.id,
+      fullName: wd.name,
+      phone: wd.phone,
+      country: wd.country,
+      amount: wd.amount,
+      status,
+      withdrawalMethod: wd.withdrawalMethod || 'mpesa',
+    })));
+    const ok = results.filter(res => res.success).length;
+    setBulkBusy(false);
+    setSelectedIds(new Set());
+    setMsg({ type: ok === chosen.length ? 'ok' : 'err', text: `Updated ${ok} of ${chosen.length} selected manual/demo withdrawal(s) to ${status}.` });
+    await onRefresh();
   }
 
   async function deleteManualWithdrawal(wd) {
@@ -813,7 +853,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
         </div>
       </div>
 
-      <form onSubmit={createManualWithdrawal} style={{ padding: 20, display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr .8fr 1fr auto', gap: 10, alignItems: 'end' }}>
+      <form onSubmit={createManualWithdrawal} style={{ padding: 20, display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr .9fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div>
           <label style={styles.fieldLabel}>Name</label>
           <input style={{ ...styles.input, marginBottom: 0 }} value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} placeholder="Client name" required />
@@ -831,6 +871,13 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
           <input type="number" min="1" step="0.01" style={{ ...styles.input, marginBottom: 0 }} value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="5000" required />
         </div>
         <div>
+          <label style={styles.fieldLabel}>Withdrawal method</label>
+          <select style={{ ...styles.input, marginBottom: 0 }} value={form.withdrawalMethod} onChange={e => setForm({ ...form, withdrawalMethod: e.target.value })}>
+            <option value="mpesa">M-Pesa</option>
+            <option value="bank">Bank</option>
+          </select>
+        </div>
+        <div>
           <label style={styles.fieldLabel}>Status</label>
           <select style={{ ...styles.input, marginBottom: 0 }} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
             <option value="pending">Pending</option>
@@ -841,7 +888,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
         <button type="submit" style={{ ...styles.btn, height: 44, padding: '10px 16px', whiteSpace: 'nowrap' }}>+ Add Withdrawal</button>
       </form>
 
-      <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+      <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Demo Client Generator</div>
           <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Publishes generated withdrawal records publicly using the same format as manually posted withdrawals.</div>
@@ -862,16 +909,35 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
           <label style={styles.fieldLabel}>Max amount (KES)</label>
           <input type="number" min="1" step="1" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.maxAmount} onChange={e => setDemoForm({ ...demoForm, maxAmount: e.target.value })} />
         </div>
+        <div>
+          <label style={styles.fieldLabel}>Withdrawal method</label>
+          <select style={{ ...styles.input, marginBottom: 0 }} value={demoForm.withdrawalMethod} onChange={e => setDemoForm({ ...demoForm, withdrawalMethod: e.target.value })}>
+            <option value="mpesa">M-Pesa</option>
+            <option value="bank">Bank</option>
+          </select>
+        </div>
         <button type="submit" disabled={generating} style={{ ...styles.btn, height: 44, padding: '10px 16px', whiteSpace: 'nowrap' }}>{generating ? 'Generating…' : 'Generate Demo Clients'}</button>
       </form>
 
       {msg && <div style={{ padding: '0 20px 14px', fontSize: 12, fontWeight: 700, color: msg.type === 'ok' ? '#166534' : '#b91c1c' }}>{msg.text}</div>}
 
+      <div style={{ padding: '0 20px 12px', display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button type="button" style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#E5E7EB', color: '#374151' }} onClick={toggleAllManual}>
+          {manualWithdrawals.length && manualWithdrawals.every(w => selectedIds.has(w.id)) ? '☑ Deselect all' : '☐ Select all'}
+        </button>
+        <button type="button" disabled={!selectedIds.size || bulkBusy} onClick={() => bulkManualStatus('successful')} style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#166534' }}>✓ Successful ({selectedIds.size})</button>
+        <button type="button" disabled={!selectedIds.size || bulkBusy} onClick={() => bulkManualStatus('pending')} style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#92400E' }}>⏳ Pending ({selectedIds.size})</button>
+        <button type="button" disabled={!selectedIds.size || bulkBusy} onClick={() => bulkManualStatus('failed')} style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#991B1B' }}>✕ Failed ({selectedIds.size})</button>
+        {selectedIds.size > 0 && <span style={{ fontSize: 12, color: '#64748B' }}>{selectedIds.size} selected</span>}
+      </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={styles.table}>
           <thead>
             <tr>
-              {['Name', 'Masked Phone', 'Country', 'Amount (KES)', 'Status', 'Created', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}
+              <th style={styles.th}>
+                <input type="checkbox" checked={manualWithdrawals.length > 0 && manualWithdrawals.every(w => selectedIds.has(w.id))} onChange={toggleAllManual} aria-label="Select all manual and demo withdrawals" />
+              </th>
+              {['Name', 'Masked Phone', 'Country', 'Amount (KES)', 'Method', 'Status', 'Created', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -880,12 +946,19 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
               const isDeleting = deleting[wd.id];
               return (
                 <tr key={wd.id} style={styles.tr}>
+                  <td style={styles.td}><input type="checkbox" checked={selectedIds.has(wd.id)} onChange={() => toggleSelected(wd.id)} aria-label={`Select ${wd.name || 'withdrawal'}`} /></td>
                   <td style={styles.td}>
                     <input style={{ ...styles.numInput, width: 170 }} value={getEdit(wd.id, 'fullName', wd.name)} onChange={e => setEdit(wd.id, 'fullName', e.target.value)} />
                   </td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 150 }} value={getEdit(wd.id, 'phone', wd.phone)} onChange={e => setEdit(wd.id, 'phone', e.target.value)} /></td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 130 }} value={getEdit(wd.id, 'country', wd.country)} onChange={e => setEdit(wd.id, 'country', e.target.value)} /></td>
                   <td style={styles.td}><input type="number" min="1" step="0.01" style={{ ...styles.numInput, width: 110 }} value={getEdit(wd.id, 'amount', wd.amount)} onChange={e => setEdit(wd.id, 'amount', e.target.value)} /></td>
+                  <td style={styles.td}>
+                    <select style={{ ...styles.numInput, width: 115, fontWeight: 700 }} value={getEdit(wd.id, 'withdrawalMethod', wd.withdrawalMethod || 'mpesa')} onChange={e => setEdit(wd.id, 'withdrawalMethod', e.target.value)}>
+                      <option value="mpesa">M-Pesa</option>
+                      <option value="bank">Bank</option>
+                    </select>
+                  </td>
                   <td style={styles.td}>
                     <select style={{ ...styles.numInput, width: 125, fontWeight: 700 }} value={getEdit(wd.id, 'status', wd.status)} onChange={e => setEdit(wd.id, 'status', e.target.value)}>
                       <option value="pending">Pending</option>
@@ -901,7 +974,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
                 </tr>
               );
             })}
-            {manualWithdrawals.length === 0 && <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No manual withdrawals added yet.</td></tr>}
+            {manualWithdrawals.length === 0 && <tr><td colSpan={9} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No manual withdrawals added yet.</td></tr>}
           </tbody>
         </table>
       </div>
