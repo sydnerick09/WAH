@@ -194,9 +194,10 @@ function normManualWd(row) {
     country:   row.country ?? '',
     amount:    Number(row.amount || 0),
     status:    row.status ?? 'pending',
+    withdrawalMethod: String(row.withdrawal_method || 'mpesa').toLowerCase() === 'bank' ? 'bank' : 'mpesa',
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,
-    isDemo:   false,
+    isDemo:   Boolean(row.is_demo),
   };
 }
 
@@ -1022,7 +1023,7 @@ export default async function handler(req, res) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const { data, error } = await db.from('manual_withdrawals')
-          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo')
+          .select('id,full_name,phone_masked,country,amount,status,withdrawal_method,created_at,updated_at,is_demo')
           .order('created_at', { ascending: false });
         if (error) return res.json({ data: [], error: error.message });
         return res.json({ data: (data || []).map(normManualWd) });
@@ -1037,6 +1038,7 @@ export default async function handler(req, res) {
         const country = cleanManualWithdrawalName(p.country);
         const amount = Number(p.amount);
         const status = String(p.status || 'pending').toLowerCase();
+        const withdrawalMethod = String(p.withdrawalMethod || 'mpesa').toLowerCase() === 'bank' ? 'bank' : 'mpesa';
         if (!name) return res.json({ success: false, error: 'Name is required.' });
         if (!phone) return res.json({ success: false, error: 'Masked phone number is required.' });
         if (!country) return res.json({ success: false, error: 'Country is required.' });
@@ -1065,7 +1067,9 @@ export default async function handler(req, res) {
           country,
           amount,
           status,
-        }).select('id,full_name,phone_masked,country,amount,status,created_at,updated_at').single();
+          withdrawal_method: withdrawalMethod,
+          is_demo: false,
+        }).select('id,full_name,phone_masked,country,amount,status,withdrawal_method,created_at,updated_at,is_demo').single();
         if (error) return res.json({ success: false, error: error.message });
         return res.json({ success: true, data: normManualWd(data) });
       }
@@ -1085,23 +1089,29 @@ export default async function handler(req, res) {
         const country = cleanManualWithdrawalName(p.country !== undefined ? p.country : current.country);
         const amount = Number(p.amount !== undefined ? p.amount : current.amount);
         const status = String(p.status !== undefined ? p.status : current.status).toLowerCase();
+        const withdrawalMethod = String(p.withdrawalMethod !== undefined ? p.withdrawalMethod : (current.withdrawal_method || 'mpesa')).toLowerCase() === 'bank' ? 'bank' : 'mpesa';
         if (!name) return res.json({ success: false, error: 'Name is required.' });
         if (!phone) return res.json({ success: false, error: 'Masked phone number is required.' });
         if (!country) return res.json({ success: false, error: 'Country is required.' });
         if (!(amount > 0) || !Number.isFinite(amount)) return res.json({ success: false, error: 'Amount must be greater than 0.' });
         if (!validManualWithdrawalStatus(status)) return res.json({ success: false, error: 'Invalid withdrawal status.' });
 
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data: recent, error: recentErr } = await db.from('manual_withdrawals')
-          .select('id,status,created_at').eq('phone_masked', phone).neq('id', p.requestId)
-          .gte('created_at', since).order('created_at', { ascending: false }).limit(1);
-        if (recentErr) return res.json({ success: false, error: recentErr.message });
-        const latest = recent?.[0];
-        if (latest && latest.status !== 'failed') {
-          return res.json({ success: false, error: 'This masked phone number already has another withdrawal within the last 24 hours.' });
-        }
-        if (latest && latest.status === 'failed' && status === 'failed') {
-          return res.json({ success: false, error: 'A failed withdrawal cannot be recorded twice within 24 hours.' });
+        // Status/method edits to an existing record must remain possible even when
+        // another record for the same masked number exists. The 24-hour duplicate
+        // rule applies only when the admin changes the phone to a different number.
+        if (phone !== String(current.phone_masked || '')) {
+          const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          const { data: recent, error: recentErr } = await db.from('manual_withdrawals')
+            .select('id,status,created_at').eq('phone_masked', phone).neq('id', p.requestId)
+            .gte('created_at', since).order('created_at', { ascending: false }).limit(1);
+          if (recentErr) return res.json({ success: false, error: recentErr.message });
+          const latest = recent?.[0];
+          if (latest && latest.status !== 'failed') {
+            return res.json({ success: false, error: 'This masked phone number already has another withdrawal within the last 24 hours.' });
+          }
+          if (latest && latest.status === 'failed' && status === 'failed') {
+            return res.json({ success: false, error: 'A failed withdrawal cannot be recorded twice within 24 hours.' });
+          }
         }
 
         const { data, error } = await db.from('manual_withdrawals').update({
@@ -1110,8 +1120,9 @@ export default async function handler(req, res) {
           country,
           amount,
           status,
+          withdrawal_method: withdrawalMethod,
           updated_at: new Date().toISOString(),
-        }).eq('id', p.requestId).select('id,full_name,phone_masked,country,amount,status,created_at,updated_at').single();
+        }).eq('id', p.requestId).select('id,full_name,phone_masked,country,amount,status,withdrawal_method,created_at,updated_at,is_demo').single();
         if (error) return res.json({ success: false, error: error.message });
         return res.json({ success: true, data: normManualWd(data) });
       }
@@ -1125,6 +1136,7 @@ export default async function handler(req, res) {
         const intervalMinutes = Math.max(1, Math.min(1440, Math.floor(Number(p.intervalMinutes) || 30)));
         const minAmount = Math.max(1, Number(p.minAmount) || 1000);
         const maxAmount = Math.max(minAmount, Number(p.maxAmount) || 10000);
+        const withdrawalMethod = String(p.withdrawalMethod || 'mpesa').toLowerCase() === 'bank' ? 'bank' : 'mpesa';
 
         // Generated records are posted publicly in the same feed as manual records.
         const people = [
@@ -1156,7 +1168,8 @@ export default async function handler(req, res) {
             country: person[1],
             amount,
             status: 'pending',
-            is_demo: false,
+            withdrawal_method: withdrawalMethod,
+            is_demo: true,
             created_at: new Date(base - (count - 1 - i) * intervalMinutes * 60 * 1000).toISOString(),
             updated_at: new Date().toISOString(),
           });
@@ -1164,7 +1177,7 @@ export default async function handler(req, res) {
 
         const { data, error } = await db.from('manual_withdrawals')
           .insert(rows)
-          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo');
+          .select('id,full_name,phone_masked,country,amount,status,withdrawal_method,created_at,updated_at,is_demo');
         if (error) return res.json({ success: false, error: error.message });
         return res.json({ success: true, data: (data || []).map(normManualWd), count: data?.length || 0 });
       }
@@ -1181,7 +1194,7 @@ export default async function handler(req, res) {
 
       case 'listPublicManualWithdrawals': {
         const { data, error } = await db.from('manual_withdrawals')
-          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo')
+          .select('id,full_name,phone_masked,country,amount,status,withdrawal_method,created_at,updated_at,is_demo')
           .order('created_at', { ascending: false }).limit(200);
         if (error) return res.json({ data: [], error: error.message });
         return res.json({ data: (data || []).map(normManualWd) });
