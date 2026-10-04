@@ -211,7 +211,7 @@ export default function WithdrawalReviews() {
       kind: 'manual',
     }));
     return shuffleRealAndDemo([...records, ...genuine, ...manual], getDaySeed() ^ 0x9e3779b9);
-  }, [records, approvedReviews]);
+  }, [records, approvedReviews, manualWithdrawals]);
 
   useEffect(() => {
     let cancelled = false;
@@ -508,6 +508,7 @@ export default function WithdrawalReviews() {
               country: withdrawal.country || '',
               amount: Number(withdrawal.amount || 0),
               status: withdrawal.status || 'pending',
+              withdrawalMethod: withdrawal.withdrawalMethod || 'mpesa',
               kind: 'manual',
             }))].map((record) => (
               <div key={record.id} style={{
@@ -523,6 +524,9 @@ export default function WithdrawalReviews() {
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{ fontWeight: 800, fontSize: 13 }}>{formatKes(record.amount)}</div>
+                  <div style={{ color: '#475569', fontWeight: 800, fontSize: 10.5, marginTop: 2 }}>
+                    {String(record.withdrawalMethod || 'mpesa').toLowerCase() === 'bank' ? '🏦 Bank withdrawal' : '📱 M-Pesa withdrawal'}
+                  </div>
                   <div style={{ color: '#6b7280', fontWeight: 700, fontSize: 10.5, marginTop: 2 }}>
                     {record.status === 'failed'
                       ? 'Failed withdrawal'
