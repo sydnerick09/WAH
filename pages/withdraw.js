@@ -124,25 +124,25 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
 // Withdrawal processing fees, based on the client's current balance it is working please don't interrupt the code because it just worked.
-// Up to KES 10,000 → KES 650
-// Above KES 10,000 up to KES 20,000 → KES 2,000
-// Above KES 20,000 up to KES 30,000 → KES 4,800
-// Above KES 30,000 up to KES 40,000 → KES 5,200
+// Up to KES 10,000 → KES 487.50
+// Above KES 10,000 up to KES 20,000 → KES 1,500
+// Above KES 20,000 up to KES 30,000 → KES 3,600
+// Above KES 30,000 up to KES 40,000 → KES 3,900
 // Above KES 40,000 → M-Pesa is unavailable; use the bank withdrawal flow.
 function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
 
 
   // M-Pesa withdrawal fee brackets:it is working please don't interrupt the code because it just worked.
-  // Up to KES 10,000              -> KES 650
-  // Above KES 10,000 - 20,000     -> KES 2,000
-  // Above KES 20,000 - 30,000     -> KES 4,800
-  // Above KES 30,000 - 40,000     -> KES 5,200
+  // Up to KES 10,000              -> KES 487.50
+  // Above KES 10,000 - 20,000     -> KES 1,500
+  // Above KES 20,000 - 30,000     -> KES 3,600
+  // Above KES 30,000 - 40,000     -> KES 3,900
   // Above KES 40,000              -> M-Pesa unavailable
-  if (amount <= 10000) return 650;
-  if (amount <= 20000) return 2000;
-  if (amount <= 30000) return 4800;
-  if (amount <= 40000) return 5200;
+  if (amount <= 10000) return 487.50;
+  if (amount <= 20000) return 1500;
+  if (amount <= 30000) return 3600;
+  if (amount <= 40000) return 3900;
   return null;
 }
 
@@ -154,84 +154,84 @@ const USD_TO_KES = 135;
 
 const BANK_WITHDRAWAL_FEES_USD = {
   // Kenya — supplied figures
-  'CB Bank': 23,
-  'NCBA Bank': 27,
-  'Co-operative Bank of Kenya': 38,
-  'Co-operative Bank': 48,
-  'Equity Bank': 25,
-  'Absa Bank Kenya': 29,
-  'Standard Chartered Bank': 24,
-  'Stanbic Bank Kenya': 49,
-  'Postbank Kenya': 38,
-  'Family Bank of Kenya': 39,
-  'DTB Bank': 29,
-  'KCB Bank': 36,
+  'CB Bank': 17.25,
+  'NCBA Bank': 20.25,
+  'Co-operative Bank of Kenya': 28.5,
+  'Co-operative Bank': 36,
+  'Equity Bank': 18.75,
+  'Absa Bank Kenya': 21.75,
+  'Standard Chartered Bank': 18,
+  'Stanbic Bank Kenya': 36.75,
+  'Postbank Kenya': 28.5,
+  'Family Bank of Kenya': 29.25,
+  'DTB Bank': 21.75,
+  'KCB Bank': 27,
 
   // Uganda / Sudan / Tanzania — supplied ranges converted to fixed fees
-  'Stanbic Bank Uganda': 22,
-  'Centenary Bank': 11,
-  'Absa Bank Uganda': 40,
-  'Bank of Uganda': 41,
-  'Bank of Khartoum': 42,
-  'Faisal Islamic Bank': 43,
-  'Omdurman National Bank': 44,
-  'CRDB Bank': 45,
-  'NMB Bank': 46,
-  'NBC Bank': 47,
+  'Stanbic Bank Uganda': 16.5,
+  'Centenary Bank': 8.25,
+  'Absa Bank Uganda': 30,
+  'Bank of Uganda': 30.75,
+  'Bank of Khartoum': 31.5,
+  'Faisal Islamic Bank': 32.25,
+  'Omdurman National Bank': 33,
+  'CRDB Bank': 33.75,
+  'NMB Bank': 34.5,
+  'NBC Bank': 35.25,
 
   // Brazil / Colombia / Chile — supplied ranges converted to fixed fees
-  'Banco do Brasil': 48,
-  'Itaú Unibanco': 49,
-  'Banco Bradesco': 50,
-  'Bradesco': 50,
-  'Banco Santander': 51,
-  'Santander': 51,
-  'Banco de Bogotá': 52,
-  'Bancolombia': 53,
-  'BCI': 54,
-  'Banco de Chile': 55,
+  'Banco do Brasil': 36,
+  'Itaú Unibanco': 36.75,
+  'Banco Bradesco': 37.5,
+  'Bradesco': 37.5,
+  'Banco Santander': 38.25,
+  'Santander': 38.25,
+  'Banco de Bogotá': 39,
+  'Bancolombia': 39.75,
+  'BCI': 40.5,
+  'Banco de Chile': 41.25,
 
   // United States — fixed values within the supplied USD 60–86 range
-  'JPMorgan Chase': 60,
-  'Bank of America': 62,
-  'Wells Fargo': 64,
-  'Citibank': 66,
-  'U.S. Bank': 68,
-  'PNC Bank': 70,
-  'Truist Bank': 72,
-  'Capital One': 74,
+  'JPMorgan Chase': 45,
+  'Bank of America': 46.5,
+  'Wells Fargo': 48,
+  'Citibank': 49.5,
+  'U.S. Bank': 51,
+  'PNC Bank': 52.5,
+  'Truist Bank': 54,
+  'Capital One': 55.5,
 
   // Other listed banks — fixed fees in the requested USD 40–82 band
-  'Barclays Bank': 40.5, 'HSBC UK': 41.5, 'Lloyds Bank': 42.5, 'NatWest': 43.5, 'Standard Chartered': 44.5,
-  'Deutsche Bank': 45.5, 'Commerzbank': 46.5, 'DZ Bank': 47.5,
-  'BNP Paribas': 48.5, 'Société Générale': 49.5, 'Crédit Agricole': 50.5,
-  'BBVA': 52.5, 'CaixaBank': 53.5,
-  'UniCredit': 54.5, 'Intesa Sanpaolo': 55.5,
-  'ING Bank': 56.5, 'Rabobank': 57.5, 'ABN AMRO': 58.5,
-  'UBS': 59.5, 'Credit Suisse': 60.5,
-  'Allied Irish Banks (AIB)': 61.5, 'Bank of Ireland': 62.5,
-  'KBC Bank': 63.5, 'Millennium BCP': 64.5,
-  'Nordea': 65.5, 'SEB': 66.5, 'DNB': 67.5, 'PKO Bank Polski': 68.5,
-  'Emirates NBD': 69.5, 'First Abu Dhabi Bank': 70.5,
-  'Al Rajhi Bank': 71.5, 'Saudi National Bank': 72.5,
-  'National Bank of Egypt': 73.5, 'HBL (Habib Bank)': 74.5, 'United Bank (UBL)': 75.5,
-  'RBC Royal Bank': 76.5, 'TD Canada Trust': 77.5, 'Scotiabank': 78.5,
-  'Guaranty Trust Bank (GTBank)': 79.5, 'Access Bank': 80.5, 'First Bank of Nigeria': 81, 'Zenith Bank': 81.5,
-  'Standard Bank': 40.25, 'First National Bank (FNB)': 41.25, 'Absa': 42.25, 'Capitec': 43.25, 'Nedbank': 44.25,
-  'Ecobank Ghana': 45.25, 'GCB Bank': 46.25,
-  'State Bank of India (SBI)': 47.25, 'HDFC Bank': 48.25, 'ICICI Bank': 49.25, 'Axis Bank': 50.25,
-  'ICBC': 51.25, 'Bank of China': 52.25, 'China Construction Bank': 53.25,
-  'MUFG Bank': 54.25, 'Sumitomo Mitsui (SMBC)': 55.25,
-  'Commonwealth Bank': 56.25, 'ANZ': 57.25, 'Westpac': 58.25, 'NAB': 59.25,
-  'DBS Bank': 60.25, 'OCBC Bank': 61.25, 'UOB': 62.25,
-  'National Commercial Bank (NCB)': 63.25, 'Scotiabank Jamaica': 64.25, 'JN Bank': 65.25,
-  'BBVA México': 66.25, 'Banorte': 67.25, 'Citibanamex': 68.25,
-  'Mobile Banking': 69.25,
+  'Barclays Bank': 30.375, 'HSBC UK': 31.125, 'Lloyds Bank': 31.875, 'NatWest': 32.625, 'Standard Chartered': 33.375,
+  'Deutsche Bank': 34.125, 'Commerzbank': 34.875, 'DZ Bank': 35.625,
+  'BNP Paribas': 36.375, 'Société Générale': 37.125, 'Crédit Agricole': 37.875,
+  'BBVA': 39.375, 'CaixaBank': 40.125,
+  'UniCredit': 40.875, 'Intesa Sanpaolo': 41.625,
+  'ING Bank': 42.375, 'Rabobank': 43.125, 'ABN AMRO': 43.875,
+  'UBS': 44.625, 'Credit Suisse': 45.375,
+  'Allied Irish Banks (AIB)': 46.125, 'Bank of Ireland': 46.875,
+  'KBC Bank': 47.625, 'Millennium BCP': 48.375,
+  'Nordea': 49.125, 'SEB': 49.875, 'DNB': 50.625, 'PKO Bank Polski': 51.375,
+  'Emirates NBD': 52.125, 'First Abu Dhabi Bank': 52.875,
+  'Al Rajhi Bank': 53.625, 'Saudi National Bank': 54.375,
+  'National Bank of Egypt': 55.125, 'HBL (Habib Bank)': 55.875, 'United Bank (UBL)': 56.625,
+  'RBC Royal Bank': 57.375, 'TD Canada Trust': 58.125, 'Scotiabank': 58.875,
+  'Guaranty Trust Bank (GTBank)': 59.625, 'Access Bank': 60.375, 'First Bank of Nigeria': 60.75, 'Zenith Bank': 61.125,
+  'Standard Bank': 30.1875, 'First National Bank (FNB)': 30.9375, 'Absa': 31.6875, 'Capitec': 32.4375, 'Nedbank': 33.1875,
+  'Ecobank Ghana': 33.9375, 'GCB Bank': 34.6875,
+  'State Bank of India (SBI)': 35.4375, 'HDFC Bank': 36.1875, 'ICICI Bank': 36.9375, 'Axis Bank': 37.6875,
+  'ICBC': 38.4375, 'Bank of China': 39.1875, 'China Construction Bank': 39.9375,
+  'MUFG Bank': 40.6875, 'Sumitomo Mitsui (SMBC)': 41.4375,
+  'Commonwealth Bank': 42.1875, 'ANZ': 42.9375, 'Westpac': 43.6875, 'NAB': 44.4375,
+  'DBS Bank': 45.1875, 'OCBC Bank': 45.9375, 'UOB': 46.6875,
+  'National Commercial Bank (NCB)': 47.4375, 'Scotiabank Jamaica': 48.1875, 'JN Bank': 48.9375,
+  'BBVA México': 49.6875, 'Banorte': 50.4375, 'Citibanamex': 51.1875,
+  'Mobile Banking': 51.9375,
 };
 
 function getBankWithdrawalFeeUsd(bankName) {
   const fee = BANK_WITHDRAWAL_FEES_USD[bankName];
-  return Number.isFinite(Number(fee)) ? Number(fee) : 40;
+  return Number.isFinite(Number(fee)) ? Number(fee) : 30;
 }
 
 function getBankWithdrawalFeeKes(bankName, rate = USD_TO_KES) {
