@@ -584,7 +584,7 @@ function ReferralModal({ user, onClose }) {
 }
 
 // ─── Hamburger Menu ───────────────────────────────────────────────────────────
-function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onMpesaWithdraw, onOtherWithdraw, onReferral, onTraining, onWithdrawalReviews, onLogout }) {
+function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onMpesaWithdraw, onSafaricomWithdraw, onOtherWithdraw, onReferral, onTraining, onWithdrawalReviews, onLogout }) {
   const items = [
     { icon: 'home',       label: 'Dashboard',                    action: () => { onClose(); } },
     { icon: 'user',       label: 'My Profile',                   action: () => { onClose(); onProfile(); } },
@@ -592,6 +592,7 @@ function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onM
     { icon: 'star',       label: 'Upgrade to Premium',           action: () => { onClose(); onUpgrade(); } },
     { icon: 'check',      label: 'Awarded Tasks',                action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: 'smartphone', label: 'Withdraw with M-Pesa', mpesa: true, action: () => { onClose(); onMpesaWithdraw(); } },
+    { icon: 'phone',      label: 'Safaricom Withdrawal', safaricom: true, action: () => { onClose(); onSafaricomWithdraw(); } },
     { icon: 'globe',      label: 'Withdraw from Other Countries', action: () => { onClose(); onOtherWithdraw(); } },
     { icon: 'star',       label: 'Withdrawal Reviews & Testimonies', action: () => { onClose(); onWithdrawalReviews(); } },
     { icon: 'graduation', label: 'Apply for Training',           action: () => { onClose(); onTraining(); } },
@@ -620,7 +621,7 @@ function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onM
         <nav className="hamburger-nav">
           {items.map(item => (
             <button key={item.label} className="hamburger-item" onClick={item.action}>
-              <span className="hamburger-item-icon" style={item.mpesa ? { color: 'var(--mpesa-green)' } : undefined}>
+              <span className="hamburger-item-icon" style={item.safaricom ? { color: '#E4002B' } : item.mpesa ? { color: 'var(--mpesa-green)' } : undefined}>
                 <Icon name={item.icon} size={18} />
               </span>
               <span>{item.label}</span>
@@ -1170,6 +1171,7 @@ export default function Dashboard() {
           onLeaderboard={() => router.push('/leaderboard')}
           onUpgrade={() => router.push('/premium')}
           onMpesaWithdraw={() => router.push('/withdraw?method=mpesa')}
+          onSafaricomWithdraw={() => router.push('/withdraw?method=safaricom')}
           onOtherWithdraw={() => router.push('/withdraw?method=international')}
           onReferral={() => setShowReferral(true)}
           onTraining={() => setShowTraining(true)}
