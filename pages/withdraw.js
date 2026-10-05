@@ -123,28 +123,42 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 // Mobile Banking is offered to every user regardless of country.
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
-// Withdrawal processing fees, based on the client's current balance it is working please don't interrupt the code because it just worked.
-// Up to KES 10,000 → KES 650
-// Above KES 10,000 up to KES 20,000 → KES 2,000
-// Above KES 20,000 up to KES 30,000 → KES 4,800
-// Above KES 30,000 up to KES 40,000 → KES 5,200
-// Above KES 40,000 → M-Pesa is unavailable; use the bank withdrawal flow.
+// Withdrawal processing fees, based on the client's current balance.
+// M-Pesa is available through KES 40,000; balances above that use the bank withdrawal flow.
 function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
 
-
-  // M-Pesa withdrawal fee brackets:it is working please don't interrupt the code because it just worked.
-  // Up to KES 10,000              -> KES 650
-  // Above KES 10,000 - 20,000     -> KES 2,000
-  // Above KES 20,000 - 30,000     -> KES 4,800
-  // Above KES 30,000 - 40,000     -> KES 5,200
-  // Above KES 40,000              -> M-Pesa unavailable
-  if (amount <= 10000) return 650;
-  if (amount <= 20000) return 2000;
-  if (amount <= 30000) return 4800;
-  if (amount <= 40000) return 5200;
+  // M-Pesa withdrawal fee brackets:
+  // Below KES 5,000             -> KES 408
+  // KES 5,000 - 9,999           -> KES 1,000
+  // KES 10,000 - 19,999         -> KES 1,300
+  // KES 20,000 - 29,999         -> KES 2,999
+  // KES 30,000 - 40,000         -> KES 3,200
+  // Above KES 40,000             -> M-Pesa unavailable
+  if (amount < 5000) return 408;
+  if (amount < 10000) return 1000;
+  if (amount < 20000) return 1300;
+  if (amount < 30000) return 2999;
+  if (amount <= 40000) return 3200;
   return null;
 }
+
+// Kenya phone numbers accepted in the M-Pesa and Airtel forms:
+// 07XXXXXXXX / 01XXXXXXXX or +2547XXXXXXXX / +2541XXXXXXXX.
+// Spaces and hyphens are ignored for validation.
+function isValidKenyanMobilePhone(value) {
+  const normalized = String(value || '').replace(/[\s-]/g, '');
+  return /^(?:0[17]\d{8}|\+254[17]\d{8})$/.test(normalized);
+}
+
+// National ID must contain exactly 8 digits.
+function isValidKenyanNationalId(value) {
+  return /^\d{8}$/.test(String(value || '').trim());
+}
+
+// Bank withdrawal fees in the "Withdraw from Other Countries" flow are reduced by 25%.
+// Existing bank fee values remain untouched so other withdrawal flows are unchanged.
+const INTERNATIONAL_BANK_FEE_DISCOUNT = 0.75;
 
 // Bank withdrawal fees are fixed in USD (Option A).
 // The exact figures supplied by the client are preserved below. For banks where
@@ -285,8 +299,10 @@ function MpesaFlow({ user }) {
   function handleSubmitForm() {
     const errs = {};
     if (!fullName.trim()) errs.fullName = 'Full name is required';
-    if (!phone.trim())    errs.phone = 'Phone number is required';
+    if (!phone.trim()) errs.phone = 'Phone number is required';
+    else if (!isValidKenyanMobilePhone(phone)) errs.phone = 'Enter a valid Kenyan phone number (07/01XXXXXXXX or +2547/+2541XXXXXXXX)';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
+    else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be exactly 8 digits';
 
     if (Object.keys(errs).length) {
       setErrors(errs);
@@ -383,15 +399,16 @@ function MpesaFlow({ user }) {
           {errors.fullName && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.fullName}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>M-Pesa Phone Number</div>
-          <input className="pay-phone-input" type="tel" value={phone}
-            onChange={e => { setPhone(e.target.value); setErrors(p => ({ ...p, phone: undefined })); }}
-            placeholder="+254 7XX XXX XXX" style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
+          <input className="pay-phone-input" type="tel" inputMode="tel" autoComplete="tel" value={phone}
+            onChange={e => { setPhone(e.target.value.replace(/[^0-9+\s-]/g, '').slice(0, 16)); setErrors(p => ({ ...p, phone: undefined })); }}
+            placeholder="+254 7XX XXX XXX or +254 1XX XXX XXX"
+             style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
-          <input className="pay-phone-input" type="text" value={idNumber}
-            onChange={e => { setIdNumber(e.target.value); setErrors(p => ({ ...p, idNumber: undefined })); }}
-            placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
+          <input className="pay-phone-input" type="text" inputMode="numeric" autoComplete="off" maxLength={8} value={idNumber}
+             onChange={e => { setIdNumber(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrors(p => ({ ...p, idNumber: undefined })); }}
+             placeholder="e.g. 12345678" pattern="\d{8}" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
 
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
@@ -515,8 +532,10 @@ function SafaricomFlow({ user }) {
   function handleSubmitForm() {
     const errs = {};
     if (!fullName.trim()) errs.fullName = 'Full name is required';
-    if (!safaricomPhone.trim())    errs.phone = 'Phone number is required';
+    if (!safaricomPhone.trim()) errs.phone = 'Phone number is required';
+    else if (!isValidKenyanMobilePhone(safaricomPhone)) errs.phone = 'Enter a valid Kenyan phone number (07/01XXXXXXXX or +2547/+2541XXXXXXXX)';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
+    else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be exactly 8 digits';
 
     if (Object.keys(errs).length) {
       setErrors(errs);
@@ -613,15 +632,16 @@ function SafaricomFlow({ user }) {
           {errors.fullName && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.fullName}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>Airtel Phone Number</div>
-          <input className="pay-phone-input" type="tel" value={safaricomPhone}
-            onChange={e => { setSafaricomPhone(e.target.value); setErrors(p => ({ ...p, phone: undefined })); }}
-            placeholder="+254 7XX XXX XXX" style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
+          <input className="pay-phone-input" type="tel" inputMode="tel" autoComplete="tel" value={safaricomPhone}
+            onChange={e => { setSafaricomPhone(e.target.value.replace(/[^0-9+\s-]/g, '').slice(0, 16)); setErrors(p => ({ ...p, phone: undefined })); }}
+            placeholder="+254 7XX XXX XXX or +254 1XX XXX XXX"
+             style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
-          <input className="pay-phone-input" type="text" value={idNumber}
-            onChange={e => { setIdNumber(e.target.value); setErrors(p => ({ ...p, idNumber: undefined })); }}
-            placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
+          <input className="pay-phone-input" type="text" inputMode="numeric" autoComplete="off" maxLength={8} value={idNumber}
+             onChange={e => { setIdNumber(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrors(p => ({ ...p, idNumber: undefined })); }}
+             placeholder="e.g. 12345678" pattern="\d{8}" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
 
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
@@ -956,7 +976,9 @@ function InternationalFlow({ user }) {
   const amountValid = Number.isFinite(requestedAmount) && requestedAmount >= 100 && requestedAmount <= balanceAmount;
   const formValid = accountName.trim().length > 0 && !!selectedBank && acctValid && branch.trim().length > 0 && swiftCode.trim().length > 0 && amountValid;
 
-  const selectedBankFeeUsd = selectedBank ? getBankWithdrawalFeeUsd(selectedBank.name) : 0;
+  const selectedBankFeeUsd = selectedBank
+    ? getBankWithdrawalFeeUsd(selectedBank.name) * INTERNATIONAL_BANK_FEE_DISCOUNT
+    : 0;
   const selectedBankRate = Number(quote?.rate || USD_TO_KES);
   const selectedBankFeeKes = selectedBank ? Math.round(selectedBankFeeUsd * selectedBankRate) : 0;
 
@@ -1033,7 +1055,7 @@ function InternationalFlow({ user }) {
     const details =
       `${bankDetails}\n` +
       `Amount: KES ${amount.toLocaleString()}\n` +
-      `Bank Withdrawal Fee: USD ${selectedBankFeeUsd} = KES ${selectedBankFeeKes.toLocaleString()}\n` +
+      `Bank Withdrawal Fee (25% reduced): USD ${selectedBankFeeUsd.toFixed(2)} = KES ${selectedBankFeeKes.toLocaleString()}\n` +
       `Fee Paid: KES ${selectedBankFeeKes.toLocaleString()}\n` +
       `Requested by: ${user?.fullName || ''} (${user?.email || ''})`;
 
@@ -1077,7 +1099,7 @@ function InternationalFlow({ user }) {
     return (
       <FlowShell title="Withdraw from Other Countries" subtitle="Withdrawal fee" icon="globe" accent="#000000">
         <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 16 }}>
-          Your bank details are ready. Pay the bank withdrawal fee via M-Pesa. The fee varies by bank: <strong>{selectedBank?.name}</strong> is <strong>USD {selectedBankFeeUsd}</strong>, payable as approximately <strong>KES {selectedBankFeeKes.toLocaleString()}</strong> at {selectedBankRate}{quote?.rateLive ? '' : ' (approx.)'}.
+          Your bank details are ready. Pay the bank withdrawal fee via M-Pesa. The fee varies by bank: <strong>{selectedBank?.name}</strong> is <strong>USD {selectedBankFeeUsd.toFixed(2)}</strong>, payable as approximately <strong>KES {selectedBankFeeKes.toLocaleString()}</strong> at {selectedBankRate}{quote?.rateLive ? '' : ' (approx.)'}.
         </div>
 
         <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', textAlign: 'left', marginBottom: 18, fontSize: 13 }}>
@@ -1173,7 +1195,7 @@ function InternationalFlow({ user }) {
 
       {selectedBank && (
         <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginTop: 12, fontSize: 13 }}>
-          Withdrawal fee for <strong>{selectedBank.name}</strong>: <strong>USD {selectedBankFeeUsd}</strong> ≈ <strong>KES {selectedBankFeeKes.toLocaleString()}</strong>.
+          Withdrawal fee for <strong>{selectedBank.name}</strong>: <strong>USD {selectedBankFeeUsd.toFixed(2)}</strong> ≈ <strong>KES {selectedBankFeeKes.toLocaleString()}</strong>.
         </div>
       )}
 
@@ -1284,4 +1306,4 @@ export default function WithdrawPage() {
       </button>
     </FlowShell>
   );
-}
+}s
