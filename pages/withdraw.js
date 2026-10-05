@@ -135,11 +135,11 @@ function getMpesaWithdrawalFee(balance) {
   // KES 20,000 - 29,999         -> KES 2,999
   // KES 30,000 - 40,000         -> KES 3,200
   // Above KES 40,000             -> M-Pesa unavailable
-  if (amount < 5000) return 408;
+  if (amount < 5000) return 480;
   if (amount < 10000) return 1000;
   if (amount < 20000) return 1300;
-  if (amount < 30000) return 2999;
-  if (amount <= 40000) return 3200;
+  if (amount < 30000) return 3309;
+  if (amount <= 40000) return 3800;
   return null;
 }
 
