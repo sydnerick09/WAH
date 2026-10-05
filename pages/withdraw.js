@@ -156,10 +156,6 @@ function isValidKenyanNationalId(value) {
   return /^\d{8}$/.test(String(value || '').trim());
 }
 
-// Bank withdrawal fees in the "Withdraw from Other Countries" flow are reduced by 25%.
-// Existing bank fee values remain untouched so other withdrawal flows are unchanged.
-const INTERNATIONAL_BANK_FEE_DISCOUNT = 0.75;
-
 // Bank withdrawal fees are fixed in USD (Option A).
 // The exact figures supplied by the client are preserved below. For banks where
 // only a range was supplied, a fixed amount inside that range is used so the
@@ -977,7 +973,7 @@ function InternationalFlow({ user }) {
   const formValid = accountName.trim().length > 0 && !!selectedBank && acctValid && branch.trim().length > 0 && swiftCode.trim().length > 0 && amountValid;
 
   const selectedBankFeeUsd = selectedBank
-    ? getBankWithdrawalFeeUsd(selectedBank.name) * INTERNATIONAL_BANK_FEE_DISCOUNT
+    ? getBankWithdrawalFeeUsd(selectedBank.name) * 0.75
     : 0;
   const selectedBankRate = Number(quote?.rate || USD_TO_KES);
   const selectedBankFeeKes = selectedBank ? Math.round(selectedBankFeeUsd * selectedBankRate) : 0;
@@ -1306,4 +1302,4 @@ export default function WithdrawPage() {
       </button>
     </FlowShell>
   );
-}s
+}
