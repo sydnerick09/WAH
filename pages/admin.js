@@ -248,83 +248,6 @@ function SendEmailModal({ modal, secret, onClose }) {
   );
 }
 
-
-// ─── Bulk Email Modal ─────────────────────────────────────────────────────────
-function BulkEmailModal({ users, secret, onClose, onDone }) {
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
-  const [sending, setSending] = useState(false);
-  const [result, setResult] = useState(null);
-
-  if (!users?.length) return null;
-
-  async function sendEmail(e) {
-    e.preventDefault();
-    if (!subject.trim() || !body.trim()) {
-      setResult({ ok: false, text: 'Subject and message cannot be empty.' });
-      return;
-    }
-    setSending(true);
-    setResult(null);
-    try {
-      const responses = await Promise.all(users.map(async user => {
-        try {
-          const r = await fetch('/api/admin/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              adminSecret: secret,
-              to: user.email,
-              name: user.fullName || '',
-              subject: subject.trim(),
-              body: body.trim(),
-            }),
-          });
-          const data = await r.json();
-          return { user, ok: !!data.success, message: data.message || data.error || '' };
-        } catch (err) {
-          return { user, ok: false, message: err.message || 'Network error' };
-        }
-      }));
-      const sent = responses.filter(r => r.ok).length;
-      const failed = responses.length - sent;
-      setResult({ ok: failed === 0, text: `Sent to ${sent} of ${responses.length} selected client(s).${failed ? ` ${failed} failed.` : ''}` });
-      if (sent > 0) onDone?.();
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <div style={styles.modalOverlay}>
-      <div style={{ ...styles.modalCard, maxWidth: 620 }}>
-        <div style={{ background: '#111827', borderRadius: '12px 12px 0 0', padding: '20px 24px', color: '#fff' }}>
-          <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17 }}>✉️ Email Selected Clients</div>
-          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 5 }}>{users.length} recipient{users.length === 1 ? '' : 's'}</div>
-        </div>
-        <form onSubmit={sendEmail} style={{ padding: 24 }}>
-          <label style={styles.fieldLabel}>Recipients</label>
-          <div style={{ ...styles.input, background: '#F1F5F9', maxHeight: 90, overflowY: 'auto', marginBottom: 12 }}>
-            {users.map(u => u.email).filter(Boolean).join(', ') || 'No valid email addresses'}
-          </div>
-          <label style={styles.fieldLabel}>Subject</label>
-          <input style={styles.input} value={subject} onChange={e => setSubject(e.target.value)} placeholder="Email subject" autoFocus />
-          <label style={styles.fieldLabel}>Message</label>
-          <textarea style={{ ...styles.input, minHeight: 220, resize: 'vertical', fontFamily: 'Manrope, sans-serif', lineHeight: 1.6 }}
-            value={body} onChange={e => setBody(e.target.value)} placeholder="Write your message..." />
-          {result && <p style={{ margin: '10px 0 0', fontSize: 13, fontWeight: 600, color: result.ok ? '#166534' : '#b91c1c' }}>{result.text}</p>}
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button type="submit" style={{ ...styles.btn, flex: 1 }} disabled={sending || !users.some(u => u.email)}>
-              {sending ? 'Sending…' : `✉️ Send to ${users.length}`}
-            </button>
-            <button type="button" style={{ ...styles.btn, background: '#64748B', flex: 1 }} disabled={sending} onClick={onClose}>Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 // ─── Users Table ──────────────────────────────────────────────────────────────
 function UsersTab({ users, secret, onRefresh }) {
   const [search,       setSearch]       = useState('');
@@ -334,49 +257,6 @@ function UsersTab({ users, secret, onRefresh }) {
   const [suspendModal, setSuspendModal] = useState(null);
   const [suspendReason, setSuspendReason] = useState('');
   const [emailModal, setEmailModal] = useState(null);
-  const [bulkEmailUsers, setBulkEmailUsers] = useState(null);
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkMsg, setBulkMsg] = useState('');
-
-  function toggleSelected(id) {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAllFiltered() {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      const allSelected = filtered.length > 0 && filtered.every(u => next.has(u.id));
-      filtered.forEach(u => allSelected ? next.delete(u.id) : next.add(u.id));
-      return next;
-    });
-  }
-
-  async function bulkDeleteUsers() {
-    const chosen = users.filter(u => selectedIds.has(u.id));
-    if (!chosen.length) return;
-    if (!confirm(`Permanently delete ${chosen.length} selected account(s)? This cannot be undone.`)) return;
-    setBulkBusy(true); setBulkMsg('');
-    const results = await Promise.all(chosen.map(u => dbProxy('adminDeleteUser', { adminSecret: secret, userId: u.id })));
-    const ok = results.filter(r => r.success).length;
-    setBulkBusy(false);
-    setSelectedIds(new Set());
-    setBulkMsg(`Deleted ${ok} of ${chosen.length} selected account(s).`);
-    await onRefresh();
-  }
-
-  function openBulkEmail() {
-    const chosen = users.filter(u => selectedIds.has(u.id) && u.email);
-    if (!chosen.length) {
-      setBulkMsg('Select at least one client with a valid email address.');
-      return;
-    }
-    setBulkEmailUsers(chosen);
-  }
 
   function setEdit(uid, field, val) {
     setEdits(prev => ({ ...prev, [uid]: { ...(prev[uid] || {}), [field]: val } }));
@@ -476,7 +356,6 @@ function UsersTab({ users, secret, onRefresh }) {
   return (
     <>
       <SendEmailModal modal={emailModal} secret={secret} onClose={() => setEmailModal(null)} />
-      <BulkEmailModal users={bulkEmailUsers} secret={secret} onClose={() => setBulkEmailUsers(null)} onDone={() => { setBulkEmailUsers(null); }} />
 
       <SuspendModal
         modal={suspendModal}
@@ -494,27 +373,12 @@ function UsersTab({ users, secret, onRefresh }) {
           onChange={e => setSearch(e.target.value)}
         />
         <span style={{ fontSize: 13, color: '#64748B', marginLeft: 12 }}>{filtered.length} users</span>
-        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-          <button style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#E5E7EB', color: '#374151' }}
-            onClick={toggleAllFiltered}>
-            {filtered.length && filtered.every(u => selectedIds.has(u.id)) ? '☑ Deselect visible' : '☐ Select visible'}
-          </button>
-          <button style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#374151' }}
-            disabled={!selectedIds.size || bulkBusy} onClick={openBulkEmail}>✉️ Email selected ({selectedIds.size})</button>
-          <button style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#111827' }}
-            disabled={!selectedIds.size || bulkBusy} onClick={bulkDeleteUsers}>{bulkBusy ? 'Working…' : `🗑️ Delete selected (${selectedIds.size})`}</button>
-        </div>
-        {bulkMsg && <span style={{ width: '100%', fontSize: 12, color: '#374151', marginTop: 5 }}>{bulkMsg}</span>}
       </div>
 
       <div style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>
-              <th style={styles.th}>
-                <input type="checkbox" checked={filtered.length > 0 && filtered.every(u => selectedIds.has(u.id))}
-                  onChange={toggleAllFiltered} aria-label="Select all visible users" />
-              </th>
               {['Name / Email / Phone / Password', 'Dates', 'Balance (KES)', 'Activation', 'Premium', 'Status', 'Actions'].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
@@ -537,9 +401,6 @@ function UsersTab({ users, secret, onRefresh }) {
 
               return (
                 <tr key={user.id} style={{ ...styles.tr, background: isSusp ? '#f9fafb' : undefined }}>
-                  <td style={{ ...styles.td, width: 42, textAlign: 'center' }}>
-                    <input type="checkbox" checked={selectedIds.has(user.id)} onChange={() => toggleSelected(user.id)} aria-label={`Select ${user.fullName || user.email || 'user'}`} />
-                  </td>
 
                   {/* Name / Email / Phone */}
                   <td style={styles.td}>
@@ -705,7 +566,7 @@ function UsersTab({ users, secret, onRefresh }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No users found.</td></tr>
+              <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No users found.</td></tr>
             )}
           </tbody>
         </table>
@@ -716,27 +577,13 @@ function UsersTab({ users, secret, onRefresh }) {
 
 // ─── Manual Withdrawal Records ────────────────────────────────────────────────
 function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
-  const [form, setForm] = useState({ fullName: '', phone: '', country: '', amount: '', status: 'pending', withdrawalMethod: 'mpesa' });
-  const [demoForm, setDemoForm] = useState({ count: 10, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000, withdrawalMethod: 'mpesa' });
+  const [form, setForm] = useState({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
+  const [demoForm, setDemoForm] = useState({ count: 10, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000 });
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState({});
   const [deleting, setDeleting] = useState({});
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState(null);
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
-
-  function toggleSelected(id) {
-    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  }
-  function toggleAllManual() {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      const allSelected = manualWithdrawals.length > 0 && manualWithdrawals.every(w => next.has(w.id));
-      manualWithdrawals.forEach(w => allSelected ? next.delete(w.id) : next.add(w.id));
-      return next;
-    });
-  }
 
   function setEdit(id, field, value) {
     setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
@@ -756,10 +603,9 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       country: form.country,
       amount: form.amount,
       status: form.status,
-      withdrawalMethod: form.withdrawalMethod,
     });
     if (res.success) {
-      setForm({ fullName: '', phone: '', country: '', amount: '', status: 'pending', withdrawalMethod: 'mpesa' });
+      setForm({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
       setMsg({ type: 'ok', text: 'Manual withdrawal added.' });
       await onRefresh();
     } else {
@@ -777,7 +623,6 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       intervalMinutes: demoForm.intervalMinutes,
       minAmount: demoForm.minAmount,
       maxAmount: demoForm.maxAmount,
-      withdrawalMethod: demoForm.withdrawalMethod,
     });
     setGenerating(false);
     if (res.success) {
@@ -799,7 +644,6 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       country: getEdit(wd.id, 'country', wd.country),
       amount: getEdit(wd.id, 'amount', wd.amount),
       status: getEdit(wd.id, 'status', wd.status),
-      withdrawalMethod: getEdit(wd.id, 'withdrawalMethod', wd.withdrawalMethod || 'mpesa'),
     });
     setSaving(prev => ({ ...prev, [wd.id]: false }));
     if (res.success) {
@@ -809,29 +653,6 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
     } else {
       setMsg({ type: 'err', text: res.error || 'Could not update manual withdrawal.' });
     }
-  }
-
-  async function bulkManualStatus(status) {
-    const chosen = manualWithdrawals.filter(w => selectedIds.has(w.id));
-    if (!chosen.length) return;
-    const label = status === 'successful' ? 'mark successful' : status === 'failed' ? 'mark failed' : 'mark pending';
-    if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${chosen.length} selected manual/demo withdrawal(s)?`)) return;
-    setBulkBusy(true);
-    const results = await Promise.all(chosen.map(wd => dbProxy('adminUpdateManualWithdrawal', {
-      adminSecret: secret,
-      requestId: wd.id,
-      fullName: wd.name,
-      phone: wd.phone,
-      country: wd.country,
-      amount: wd.amount,
-      status,
-      withdrawalMethod: wd.withdrawalMethod || 'mpesa',
-    })));
-    const ok = results.filter(res => res.success).length;
-    setBulkBusy(false);
-    setSelectedIds(new Set());
-    setMsg({ type: ok === chosen.length ? 'ok' : 'err', text: `Updated ${ok} of ${chosen.length} selected manual/demo withdrawal(s) to ${status}.` });
-    await onRefresh();
   }
 
   async function deleteManualWithdrawal(wd) {
@@ -853,7 +674,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
         </div>
       </div>
 
-      <form onSubmit={createManualWithdrawal} style={{ padding: 20, display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr .9fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+      <form onSubmit={createManualWithdrawal} style={{ padding: 20, display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr .8fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div>
           <label style={styles.fieldLabel}>Name</label>
           <input style={{ ...styles.input, marginBottom: 0 }} value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} placeholder="Client name" required />
@@ -871,13 +692,6 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
           <input type="number" min="1" step="0.01" style={{ ...styles.input, marginBottom: 0 }} value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="5000" required />
         </div>
         <div>
-          <label style={styles.fieldLabel}>Withdrawal method</label>
-          <select style={{ ...styles.input, marginBottom: 0 }} value={form.withdrawalMethod} onChange={e => setForm({ ...form, withdrawalMethod: e.target.value })}>
-            <option value="mpesa">M-Pesa</option>
-            <option value="bank">Bank</option>
-          </select>
-        </div>
-        <div>
           <label style={styles.fieldLabel}>Status</label>
           <select style={{ ...styles.input, marginBottom: 0 }} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
             <option value="pending">Pending</option>
@@ -888,7 +702,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
         <button type="submit" style={{ ...styles.btn, height: 44, padding: '10px 16px', whiteSpace: 'nowrap' }}>+ Add Withdrawal</button>
       </form>
 
-      <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+      <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Demo Client Generator</div>
           <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Publishes generated withdrawal records publicly using the same format as manually posted withdrawals.</div>
@@ -909,35 +723,16 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
           <label style={styles.fieldLabel}>Max amount (KES)</label>
           <input type="number" min="1" step="1" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.maxAmount} onChange={e => setDemoForm({ ...demoForm, maxAmount: e.target.value })} />
         </div>
-        <div>
-          <label style={styles.fieldLabel}>Withdrawal method</label>
-          <select style={{ ...styles.input, marginBottom: 0 }} value={demoForm.withdrawalMethod} onChange={e => setDemoForm({ ...demoForm, withdrawalMethod: e.target.value })}>
-            <option value="mpesa">M-Pesa</option>
-            <option value="bank">Bank</option>
-          </select>
-        </div>
         <button type="submit" disabled={generating} style={{ ...styles.btn, height: 44, padding: '10px 16px', whiteSpace: 'nowrap' }}>{generating ? 'Generating…' : 'Generate Demo Clients'}</button>
       </form>
 
       {msg && <div style={{ padding: '0 20px 14px', fontSize: 12, fontWeight: 700, color: msg.type === 'ok' ? '#166534' : '#b91c1c' }}>{msg.text}</div>}
 
-      <div style={{ padding: '0 20px 12px', display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button type="button" style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#E5E7EB', color: '#374151' }} onClick={toggleAllManual}>
-          {manualWithdrawals.length && manualWithdrawals.every(w => selectedIds.has(w.id)) ? '☑ Deselect all' : '☐ Select all'}
-        </button>
-        <button type="button" disabled={!selectedIds.size || bulkBusy} onClick={() => bulkManualStatus('successful')} style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#166534' }}>✓ Successful ({selectedIds.size})</button>
-        <button type="button" disabled={!selectedIds.size || bulkBusy} onClick={() => bulkManualStatus('pending')} style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#92400E' }}>⏳ Pending ({selectedIds.size})</button>
-        <button type="button" disabled={!selectedIds.size || bulkBusy} onClick={() => bulkManualStatus('failed')} style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#991B1B' }}>✕ Failed ({selectedIds.size})</button>
-        {selectedIds.size > 0 && <span style={{ fontSize: 12, color: '#64748B' }}>{selectedIds.size} selected</span>}
-      </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={styles.table}>
           <thead>
             <tr>
-              <th style={styles.th}>
-                <input type="checkbox" checked={manualWithdrawals.length > 0 && manualWithdrawals.every(w => selectedIds.has(w.id))} onChange={toggleAllManual} aria-label="Select all manual and demo withdrawals" />
-              </th>
-              {['Name', 'Masked Phone', 'Country', 'Amount (KES)', 'Method', 'Status', 'Created', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}
+              {['Name', 'Masked Phone', 'Country', 'Amount (KES)', 'Status', 'Created', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -946,19 +741,12 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
               const isDeleting = deleting[wd.id];
               return (
                 <tr key={wd.id} style={styles.tr}>
-                  <td style={styles.td}><input type="checkbox" checked={selectedIds.has(wd.id)} onChange={() => toggleSelected(wd.id)} aria-label={`Select ${wd.name || 'withdrawal'}`} /></td>
                   <td style={styles.td}>
                     <input style={{ ...styles.numInput, width: 170 }} value={getEdit(wd.id, 'fullName', wd.name)} onChange={e => setEdit(wd.id, 'fullName', e.target.value)} />
                   </td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 150 }} value={getEdit(wd.id, 'phone', wd.phone)} onChange={e => setEdit(wd.id, 'phone', e.target.value)} /></td>
                   <td style={styles.td}><input style={{ ...styles.numInput, width: 130 }} value={getEdit(wd.id, 'country', wd.country)} onChange={e => setEdit(wd.id, 'country', e.target.value)} /></td>
                   <td style={styles.td}><input type="number" min="1" step="0.01" style={{ ...styles.numInput, width: 110 }} value={getEdit(wd.id, 'amount', wd.amount)} onChange={e => setEdit(wd.id, 'amount', e.target.value)} /></td>
-                  <td style={styles.td}>
-                    <select style={{ ...styles.numInput, width: 115, fontWeight: 700 }} value={getEdit(wd.id, 'withdrawalMethod', wd.withdrawalMethod || 'mpesa')} onChange={e => setEdit(wd.id, 'withdrawalMethod', e.target.value)}>
-                      <option value="mpesa">M-Pesa</option>
-                      <option value="bank">Bank</option>
-                    </select>
-                  </td>
                   <td style={styles.td}>
                     <select style={{ ...styles.numInput, width: 125, fontWeight: 700 }} value={getEdit(wd.id, 'status', wd.status)} onChange={e => setEdit(wd.id, 'status', e.target.value)}>
                       <option value="pending">Pending</option>
@@ -974,7 +762,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
                 </tr>
               );
             })}
-            {manualWithdrawals.length === 0 && <tr><td colSpan={9} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No manual withdrawals added yet.</td></tr>}
+            {manualWithdrawals.length === 0 && <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No manual withdrawals added yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -991,44 +779,6 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
   const [deleting, setDeleting] = useState({});
   const [b2cEnabled, setB2cEnabled] = useState(false);   // true once Daraja B2C is live
   const [methodFilter, setMethodFilter] = useState('all');
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkMsg, setBulkMsg] = useState('');
-
-  function toggleSelected(id) {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAllFiltered() {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      const allSelected = filtered.length > 0 && filtered.every(w => next.has(w.id));
-      filtered.forEach(w => allSelected ? next.delete(w.id) : next.add(w.id));
-      return next;
-    });
-  }
-
-  async function bulkWithdrawalAction(action) {
-    const chosen = withdrawals.filter(w => selectedIds.has(w.id));
-    if (!chosen.length) return;
-    const label = action === 'delete' ? 'delete' : action === 'paid' ? 'mark as paid' : 'approve';
-    if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${chosen.length} selected withdrawal(s)?${action === 'delete' ? ' This cannot be undone.' : ''}`)) return;
-    setBulkBusy(true); setBulkMsg('');
-    const results = await Promise.all(chosen.map(async wd => {
-      if (action === 'delete') return dbProxy('adminDeleteWithdrawal', { adminSecret: secret, requestId: wd.id });
-      if (action === 'paid') return dbProxy('adminMarkWithdrawalPaid', { adminSecret: secret, requestId: wd.id });
-      return dbProxy('adminUpdateWithdrawal', { adminSecret: secret, requestId: wd.id, status: 'approved', rejectReason: '' });
-    }));
-    const ok = results.filter(r => r.success).length;
-    setBulkBusy(false);
-    setSelectedIds(new Set());
-    setBulkMsg(`${label.charAt(0).toUpperCase() + label.slice(1)} ${ok} of ${chosen.length} selected withdrawal(s).`);
-    await onRefresh();
-  }
 
   // While B2C is pending approval, admins pay manually + Mark as Paid. Once B2C
   // is configured, the automatic "Pay via M-Pesa" (B2C) button appears instead.
@@ -1142,21 +892,8 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
           onChange={e => setSearch(e.target.value)}
         />
         <span style={{ fontSize: 13, color: '#64748B', marginLeft: 12 }}>{filtered.length} requests</span>
-        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-          <button style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#E5E7EB', color: '#374151' }}
-            onClick={toggleAllFiltered}>
-            {filtered.length && filtered.every(w => selectedIds.has(w.id)) ? '☑ Deselect visible' : '☐ Select visible'}
-          </button>
-          <button style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#374151' }}
-            disabled={!selectedIds.size || bulkBusy} onClick={() => bulkWithdrawalAction('approved')}>✅ Approve selected ({selectedIds.size})</button>
-          <button style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#065F46' }}
-            disabled={!selectedIds.size || bulkBusy} onClick={() => bulkWithdrawalAction('paid')}>💰 Mark paid ({selectedIds.size})</button>
-          <button style={{ ...styles.btn, width: 'auto', padding: '7px 11px', fontSize: 12, background: '#111827' }}
-            disabled={!selectedIds.size || bulkBusy} onClick={() => bulkWithdrawalAction('delete')}>{bulkBusy ? 'Working…' : `🗑️ Delete (${selectedIds.size})`}</button>
-        </div>
-        {bulkMsg && <span style={{ width: '100%', fontSize: 12, color: '#374151', marginTop: 5 }}>{bulkMsg}</span>}
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-          {[['all', 'All withdrawals'], ['mpesa', 'M-Pesa'], ['bank', 'Bank']].map(([key, label]) => (
+          {[['all', 'All withdrawals'], ['mpesa', 'M-Pesa'], ['safaricom', 'Safaricom'], ['bank', 'Bank']].map(([key, label]) => (
             <button key={key} onClick={() => setMethodFilter(key)} style={{
               ...styles.btn, width: 'auto', padding: '7px 12px', fontSize: 12,
               background: methodFilter === key ? '#111827' : '#E5E7EB',
@@ -1170,10 +907,6 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
         <table style={styles.table}>
           <thead>
             <tr>
-              <th style={styles.th}>
-                <input type="checkbox" checked={filtered.length > 0 && filtered.every(w => selectedIds.has(w.id))}
-                  onChange={toggleAllFiltered} aria-label="Select all visible withdrawals" />
-              </th>
               {['Client Name', 'Withdrawal Details', 'Amount (KES)', 'Status', 'Dates', 'Actions'].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
@@ -1188,9 +921,6 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
 
               return (
                 <tr key={wd.id} style={styles.tr}>
-                  <td style={{ ...styles.td, width: 42, textAlign: 'center' }}>
-                    <input type="checkbox" checked={selectedIds.has(wd.id)} onChange={() => toggleSelected(wd.id)} aria-label={`Select withdrawal from ${wd.fullName || 'client'}`} />
-                  </td>
 
                   {/* Name */}
                   <td style={styles.td}>
@@ -1202,7 +932,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
                   {/* Withdrawal details: phone is masked; bank account is masked */}
                   <td style={styles.td}>
                     <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Method</div>
-                    <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6 }}>{wd.withdrawalMethod === 'bank' ? 'Bank' : 'M-Pesa'}</div>
+                    <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6 }}>{wd.withdrawalMethod === 'bank' ? 'Bank' : wd.withdrawalMethod === 'safaricom' ? 'Safaricom' : 'M-Pesa'}</div>
                     {wd.withdrawalMethod === 'bank' ? (
                       <>
                         <div style={{ fontSize: 11, color: '#64748B' }}>Bank</div>
@@ -1212,7 +942,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
                       </>
                     ) : (
                       <>
-                        <div style={{ fontSize: 11, color: '#64748B' }}>Phone</div>
+                        <div style={{ fontSize: 11, color: '#64748B' }}>{wd.withdrawalMethod === 'safaricom' ? 'Safaricom Phone' : 'Phone'}</div>
                         <div style={{ fontWeight: 700 }}>{wd.phone || '—'}</div>
                         <div style={{ fontSize: 11, color: '#64748B', marginTop: 5 }}>National ID</div>
                         <div style={{ fontSize: 12 }}>{wd.idNumber || '—'}</div>
@@ -1294,7 +1024,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No withdrawal requests found.</td></tr>
+              <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No withdrawal requests found.</td></tr>
             )}
           </tbody>
         </table>
@@ -1414,133 +1144,87 @@ function ReviewsTab({ secret }) {
 }
 
 // ─── Broadcast Email Tab ──────────────────────────────────────────────────────
-function BroadcastTab({ secret, users = [], userCount }) {
+function BroadcastTab({ secret, userCount }) {
   const [subject, setSubject] = useState(BROADCAST_DEFAULT_SUBJECT);
-  const [body, setBody] = useState(BROADCAST_DEFAULT_BODY);
-  const [audience, setAudience] = useState('all');
+  const [body,    setBody]    = useState(BROADCAST_DEFAULT_BODY);
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState(null);
-
-  const recipients = users.filter(u => {
-    if (!u.email) return false;
-    if (audience === 'premium') return !!u.premium;
-    if (audience === 'active') return !!u.activated;
-    if (audience === 'active_premium') return !!u.activated && !!u.premium;
-    return true;
-  });
-
-  const audienceLabel = {
-    all: 'all members',
-    premium: 'premium members',
-    active: 'active members',
-    active_premium: 'active premium members',
-  }[audience];
+  const [result,  setResult]  = useState(null);
 
   async function send(test) {
     if (!body.trim() || !subject.trim()) {
       setResult({ ok: false, text: 'Subject and message cannot be empty.' });
       return;
     }
-    if (test) {
-      const first = recipients[0];
-      if (!first?.email) {
-        setResult({ ok: false, text: 'No recipient with a valid email address is available.' });
-        return;
-      }
-      try {
-        const r = await fetch('/api/admin/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ adminSecret: secret, to: first.email, name: first.fullName || '', subject, body }),
-        });
-        const data = await r.json();
-        setResult({ ok: !!data.success, text: data.success ? `Test email sent to ${first.email}.` : (data.message || data.error || 'Test email failed.') });
-      } catch (e) {
-        setResult({ ok: false, text: e.message || 'Network error.' });
-      }
+    if (!test && !confirm(`Send this email to ALL ${userCount} client(s) in the database? This cannot be undone.`)) {
       return;
     }
-
-    if (!recipients.length) {
-      setResult({ ok: false, text: `There are no ${audienceLabel} with valid email addresses.` });
-      return;
-    }
-
-    if (!confirm(`Send this email to ${recipients.length} ${audienceLabel}? This cannot be undone.`)) return;
-
     setSending(true);
     setResult(null);
     try {
-      const responses = await Promise.all(recipients.map(async user => {
-        try {
-          const r = await fetch('/api/admin/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              adminSecret: secret,
-              to: user.email,
-              name: user.fullName || '',
-              subject: subject.trim(),
-              body: body.trim(),
-            }),
-          });
-          const data = await r.json();
-          return !!data.success;
-        } catch {
-          return false;
-        }
-      }));
-      const sent = responses.filter(Boolean).length;
-      const failed = responses.length - sent;
-      setResult({
-        ok: failed === 0,
-        text: `Broadcast complete: ${sent} of ${responses.length} ${audienceLabel} received the email.${failed ? ` ${failed} failed.` : ''}`,
+      const r = await fetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminSecret: secret, subject, body, test }),
       });
-    } finally {
-      setSending(false);
+      const data = await r.json();
+      if (data.success) {
+        setResult({
+          ok: true,
+          text: test
+            ? `Test email sent to your own inbox (${data.sent} sent).`
+            : `Done, ${data.sent} sent, ${data.failed} failed out of ${data.total} client(s).`,
+        });
+      } else {
+        setResult({ ok: false, text: data.message || 'Failed to send.' });
+      }
+    } catch (err) {
+      setResult({ ok: false, text: err.message || 'Network error.' });
     }
+    setSending(false);
   }
 
   return (
-    <div style={{ padding: '20px 32px' }}>
-      <div style={{ maxWidth: 820, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 22 }}>
-        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17 }}>📣 Broadcast Email</div>
-        <div style={{ marginTop: 4, color: '#64748B', fontSize: 12 }}>
-          Choose exactly which group should receive this message. The recipient list is calculated from the users currently loaded in the admin panel.
+    <div style={{ padding: '20px 32px', maxWidth: 720 }}>
+      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24 }}>
+        <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#111827', marginBottom: 4 }}>
+          📣 Email All Clients
         </div>
+        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
+          This sends the message below to every registered client&apos;s email address ({userCount} on file). Use “Send test to myself” first to preview it.
+        </p>
 
-        <label style={{ ...styles.fieldLabel, marginTop: 18 }}>Send to</label>
-        <select style={styles.input} value={audience} onChange={e => setAudience(e.target.value)}>
-          <option value="all">Everyone / All members ({users.length || userCount || 0})</option>
-          <option value="premium">Premium members ({users.filter(u => u.premium).length})</option>
-          <option value="active">Active members ({users.filter(u => u.activated).length})</option>
-          <option value="active_premium">Active + Premium members ({users.filter(u => u.activated && u.premium).length})</option>
-        </select>
+        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Subject</label>
+        <input style={{ ...styles.input, marginBottom: 16 }} value={subject} onChange={e => setSubject(e.target.value)} />
 
-        <div style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>
-          {recipients.length} recipient{recipients.length === 1 ? '' : 's'} currently match this audience and have an email address.
-        </div>
-
-        <label style={styles.fieldLabel}>Subject</label>
-        <input style={styles.input} value={subject} onChange={e => setSubject(e.target.value)} />
-
-        <label style={styles.fieldLabel}>Message</label>
+        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Message</label>
         <textarea
           style={{ ...styles.input, minHeight: 260, resize: 'vertical', fontFamily: 'Manrope, sans-serif', lineHeight: 1.6 }}
           value={body}
           onChange={e => setBody(e.target.value)}
         />
 
-        {result && <p style={{ margin: '10px 0', fontSize: 13, fontWeight: 600, color: result.ok ? '#166534' : '#b91c1c' }}>{result.text}</p>}
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
-          <button style={{ ...styles.btn, width: 'auto', padding: '10px 16px' }} disabled={sending} onClick={() => send(false)}>
-            {sending ? 'Sending…' : `📣 Broadcast to ${recipients.length}`}
+        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+          <button
+            style={{ ...styles.btn, background: '#64748B', flex: 1 }}
+            disabled={sending}
+            onClick={() => send(true)}
+          >
+            {sending ? 'Sending…' : '✉️ Send test to myself'}
           </button>
-          <button style={{ ...styles.btn, width: 'auto', padding: '10px 16px', background: '#64748B' }} disabled={sending} onClick={() => send(true)}>
-            ✉️ Send Test
+          <button
+            style={{ ...styles.btn, flex: 2 }}
+            disabled={sending}
+            onClick={() => send(false)}
+          >
+            {sending ? 'Sending…' : `📣 Send to all ${userCount} client(s)`}
           </button>
         </div>
+
+        {result && (
+          <p style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: result.ok ? '#1f2937' : '#1f2937' }}>
+            {result.text}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -2333,7 +2017,7 @@ export default function AdminPanel() {
       {tab === 'applications' && <ApplicationsTab secret={secret} />}
       {tab === 'submissions'  && <SubmissionsTab  secret={secret} />}
       {tab === 'audit'        && <AuditTab        secret={secret} />}
-      {tab === 'broadcast'    && <BroadcastTab    secret={secret} users={users} userCount={users.length} />}
+      {tab === 'broadcast'    && <BroadcastTab    secret={secret} userCount={users.length} />}
       {tab === 'cleanup'      && <CleanupTab      secret={secret} onRefresh={refresh} />}
     </div>
   );
