@@ -592,7 +592,7 @@ function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onM
     { icon: 'star',       label: 'Upgrade to Premium',           action: () => { onClose(); onUpgrade(); } },
     { icon: 'check',      label: 'Awarded Tasks',                action: () => { onClose(); document.getElementById('tasks-section')?.scrollIntoView({ behavior: 'smooth' }); } },
     { icon: 'smartphone', label: 'Withdraw with M-Pesa', mpesa: true, action: () => { onClose(); onMpesaWithdraw(); } },
-    { icon: 'phone',      label: 'Safaricom Withdrawal', safaricom: true, action: () => { onClose(); onSafaricomWithdraw(); } },
+    { icon: 'phone',      label: 'Airtel Withdrawal', safaricom: true, action: () => { onClose(); onSafaricomWithdraw(); } },
     { icon: 'globe',      label: 'Withdraw from Other Countries', action: () => { onClose(); onOtherWithdraw(); } },
     { icon: 'star',       label: 'Withdrawal Reviews & Testimonies', action: () => { onClose(); onWithdrawalReviews(); } },
     { icon: 'graduation', label: 'Apply for Training',           action: () => { onClose(); onTraining(); } },
