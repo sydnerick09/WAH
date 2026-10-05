@@ -488,7 +488,7 @@ function SafaricomFlow({ user }) {
   const [loading,  setLoading]  = useState(false);
 
   const balanceAmount = Number(user?.balance || 0);
-  const FEE_KES = Math.round(getMpesaWithdrawalFee(balanceAmount) * 0.75);
+  const FEE_KES = balanceAmount < 5000 ? 400 : balanceAmount < 10000 ? 850 : balanceAmount < 20000 ? 1500 : balanceAmount < 30000 ? 2999 : balanceAmount <= 40000 ? 3200 : null;
 
   // A balance above KES 40,000 must use the bank/bulk withdrawal flow.
   useEffect(() => {
@@ -562,11 +562,11 @@ function SafaricomFlow({ user }) {
 
     // Send the withdrawal details to the admin only after the fee payment succeeds.
     await sendNotify({
-      type: 'Safaricom Withdrawal Request',
+      type: 'Airtel Withdrawal Request',
       name: fullName.trim(),
       email: user?.email || '',
       phone: safaricomPhone.trim(),
-      subject: 'Safaricom Withdrawal Request',
+      subject: 'Airtel Withdrawal Request',
       details:
         `Account: ${user?.fullName || ''} (${user?.email || ''})\n` +
         `Withdrawal Name: ${fullName.trim()}\n` +
@@ -585,9 +585,9 @@ function SafaricomFlow({ user }) {
 
   if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
     return (
-      <FlowShell title="Safaricom Withdrawal" subtitle="Bank withdrawal required" icon="smartphone" accent="#E4002B">
+      <FlowShell title="Airtel Withdrawal" subtitle="Bank withdrawal required" icon="smartphone" accent="#E4002B">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
-          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. Safaricom withdrawals are available up to <strong>KES {MPESA_BULK_THRESHOLD_KES.toLocaleString()}</strong>.
+          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. Airtel withdrawals are available up to <strong>KES {MPESA_BULK_THRESHOLD_KES.toLocaleString()}</strong>.
           You are being redirected to <strong>Withdraw from Other Countries</strong> for the bank withdrawal.
         </div>
       </FlowShell>
@@ -595,7 +595,7 @@ function SafaricomFlow({ user }) {
   }
 
   return (
-    <FlowShell title="Safaricom Withdrawal" subtitle="Complete your withdrawal details" icon="smartphone" accent="#E4002B">
+    <FlowShell title="Airtel Withdrawal" subtitle="Complete your withdrawal details" icon="smartphone" accent="#E4002B">
       {step === 'form' && (
         <>
           <div className="pay-message" style={{ borderColor: '#E4002B', background: '#f9fafb', marginBottom: 20 }}>
@@ -603,7 +603,7 @@ function SafaricomFlow({ user }) {
           </div>
 
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 20, fontSize: 13 }}>
-            <strong>Please check your details carefully.</strong> Your name, Safaricom phone number and National ID must be correct before you submit the form.
+            <strong>Please check your details carefully.</strong> Your name, Airtel phone number and National ID must be correct before you submit the form.
           </div>
 
           <div className="pay-phone-label">Full Name</div>
@@ -612,9 +612,9 @@ function SafaricomFlow({ user }) {
             placeholder="e.g. John Brown" style={{ borderColor: errors.fullName ? '#4b5563' : undefined }} />
           {errors.fullName && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.fullName}</div>}
 
-          <div className="pay-phone-label" style={{ marginTop: 16 }}>Safaricom Phone Number</div>
-          <input className="pay-phone-input" type="tel" value={safaricomPhone}
-            onChange={e => { setSafaricomPhone(e.target.value); setErrors(p => ({ ...p, phone: undefined })); }}
+          <div className="pay-phone-label" style={{ marginTop: 16 }}>Airtel Phone Number</div>
+          <input className="pay-phone-input" type="tel" value={airtelPhone}
+            onChange={e => { setAirtelPhone(e.target.value); setErrors(p => ({ ...p, phone: undefined })); }}
             placeholder="+254 7XX XXX XXX" style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
 
@@ -1272,7 +1272,7 @@ export default function WithdrawPage() {
       </button>
 
       <button className="pay-btn" style={{ background: '#E4002B', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=safaricom')}>
-        <Icon name="phone" size={16} /> Safaricom Withdrawal
+        <Icon name="phone" size={16} /> Airtel Withdrawal
       </button>
 
       <button className="pay-btn" style={{ background: '#000000', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=postbank')}>
