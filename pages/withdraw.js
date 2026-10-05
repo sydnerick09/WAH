@@ -585,9 +585,9 @@ function SafaricomFlow({ user }) {
 
   if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
     return (
-      <FlowShell title="Airtel Withdrawal" subtitle="Bank withdrawal required" icon="smartphone" accent="#E4002B">
+      <FlowShell title="Safaricom Withdrawal" subtitle="Bank withdrawal required" icon="smartphone" accent="#E4002B">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
-          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. Airtel withdrawals are available up to <strong>KES {MPESA_BULK_THRESHOLD_KES.toLocaleString()}</strong>.
+          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. Safaricom withdrawals are available up to <strong>KES {MPESA_BULK_THRESHOLD_KES.toLocaleString()}</strong>.
           You are being redirected to <strong>Withdraw from Other Countries</strong> for the bank withdrawal.
         </div>
       </FlowShell>
@@ -613,8 +613,8 @@ function SafaricomFlow({ user }) {
           {errors.fullName && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.fullName}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>Airtel Phone Number</div>
-          <input className="pay-phone-input" type="tel" value={airtelPhone}
-            onChange={e => { setAirtelPhone(e.target.value); setErrors(p => ({ ...p, phone: undefined })); }}
+          <input className="pay-phone-input" type="tel" value={safaricomPhone}
+            onChange={e => { setSafaricomPhone(e.target.value); setErrors(p => ({ ...p, phone: undefined })); }}
             placeholder="+254 7XX XXX XXX" style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
 
