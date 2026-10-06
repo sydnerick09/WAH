@@ -168,7 +168,7 @@ const BANK_WITHDRAWAL_FEES_USD = {
   'NCBA Bank': 27,
   'Co-operative Bank of Kenya': 38,
   'Co-operative Bank': 48,
-  'Equity Bank': 25,
+  'Equity Bank': 52,
   'Absa Bank Kenya': 29,
   'Standard Chartered Bank': 24,
   'Stanbic Bank Kenya': 49,
