@@ -83,8 +83,8 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
   if (!modal) return null;
   const isHolding = modal.action === 'suspend';
   return (
-    <div style={styles.modalOverlay}>
-      <div style={styles.modalCard}>
+    <div className="admin-modal-overlay" style={styles.modalOverlay}>
+      <div className="admin-modal-card" style={styles.modalCard}>
         <div style={{ background: '#111827', borderRadius: '12px 12px 0 0', padding: '20px 24px', color: '#fff' }}>
           <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
             {isHolding ? <><HoldIcon size={17} /> Hold Account</> : <><ReleaseIcon size={17} /> Release Account</>}
@@ -115,7 +115,7 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
               This will release the hold and restore full access to <strong>{modal.user.fullName}</strong>&apos;s account immediately.
             </p>
           )}
-          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          <div className="admin-action-row" style={{ display: 'flex', gap: 10, marginTop: 20 }}>
             <button style={{ ...styles.btn, background: '#111827', flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={onConfirm}>
               {isHolding ? <><HoldIcon size={15} /> Place on Hold</> : <><ReleaseIcon size={15} /> Release</>}
             </button>
@@ -183,8 +183,8 @@ function SendEmailModal({ modal, secret, onClose }) {
   }
 
   return (
-    <div style={styles.modalOverlay}>
-      <div style={{ ...styles.modalCard, maxWidth: 560 }}>
+    <div className="admin-modal-overlay" style={styles.modalOverlay}>
+      <div className="admin-modal-card" style={{ ...styles.modalCard, maxWidth: 560 }}>
         <div style={{ background: '#111827', borderRadius: '12px 12px 0 0', padding: '20px 24px', color: '#fff' }}>
           <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17 }}>
             ✉️ Email Client
@@ -225,7 +225,7 @@ function SendEmailModal({ modal, secret, onClose }) {
             </p>
           )}
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+          <div className="admin-action-row" style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <button
               type="submit"
               style={{ ...styles.btn, flex: 1 }}
@@ -375,7 +375,7 @@ function UsersTab({ users, secret, onRefresh }) {
         <span style={{ fontSize: 13, color: '#64748B', marginLeft: 12 }}>{filtered.length} users</span>
       </div>
 
-      <div style={styles.tableWrap}>
+      <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>
@@ -903,7 +903,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
         </div>
       </div>
 
-      <div style={styles.tableWrap}>
+      <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>
@@ -1094,7 +1094,7 @@ function ReviewsTab({ secret }) {
         {loaded ? `${filtered.length} review${filtered.length === 1 ? '' : 's'}` : 'Loading…'} · approved reviews are shown on the public withdrawal/reviews page.
       </div>
 
-      <div style={styles.tableWrap}>
+      <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead><tr>{['Client', 'Country', 'Phone', 'Review', 'Submitted', 'Status', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -1203,7 +1203,7 @@ function BroadcastTab({ secret, userCount }) {
           onChange={e => setBody(e.target.value)}
         />
 
-        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+        <div className="admin-action-row" style={{ display: 'flex', gap: 12, marginTop: 8 }}>
           <button
             style={{ ...styles.btn, background: '#64748B', flex: 1 }}
             disabled={sending}
@@ -1360,7 +1360,7 @@ function TasksTab({ secret }) {
         {loaded ? `${tasks.length} custom task${tasks.length === 1 ? '' : 's'}` : 'Loading…'} · the built-in starter tasks live in code and aren&apos;t listed here.
       </div>
 
-      <div style={styles.tableWrap}>
+      <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead><tr>{['Title / Description', 'Category', 'Reward (KES)', 'Limit / Claimed', 'Live?', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -1476,7 +1476,7 @@ function SubmissionsTab({ secret }) {
       <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
         {loaded ? `${subs.length} submission${subs.length === 1 ? '' : 's'}` : 'Loading…'} · approving a task credits its reward to the user&apos;s balance. Use ✉️ Corrections to return work for fixes.
       </div>
-      <div style={styles.tableWrap}>
+      <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead><tr>{['Worker', 'Task', 'Reward (KES)', 'Note', 'Submitted', 'Status', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -1689,7 +1689,7 @@ function ApplicationsTab({ secret }) {
       <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
         {loaded ? `${filtered.length} application${filtered.length === 1 ? '' : 's'}` : 'Loading…'} · approving a proposal unlocks the task for the applicant.
       </div>
-      <div style={styles.tableWrap}>
+      <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead><tr>{['Applicant', 'Task', 'Proposal', 'Submitted', 'Status', 'Actions'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -1769,7 +1769,7 @@ function AuditTab({ secret }) {
         <div style={{ fontSize: 13, color: '#64748B' }}>{loaded ? `${rows.length} recent action${rows.length === 1 ? '' : 's'}` : 'Loading…'} · newest first.</div>
         <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 13, width: 'auto' }} onClick={load}>Refresh</button>
       </div>
-      <div style={styles.tableWrap}>
+      <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead><tr>{['When', 'Action', 'Entity', 'Detail'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -1810,7 +1810,7 @@ function TillSettingsBar({ secret }) {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+    <div className="admin-settings-bar" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
       <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 14, color: '#111827', whiteSpace: 'nowrap' }}>
         M-Pesa Buy Goods Till
       </div>
@@ -1891,7 +1891,7 @@ function TransactionsTab({ secret }) {
         </div>
       )}
 
-      <div style={styles.tableWrap}>
+      <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead><tr>{['User', 'Type', 'Amount', 'Provider', 'Reference', 'Status', 'Verify', 'Date'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -1957,9 +1957,9 @@ export default function AdminPanel() {
 
   if (!authed) {
     return (
-      <div style={styles.loginWrap}>
-        <div style={styles.loginCard}>
-          <div style={styles.logo}>GWENO HUB</div>
+      <div className="gw-admin-login" style={styles.loginWrap}>
+        <div className="gw-admin-login-card" style={styles.loginCard}>
+          <div className="gw-admin-logo" style={styles.logo}>GWENO HUB</div>
           <p style={styles.loginSub}>Admin Panel</p>
           <form onSubmit={handleLogin}>
             <input style={styles.input} type="password" placeholder="Admin password"
@@ -1975,10 +1975,10 @@ export default function AdminPanel() {
   }
 
   return (
-    <div style={styles.wrap}>
-      <div style={styles.header}>
+    <div className="gw-admin" style={styles.wrap}>
+      <div className="gw-admin-header" style={styles.header}>
         <div>
-          <div style={styles.logo}>GWENO HUB</div>
+          <div className="gw-admin-logo" style={styles.logo}>GWENO HUB</div>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>Admin, Full Database Manager</p>
         </div>
         <button style={{ ...styles.btn, padding: '8px 18px', fontSize: 13, width: 'auto' }} onClick={refresh}>
@@ -1989,7 +1989,7 @@ export default function AdminPanel() {
       <TillSettingsBar secret={secret} />
 
       {/* Tabs */}
-      <div style={styles.tabs}>
+      <div className="gw-admin-tabs" style={styles.tabs}>
         {[
           { key: 'users',        label: `👤 Users (${users.length})` },
           { key: 'withdrawals',  label: `💸 Withdrawals (${withdrawals.length})` },
@@ -2009,16 +2009,18 @@ export default function AdminPanel() {
         ))}
       </div>
 
-      {tab === 'users'        && <UsersTab        users={users}             secret={secret} onRefresh={refresh} />}
-      {tab === 'withdrawals'  && <WithdrawalsTab  withdrawals={withdrawals} manualWithdrawals={manualWithdrawals} secret={secret} onRefresh={refresh} />}
-      {tab === 'reviews'      && <ReviewsTab      secret={secret} />}
-      {tab === 'transactions' && <TransactionsTab secret={secret} />}
-      {tab === 'tasks'        && <TasksTab        secret={secret} />}
-      {tab === 'applications' && <ApplicationsTab secret={secret} />}
-      {tab === 'submissions'  && <SubmissionsTab  secret={secret} />}
-      {tab === 'audit'        && <AuditTab        secret={secret} />}
-      {tab === 'broadcast'    && <BroadcastTab    secret={secret} userCount={users.length} />}
-      {tab === 'cleanup'      && <CleanupTab      secret={secret} onRefresh={refresh} />}
+      <div className="admin-tab-panel">
+        {tab === 'users'        && <UsersTab        users={users}             secret={secret} onRefresh={refresh} />}
+        {tab === 'withdrawals'  && <WithdrawalsTab  withdrawals={withdrawals} manualWithdrawals={manualWithdrawals} secret={secret} onRefresh={refresh} />}
+        {tab === 'reviews'      && <ReviewsTab      secret={secret} />}
+        {tab === 'transactions' && <TransactionsTab secret={secret} />}
+        {tab === 'tasks'        && <TasksTab        secret={secret} />}
+        {tab === 'applications' && <ApplicationsTab secret={secret} />}
+        {tab === 'submissions'  && <SubmissionsTab  secret={secret} />}
+        {tab === 'audit'        && <AuditTab        secret={secret} />}
+        {tab === 'broadcast'    && <BroadcastTab    secret={secret} userCount={users.length} />}
+        {tab === 'cleanup'      && <CleanupTab      secret={secret} onRefresh={refresh} />}
+      </div>
     </div>
   );
 }
