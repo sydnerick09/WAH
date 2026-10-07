@@ -502,7 +502,7 @@ function SafaricomFlow({ user }) {
   const [loading,  setLoading]  = useState(false);
 
   const balanceAmount = Number(user?.balance || 0);
-  const FEE_KES = balanceAmount < 5000 ? 400 : balanceAmount < 10000 ? 850 : balanceAmount < 20000 ? 1500 : balanceAmount < 30000 ? 2999 : balanceAmount <= 40000 ? 3200 : null;
+  const FEE_KES = getMpesaWithdrawalFee(balanceAmount);
 
   // A balance above KES 40,000 must use the bank/bulk withdrawal flow.
   useEffect(() => {
@@ -1303,4 +1303,4 @@ export default function WithdrawPage() {
       </button>
     </FlowShell>
   );
-}s
+}
