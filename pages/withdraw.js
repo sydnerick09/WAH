@@ -129,13 +129,13 @@ function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
 
   // M-Pesa withdrawal fee brackets:
-  // Below KES 5,000             -> KES 408
+  // Below KES 5,000             -> KES 480
   // KES 5,000 - 9,999           -> KES 1,000
   // KES 10,000 - 19,999         -> KES 1,300
   // KES 20,000 - 29,999         -> KES 2,999
   // KES 30,000 - 40,000         -> KES 3,200
   // Above KES 40,000             -> M-Pesa unavailable
-  if (amount < 5000) return 408;
+  if (amount < 5000) return 480;
   if (amount < 10000) return 1000;
   if (amount < 20000) return 1300;
   if (amount < 30000) return 2999;
