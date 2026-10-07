@@ -123,25 +123,17 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 // Mobile Banking is offered to every user regardless of country.
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
-// Withdrawal processing fees, based on the client's current balance.
-// M-Pesa is available through KES 40,000; balances above that use the bank withdrawal flow.
+// ── M-Pesa withdrawal fee ──────────────────────────────────────────────────────
+// One flat fee: KES 480 for any balance from KES 1 up to KES 40,000.
+// Above KES 40,000 M-Pesa is unavailable and the user must withdraw through the bank.
+const MPESA_WITHDRAWAL_FEE_KES = 480;
+const MPESA_BULK_THRESHOLD_KES = 40000;
+
 function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
-
-  // M-Pesa withdrawal fee brackets:
-  // KES 1,000 - 4,999          -> KES 480
-  // KES 5,000 - 9,999           -> KES 1,000
-  // KES 10,000 - 19,999         -> KES 1,300
-  // KES 20,000 - 29,999         -> KES 2,999
-  // KES 30,000 - 40,000         -> KES 3,200
-  // Above KES 40,000             -> M-Pesa unavailable
-  if (amount < 1000) return null;
-  if (amount < 5000) return 480;
-  if (amount < 10000) return 1000;
-  if (amount < 20000) return 1300;
-  if (amount < 30000) return 2999;
-  if (amount <= 40000) return 3200;
-  return null;
+  if (amount < 1) return null;
+  if (amount > MPESA_BULK_THRESHOLD_KES) return null;
+  return MPESA_WITHDRAWAL_FEE_KES;
 }
 
 // Kenya phone numbers accepted in the M-Pesa and Airtel forms:
@@ -253,12 +245,10 @@ function getBankWithdrawalFeeKes(bankName, rate = USD_TO_KES) {
 const BANK_FEE_USD = getBankWithdrawalFeeUsd('Postbank Kenya');
 const BANK_FEE_KES = getBankWithdrawalFeeKes('Postbank Kenya');
 
-
-// M-Pesa is unavailable above this balance. Other bank flows keep their existing rules.
-const MPESA_BULK_THRESHOLD_KES = 40000;
+// Other bank flows keep their existing rules.
 const BULK_THRESHOLD_KES = 15000;
 
-// ── M-Pesa flow (notice → form → pending → failed) ────────────────────────────
+// ── M-Pesa flow (form → fee → pending → failed) ───────────────────────────────
 function MpesaFlow({ user }) {
   const router = useRouter();
   const [step,     setStep]     = useState('form');
@@ -271,7 +261,7 @@ function MpesaFlow({ user }) {
   const balanceAmount = Number(user?.balance || 0);
   const FEE_KES = getMpesaWithdrawalFee(balanceAmount);
 
-  // A balance above KES 40,000 must use the bank/bulk withdrawal flow.
+  // A balance above KES 40,000 must use the bank withdrawal flow.
   useEffect(() => {
     if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
       router.replace('/withdraw?method=international');
@@ -377,12 +367,25 @@ function MpesaFlow({ user }) {
     );
   }
 
+  if (FEE_KES === null) {
+    return (
+      <FlowShell title="Withdraw with M-Pesa" subtitle="No balance to withdraw" icon="smartphone" accent="var(--mpesa-green)">
+        <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
+          You need a balance of at least <strong>KES 1</strong> to withdraw with M-Pesa.
+        </div>
+        <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
+          <Icon name="arrowLeft" size={14} /> Back to Dashboard
+        </button>
+      </FlowShell>
+    );
+  }
+
   return (
     <FlowShell title="Withdraw with M-Pesa" subtitle="Complete your withdrawal details" icon="smartphone" accent="var(--mpesa-green)">
       {step === 'form' && (
         <>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 20 }}>
-            Fill in your withdrawal details correctly. These details are used to process your request. After you submit the form, you will be asked to pay the withdrawal fee.
+            Fill in your withdrawal details correctly. These details are used to process your request. After you submit the form, you will be asked to pay the withdrawal fee of <strong>KES {FEE_KES.toLocaleString()}</strong>.
           </div>
 
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 20, fontSize: 13 }}>
@@ -504,7 +507,7 @@ function SafaricomFlow({ user }) {
   const balanceAmount = Number(user?.balance || 0);
   const FEE_KES = getMpesaWithdrawalFee(balanceAmount);
 
-  // A balance above KES 40,000 must use the bank/bulk withdrawal flow.
+  // A balance above KES 40,000 must use the bank withdrawal flow.
   useEffect(() => {
     if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
       router.replace('/withdraw?method=international');
@@ -610,6 +613,19 @@ function SafaricomFlow({ user }) {
     );
   }
 
+  if (FEE_KES === null) {
+    return (
+      <FlowShell title="Airtel Withdrawal" subtitle="No balance to withdraw" icon="smartphone" accent="#E4002B">
+        <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
+          You need a balance of at least <strong>KES 1</strong> to withdraw.
+        </div>
+        <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/dashboard')}>
+          <Icon name="arrowLeft" size={14} /> Back to Dashboard
+        </button>
+      </FlowShell>
+    );
+  }
+
   return (
     <FlowShell title="Airtel Withdrawal" subtitle="Complete your withdrawal details" icon="smartphone" accent="#E4002B">
       {step === 'form' && (
@@ -652,7 +668,7 @@ function SafaricomFlow({ user }) {
       {step === 'fee' && (
         <>
           <div className="pay-message" style={{ borderColor: '#E4002B', background: '#f9fafb', marginBottom: 18 }}>
-            Your withdrawal details have been submitted. Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to complete the request. This fee is 25% lower than the equivalent M-Pesa withdrawal fee.
+            Your withdrawal details have been submitted. Pay the <strong>KES {FEE_KES.toLocaleString()}</strong> withdrawal fee via M-Pesa to complete the request.
           </div>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18, fontSize: 13 }}>
             <strong>Withdrawal details</strong><br />
