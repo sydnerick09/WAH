@@ -129,12 +129,13 @@ function getMpesaWithdrawalFee(balance) {
   const amount = Number(balance || 0);
 
   // M-Pesa withdrawal fee brackets:
-  // Below KES 5,000             -> KES 480
+  // KES 1,000 - 4,999          -> KES 480
   // KES 5,000 - 9,999           -> KES 1,000
   // KES 10,000 - 19,999         -> KES 1,300
   // KES 20,000 - 29,999         -> KES 2,999
   // KES 30,000 - 40,000         -> KES 3,200
   // Above KES 40,000             -> M-Pesa unavailable
+  if (amount < 1000) return null;
   if (amount < 5000) return 480;
   if (amount < 10000) return 1000;
   if (amount < 20000) return 1300;
@@ -501,7 +502,7 @@ function SafaricomFlow({ user }) {
   const [loading,  setLoading]  = useState(false);
 
   const balanceAmount = Number(user?.balance || 0);
-  const FEE_KES = getMpesaWithdrawalFee(balanceAmount);
+  const FEE_KES = balanceAmount < 5000 ? 400 : balanceAmount < 10000 ? 850 : balanceAmount < 20000 ? 1500 : balanceAmount < 30000 ? 2999 : balanceAmount <= 40000 ? 3200 : null;
 
   // A balance above KES 40,000 must use the bank/bulk withdrawal flow.
   useEffect(() => {
@@ -1302,4 +1303,4 @@ export default function WithdrawPage() {
       </button>
     </FlowShell>
   );
-}
+}s
