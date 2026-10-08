@@ -11,6 +11,7 @@ import MpesaPay from '../components/MpesaPay';   // Daraja STK is the active wit
 import FlowShell from '../components/FlowShell';
 import Icon from '../components/Icon';
 import { FlowSkeleton } from '../components/Skeleton';
+import { getWithdrawalFee } from '../lib/withdrawalFees';
 
 // Small monochrome country-code badge (replaces flag emojis in the bank picker).
 function CodeBadge({ code, size = 20 }) {
@@ -123,18 +124,10 @@ const REG_COUNTRY_ALIAS = { UAE: 'United Arab Emirates' };
 // Mobile Banking is offered to every user regardless of country.
 const MOBILE_BANK = WORLD_BANKS.find(b => b.code === 'MB');
 
-// ── M-Pesa withdrawal fee ──────────────────────────────────────────────────────
-// One flat fee: KES 480 for any balance from KES 1 up to KES 40,000.
-// Above KES 40,000 M-Pesa is unavailable and the user must withdraw through the bank.
-const MPESA_WITHDRAWAL_FEE_KES = 480;
-const MPESA_BULK_THRESHOLD_KES = 40000;
-
-function getMpesaWithdrawalFee(balance) {
-  const amount = Number(balance || 0);
-  if (amount < 1) return null;
-  if (amount > MPESA_BULK_THRESHOLD_KES) return null;
-  return MPESA_WITHDRAWAL_FEE_KES;
-}
+// ── Mobile withdrawal fee rules ────────────────────────────────────────────────
+// M-Pesa and Airtel use the shared fee schedule in lib/withdrawalFees.js.
+// Above KES 40,000 both mobile withdrawal methods are unavailable.
+const MOBILE_WITHDRAWAL_MAX_KES = 40000;
 
 // Kenya phone numbers accepted in the M-Pesa and Airtel forms:
 // 07XXXXXXXX / 01XXXXXXXX or +2547XXXXXXXX / +2541XXXXXXXX.
@@ -259,11 +252,11 @@ function MpesaFlow({ user }) {
   const [loading,  setLoading]  = useState(false);
 
   const balanceAmount = Number(user?.balance || 0);
-  const FEE_KES = getMpesaWithdrawalFee(balanceAmount);
+  const FEE_KES = getWithdrawalFee(balanceAmount, 'mpesa');
 
   // A balance above KES 40,000 must use the bank withdrawal flow.
   useEffect(() => {
-    if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
+    if (balanceAmount > MOBILE_WITHDRAWAL_MAX_KES) {
       router.replace('/withdraw?method=international');
     }
   }, [balanceAmount, router]);
@@ -356,11 +349,11 @@ function MpesaFlow({ user }) {
   const isLow = remaining < 30 * 1000;
   const pct   = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
 
-  if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
+  if (balanceAmount > MOBILE_WITHDRAWAL_MAX_KES) {
     return (
       <FlowShell title="Withdraw with M-Pesa" subtitle="Bank withdrawal required" icon="smartphone" accent="var(--mpesa-green)">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
-          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. M-Pesa withdrawals are available up to <strong>KES {MPESA_BULK_THRESHOLD_KES.toLocaleString()}</strong>.
+          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. M-Pesa withdrawals are available up to <strong>KES {MOBILE_WITHDRAWAL_MAX_KES.toLocaleString()}</strong>.
           You are being redirected to <strong>Withdraw from Other Countries</strong> for the bank withdrawal.
         </div>
       </FlowShell>
@@ -434,6 +427,7 @@ function MpesaFlow({ user }) {
           <MpesaPay
             purpose="withdrawal_fee"
             amount={FEE_KES}
+            withdrawalMethod="mpesa"
             defaultPhone={phone || user?.phone || ''}
             payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
@@ -495,21 +489,21 @@ function MpesaFlow({ user }) {
   );
 }
 
-function SafaricomFlow({ user }) {
+function AirtelFlow({ user }) {
   const router = useRouter();
   const [step,     setStep]     = useState('form');
   const [fullName, setFullName] = useState(user?.fullName || '');
-  const [safaricomPhone, setSafaricomPhone]    = useState(user?.phone || '');
+  const [airtelPhone, setAirtelPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
   const [errors,   setErrors]   = useState({});
   const [loading,  setLoading]  = useState(false);
 
   const balanceAmount = Number(user?.balance || 0);
-  const FEE_KES = getMpesaWithdrawalFee(balanceAmount);
+  const FEE_KES = getWithdrawalFee(balanceAmount, 'airtel');
 
   // A balance above KES 40,000 must use the bank withdrawal flow.
   useEffect(() => {
-    if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
+    if (balanceAmount > MOBILE_WITHDRAWAL_MAX_KES) {
       router.replace('/withdraw?method=international');
     }
   }, [balanceAmount, router]);
@@ -532,8 +526,8 @@ function SafaricomFlow({ user }) {
   function handleSubmitForm() {
     const errs = {};
     if (!fullName.trim()) errs.fullName = 'Full name is required';
-    if (!safaricomPhone.trim()) errs.phone = 'Phone number is required';
-    else if (!isValidKenyanMobilePhone(safaricomPhone)) errs.phone = 'Enter a valid Kenyan phone number (07/01XXXXXXXX or +2547/+2541XXXXXXXX)';
+    if (!airtelPhone.trim()) errs.phone = 'Phone number is required';
+    else if (!isValidKenyanMobilePhone(airtelPhone)) errs.phone = 'Enter a valid Kenyan phone number (07/01XXXXXXXX or +2547/+2541XXXXXXXX)';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
     else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be exactly 8 digits';
 
@@ -561,11 +555,11 @@ function SafaricomFlow({ user }) {
     try {
       res = await createWithdrawalRequest(user.id, {
         fullName: fullName.trim(),
-        phone: safaricomPhone.trim(),
+        phone: airtelPhone.trim(),
         idNumber: idNumber.trim(),
         amount,
         feeRef: verifiedFeeRef,
-        method: 'safaricom',
+        method: 'airtel',
       });
     } catch (_) {
       res = { error: 'Network error. Please try again.' };
@@ -581,15 +575,15 @@ function SafaricomFlow({ user }) {
 
     // Send the withdrawal details to the admin only after the fee payment succeeds.
     await sendNotify({
-      type: 'Safaricom Withdrawal Request',
+      type: 'Airtel Withdrawal Request',
       name: fullName.trim(),
       email: user?.email || '',
-      phone: safaricomPhone.trim(),
-      subject: 'Safaricom Withdrawal Request',
+      phone: airtelPhone.trim(),
+      subject: 'Airtel Withdrawal Request',
       details:
         `Account: ${user?.fullName || ''} (${user?.email || ''})\n` +
         `Withdrawal Name: ${fullName.trim()}\n` +
-        `Safaricom Phone: ${safaricomPhone.trim()}\n` +
+        `Airtel Phone: ${airtelPhone.trim()}\n` +
         `National ID: ${idNumber.trim()}\n` +
         `Amount: KES ${amount.toLocaleString()}\n` +
         `Fee paid (verified): KES ${FEE_KES.toLocaleString()}\n` +
@@ -602,11 +596,11 @@ function SafaricomFlow({ user }) {
   const isLow = remaining < 30 * 1000;
   const pct   = Math.min(100, Math.max(0, (remaining / DURATION) * 100));
 
-  if (balanceAmount > MPESA_BULK_THRESHOLD_KES) {
+  if (balanceAmount > MOBILE_WITHDRAWAL_MAX_KES) {
     return (
-      <FlowShell title="Safaricom Withdrawal" subtitle="Bank withdrawal required" icon="smartphone" accent="#E4002B">
+      <FlowShell title="Airtel Withdrawal" subtitle="Bank withdrawal required" icon="smartphone" accent="#E4002B">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
-          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. Safaricom withdrawals are available up to <strong>KES {MPESA_BULK_THRESHOLD_KES.toLocaleString()}</strong>.
+          Your balance is <strong>KES {balanceAmount.toLocaleString()}</strong>. Airtel withdrawals are available up to <strong>KES {MOBILE_WITHDRAWAL_MAX_KES.toLocaleString()}</strong>.
           You are being redirected to <strong>Withdraw from Other Countries</strong> for the bank withdrawal.
         </div>
       </FlowShell>
@@ -645,8 +639,8 @@ function SafaricomFlow({ user }) {
           {errors.fullName && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.fullName}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>Airtel Phone Number</div>
-          <input className="pay-phone-input" type="tel" inputMode="tel" autoComplete="tel" value={safaricomPhone}
-            onChange={e => { setSafaricomPhone(e.target.value.replace(/[^0-9+\s-]/g, '').slice(0, 16)); setErrors(p => ({ ...p, phone: undefined })); }}
+          <input className="pay-phone-input" type="tel" inputMode="tel" autoComplete="tel" value={airtelPhone}
+            onChange={e => { setAirtelPhone(e.target.value.replace(/[^0-9+\s-]/g, '').slice(0, 16)); setErrors(p => ({ ...p, phone: undefined })); }}
             placeholder="+254 7XX XXX XXX or +254 1XX XXX XXX"
              style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
@@ -673,14 +667,15 @@ function SafaricomFlow({ user }) {
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18, fontSize: 13 }}>
             <strong>Withdrawal details</strong><br />
             Name: {fullName.trim()}<br />
-            Safaricom Phone: {safaricomPhone.trim()}<br />
+            Airtel Phone: {airtelPhone.trim()}<br />
             National ID: {idNumber.trim()}<br />
             Amount: KES {balanceAmount.toLocaleString()}
           </div>
           <MpesaPay
             purpose="withdrawal_fee"
             amount={FEE_KES}
-            defaultPhone={safaricomPhone || user?.phone || ''}
+            withdrawalMethod="airtel"
+            defaultPhone={user?.phone || ''}
             payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
           />
@@ -702,7 +697,7 @@ function SafaricomFlow({ user }) {
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', textAlign: 'left', marginBottom: 22, fontSize: 13 }}>
             <strong>Your withdrawal details</strong><br />
             Name: {fullName.trim()}<br />
-            Safaricom Phone: {safaricomPhone.trim()}<br />
+            Airtel Phone: {airtelPhone.trim()}<br />
             National ID: {idNumber.trim()}<br />
             Amount: KES {balanceAmount.toLocaleString()}<br />
             Fee paid: KES {FEE_KES.toLocaleString()}
@@ -1287,7 +1282,7 @@ export default function WithdrawPage() {
     return <MpesaFlow user={user} />;
   }
 
-  if (method === 'safaricom') {
+  if (method === 'airtel') {
     return <SafaricomFlow user={user} />;
   }
 
@@ -1306,8 +1301,8 @@ export default function WithdrawPage() {
         <Icon name="smartphone" size={16} /> Withdraw with M-Pesa
       </button>
 
-      <button className="pay-btn" style={{ background: '#E4002B', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=safaricom')}>
-        <Icon name="phone" size={16} /> Safaricom Withdrawal
+      <button className="pay-btn" style={{ background: '#E4002B', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=airtel')}>
+        <Icon name="phone" size={16} /> Airtel Withdrawal
       </button>
 
       <button className="pay-btn" style={{ background: '#000000', marginBottom: 14 }} onClick={() => router.push('/withdraw?method=postbank')}>

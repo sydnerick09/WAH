@@ -1,3 +1,5 @@
+
+
 // pages/api/mpesa/stk-push.js — initiate a Lipa na M-PESA (STK) payment.
 // The amount is decided SERVER-SIDE for fixed prices (activation/premium); the
 // client can never set its own price. Requires a valid session token.
@@ -5,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { verifyToken } from '../../../lib/token';
 import { isConfigured, stkPush, isValidMsisdn, normalizePhone } from '../../../lib/daraja';
 import { createTransaction } from '../../../lib/mpesaStore';
+import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../../lib/withdrawalFees';
 
 const ACTIVATION_FEE = 50;
 const PREMIUM_FEE    = 480;
@@ -45,12 +48,26 @@ export default async function handler(req, res) {
   } else if (purpose === 'profile_change') {
     amount = PROFILE_FEE;
   } else if (purpose === 'withdrawal_fee' || purpose.endsWith('_withdrawal_fee')) {
-    // Fees are app-computed (fixed 650/2,990 or a dynamic bulk quote). Accept a
-    // sane range — this fee only unlocks the withdrawal form; the payout itself
-    // is admin-gated B2C.
-    const a = Math.round(Number(req.body?.amount) || 0);
-    if (!(a >= 500 && a <= 100000)) return res.json({ success: false, message: 'Invalid fee amount.' });
-    amount = a;
+    const withdrawalMethod = String(req.body?.withdrawalMethod || '').toLowerCase();
+    const requestedFee = Math.round(Number(req.body?.amount) || 0);
+
+    // Mobile withdrawal fees are server-authoritative. The client only requests
+    // the prompt; it cannot choose an arbitrary fee.
+    if (isSupportedWithdrawalMethod(withdrawalMethod)) {
+      const expectedFee = getWithdrawalFee(Number(u.balance || 0), withdrawalMethod);
+      if (expectedFee === null) {
+        return res.json({ success: false, message: 'This withdrawal method is unavailable for your current balance.' });
+      }
+      if (requestedFee !== expectedFee) {
+        return res.json({ success: false, message: `Invalid fee amount. The required ${withdrawalMethod === 'airtel' ? 'Airtel' : 'M-Pesa'} withdrawal fee is KES ${expectedFee.toLocaleString()}.` });
+      }
+      amount = expectedFee;
+    } else {
+      // Existing bank/international flows may use a bank-specific fee. Keep
+      // their existing validation unchanged.
+      if (!(requestedFee >= 500 && requestedFee <= 100000)) return res.json({ success: false, message: 'Invalid fee amount.' });
+      amount = requestedFee;
+    }
   } else {
     return res.json({ success: false, message: 'Unknown payment purpose.' });
   }
