@@ -1283,7 +1283,7 @@ export default function WithdrawPage() {
   }
 
   if (method === 'airtel') {
-    return <SafaricomFlow user={user} />;
+    return <AirtelFlow user={user} />;
   }
 
   if (method === 'postbank') {
