@@ -4,7 +4,7 @@
 // Uses the same SMTP + NOTIFY_EMAIL setup as /api/notify and /api/submit-task.
 import formidable from "formidable";
 import fs from "fs";
-import nodemailer from "nodemailer";
+import { createEmailTransport } from "../../lib/emailTransport";
 
 export const config = { api: { bodyParser: false } };
 
@@ -62,13 +62,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "File processing failed." });
   }
 
-  const smtpPort = Number(process.env.SMTP_PORT || 465);
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "mail.privateemail.com",
-    port: smtpPort,
-    secure: process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === "true" : smtpPort === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  });
+  const transporter = createEmailTransport('support');
 
   const destination = process.env.NOTIFY_EMAIL || process.env.SMTP_USER || "businesshub.comke@gmail.com";
 

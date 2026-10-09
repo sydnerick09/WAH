@@ -6,19 +6,10 @@
 //   SMTP_PASS   = your Namecheap Private Email password
 //   NOTIFY_EMAIL= where admin notifications should land (defaults to SMTP_USER)
 //   SMTP_HOST / SMTP_PORT / SMTP_SECURE default to Namecheap Private Email SSL:465
-import nodemailer from 'nodemailer';
+import { createEmailTransport } from '../../lib/emailTransport';
 
 function getTransporter() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-  const port = Number(process.env.SMTP_PORT || 465);
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'mail.privateemail.com',
-    port,
-    secure: process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : port === 465,
-    auth: { user, pass },
-  });
+  return createEmailTransport('support');
 }
 
 function esc(s) {

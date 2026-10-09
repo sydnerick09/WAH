@@ -2,7 +2,7 @@
 // Admin-only: send an email to one registered client.
 // SMTP credentials stay server-side and are never exposed to the browser.
 
-import nodemailer from 'nodemailer';
+import { createEmailTransport } from '../../../lib/emailTransport';
 
 function esc(s) {
   return String(s || '')
@@ -28,20 +28,7 @@ function bodyToHtml(body, name) {
 }
 
 function getTransporter() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-
-  const port = Number(process.env.SMTP_PORT || 465);
-
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'mail.privateemail.com',
-    port,
-    secure: process.env.SMTP_SECURE !== undefined
-      ? process.env.SMTP_SECURE === 'true'
-      : port === 465,
-    auth: { user, pass },
-  });
+  return createEmailTransport('admin');
 }
 
 export default async function handler(req, res) {

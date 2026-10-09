@@ -6,7 +6,7 @@
 //   ADMIN_SECRET               = same secret the admin panel uses
 //   SMTP_USER / SMTP_PASS      = Namecheap Private Email address + password (see /api/notify)
 //   SUPABASE_* (optional)      = used only to honour the unsubscribe opt-out
-import nodemailer from 'nodemailer';
+import { createEmailTransport } from '../../lib/emailTransport';
 import { createClient } from '@supabase/supabase-js';
 import { unsubscribeUrl } from '../../lib/unsubToken';
 
@@ -79,16 +79,7 @@ function toHtml(vars) {
 }
 
 function getTransporter() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-  const port = Number(process.env.SMTP_PORT || 465);
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'mail.privateemail.com',
-    port,
-    secure: process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : port === 465,
-    auth: { user, pass },
-  });
+  return createEmailTransport('noreply');
 }
 
 export default async function handler(req, res) {

@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword } from '../../lib/password';
 import { issueToken, verifyToken, issueResetToken, verifyResetToken, peekUid } from '../../lib/token';
 import { computeXp, levelInfo } from '../../lib/gamification';
 import { sendResetEmail } from '../../lib/resetEmail';
+import { createEmailTransport } from '../../lib/emailTransport';
 import { b2cPayment, isB2CConfigured, normalizePhone, isValidMsisdn } from '../../lib/daraja';
 
 function getAdmin() {
@@ -795,6 +796,36 @@ export default async function handler(req, res) {
         await db.from('mpesa_transactions').update({ withdrawal_id: String(data.id) }).eq('id', fee.id);
         await logAction(db, { action: 'withdrawal_fee_verified', entity: 'withdrawal', entityId: data.id,
           detail: `method:${method} user:${userId} fee_tx:${feeRef} receipt:${fee.mpesa_receipt || '—'} amount:KES ${fee.amount}` });
+
+        // Best-effort email notifications: never roll back a valid withdrawal if email fails.
+        try {
+          const { data: account } = await db.from('users').select('email,full_name').eq('id', userId).maybeSingle();
+          const transporter = createEmailTransport('withdrawal');
+          const adminTo = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.SMTP_USER;
+          const subject = `Withdrawal request received — ${fullName}`;
+          const details = `Withdrawal ID: ${data.id}\nName: ${fullName}\nEmail: ${account?.email || 'Not available'}\nAmount: KES ${amount.toLocaleString('en-KE')}\nMethod: ${method}\nPhone: ${phone || 'Not provided'}\nStatus: Pending`;
+          if (adminTo) {
+            try {
+              await transporter.sendMail({
+                to: adminTo,
+                subject: `[Gweno Hub] ${subject}`,
+                text: details,
+                html: `<h2>New withdrawal request</h2><pre style="font-family:Arial,sans-serif;white-space:pre-wrap;">${details.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`,
+              });
+            } catch (mailErr) { console.error('[withdrawal-email] admin notice failed:', mailErr?.message || mailErr); }
+          }
+          if (account?.email) {
+            try {
+              await transporter.sendMail({
+                to: account.email,
+                subject: 'We received your withdrawal request',
+                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\n\nWithdrawal reference: ${data.id}\n\nGweno Hub Team`,
+                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Gweno Hub Team</p>`,
+              });
+            } catch (mailErr) { console.error('[withdrawal-email] client confirmation failed:', mailErr?.message || mailErr); }
+          }
+        } catch (mailErr) { console.error('[withdrawal-email] notification setup failed:', mailErr?.message || mailErr); }
+
         return res.json({ data: normWd(data) });
       }
 
@@ -1220,6 +1251,21 @@ export default async function handler(req, res) {
             .update(wUpdates).eq('id', p.requestId).select().single());
         }
         if (wUpErr) return res.json({ success: false, error: wUpErr.message });
+        if (p.status !== undefined) {
+          try {
+            const { data: owner } = await db.from('users').select('email,full_name').eq('id', wUp.user_id).maybeSingle();
+            if (owner?.email) {
+              const transport = createEmailTransport('withdrawal');
+              const statusText = String(wUp.status || p.status);
+              await transport.sendMail({
+                to: owner.email,
+                subject: `Withdrawal status update: ${statusText}`,
+                text: `Hello ${owner.full_name || wUp.full_name || 'Client'},\n\nYour withdrawal request for KES ${Number(wUp.amount || 0).toLocaleString('en-KE')} has been updated to: ${statusText}.\n\nReference: ${wUp.id}\n\nGweno Hub Team`,
+                html: `<p>Hello ${String(owner.full_name || wUp.full_name || 'Client').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>Your withdrawal request for <strong>KES ${Number(wUp.amount || 0).toLocaleString('en-KE')}</strong> has been updated to: <strong>${statusText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</strong>.</p><p>Reference: ${String(wUp.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Gweno Hub Team</p>`,
+              });
+            }
+          } catch (mailErr) { console.error('[withdrawal-email] status notice failed:', mailErr?.message || mailErr); }
+        }
         return res.json({ success: true, data: normWd(wUp) });
       }
 

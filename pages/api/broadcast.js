@@ -3,7 +3,7 @@
 // Protected by ADMIN_SECRET; sends through Namecheap Private Email SMTP.
 
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
+import { createEmailTransport } from '../../lib/emailTransport';
 
 const DEFAULT_SUBJECT = 'Welcome to Gweno Hub';
 const DEFAULT_BODY = `Dear Client,
@@ -40,18 +40,7 @@ function bodyToHtml(body, name) {
 }
 
 function getTransporter() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-  const port = Number(process.env.SMTP_PORT || 465);
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'mail.privateemail.com',
-    port,
-    secure: process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : port === 465,
-    auth: { user, pass },
-    pool: true,
-    maxConnections: 3,
-  });
+  return createEmailTransport('broadcast');
 }
 
 export default async function handler(req, res) {

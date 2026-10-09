@@ -3,7 +3,7 @@
 
 import formidable from "formidable";
 import fs from "fs";
-import nodemailer from "nodemailer";
+import { createEmailTransport } from "../../lib/emailTransport";
 import { createClient } from "@supabase/supabase-js";
 import { verifyToken } from "../../lib/token";
 
@@ -141,19 +141,7 @@ export default async function handler(req, res) {
   }
 
   // ── 6. SMTP transporter ───────────────────────────────────────────────────
-  const smtpPort = Number(process.env.SMTP_PORT || 465);
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "mail.privateemail.com",
-    port: smtpPort,
-    // port 465 requires SSL; fall back to env override if provided
-    secure: process.env.SMTP_SECURE !== undefined
-      ? process.env.SMTP_SECURE === "true"
-      : smtpPort === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  const transporter = createEmailTransport('admin');
 
   const destination = process.env.NOTIFY_EMAIL || "businesshub.comke@gmail.com";
 

@@ -2,7 +2,7 @@
 // Sends an activation confirmation email to the client.
 
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
+import { createEmailTransport } from '../../lib/emailTransport';
 
 const SITE_URL = (process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '');
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -16,25 +16,7 @@ function esc(value) {
 }
 
 function getTransporter() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!user || !pass) return null;
-
-  const port = Number(process.env.SMTP_PORT || 465);
-
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'mail.privateemail.com',
-    port,
-    secure:
-      process.env.SMTP_SECURE !== undefined
-        ? process.env.SMTP_SECURE === 'true'
-        : port === 465,
-    auth: {
-      user,
-      pass,
-    },
-  });
+  return createEmailTransport('subscription');
 }
 
 export default async function handler(req, res) {
