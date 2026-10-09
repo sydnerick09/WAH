@@ -1,7 +1,6 @@
 // pages/api/broadcast.js
-// Admin-only: emails a message to EVERY registered client in the database.
-// Protected by ADMIN_SECRET.
-// Uses SUPABASE_SERVICE_ROLE_KEY to fetch users and SMTP_USER/SMTP_PASS for Gmail.
+// Admin-only: sends a message to a selected registered-client group.
+// Protected by ADMIN_SECRET; sends through Namecheap Private Email SMTP.
 
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
@@ -46,7 +45,7 @@ function getTransporter() {
   if (!user || !pass) return null;
   const port = Number(process.env.SMTP_PORT || 465);
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: process.env.SMTP_HOST || 'mail.privateemail.com',
     port,
     secure: process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : port === 465,
     auth: { user, pass },
@@ -58,7 +57,11 @@ function getTransporter() {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
 
-  const { adminSecret, subject, body, test } = req.body || {};
+  const { adminSecret, subject, body, test, recipientType = 'all' } = req.body || {};
+  const allowedRecipientTypes = ['all', 'active', 'inactive', 'premium', 'basic'];
+  if (!test && !allowedRecipientTypes.includes(recipientType)) {
+    return res.status(400).json({ success: false, message: 'Invalid recipient group.' });
+  }
   if (!process.env.ADMIN_SECRET || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ success: false, message: 'Unauthorized' });
   }
@@ -76,15 +79,30 @@ export default async function handler(req, res) {
 
   const db = createClient(url, key, { auth: { persistSession: false } });
 
-  let { data: rows, error } = await db.from('users').select('email, full_name, unsubscribed');
+  let { data: rows, error } = await db.from('users').select('id, email, full_name, unsubscribed, premium, premium_paid_at, task_submissions');
   if (error) {
-    ({ data: rows, error } = await db.from('users').select('email, full_name'));
+    ({ data: rows, error } = await db.from('users').select('id, email, full_name, unsubscribed'));
   }
   if (error) return res.status(500).json({ success: false, message: error.message });
 
+  const now = Date.now();
+  const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+  const matchesGroup = (r) => {
+    const submissions = r.task_submissions || {};
+    const activatedAt = Number(submissions._act || 0);
+    const active = !!activatedAt && now <= activatedAt + ONE_MONTH_MS;
+    const premiumPaidAt = Number(r.premium_paid_at || 0);
+    const premium = !!r.premium && !!premiumPaidAt && now <= premiumPaidAt + ONE_MONTH_MS;
+    if (recipientType === 'active') return active;
+    if (recipientType === 'inactive') return !active;
+    if (recipientType === 'premium') return premium;
+    if (recipientType === 'basic') return !premium;
+    return true;
+  };
+
   const seen = new Set();
   let recipients = (rows || [])
-    .filter(r => !r.unsubscribed)
+    .filter(r => !r.unsubscribed && matchesGroup(r))
     .map(r => ({ email: String(r.email || '').trim().toLowerCase(), name: r.full_name || '' }))
     .filter(r => {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email) || seen.has(r.email)) return false;
@@ -131,6 +149,7 @@ export default async function handler(req, res) {
     sent,
     failed,
     test: Boolean(test),
+    recipientType: test ? 'test' : recipientType,
     errors,
   });
 }

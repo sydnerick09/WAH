@@ -4,13 +4,13 @@
 // Reason is editable from the admin panel before sending. Dynamic placeholders
 // ({TASK_NAME}, {USER_NAME}, {USER_EMAIL}, {UNSUBSCRIBE_LINK}) are replaced here.
 //   ADMIN_SECRET               = same secret the admin panel uses
-//   SMTP_USER / SMTP_PASS      = Gmail address + App Password (see /api/notify)
+//   SMTP_USER / SMTP_PASS      = Namecheap Private Email address + password (see /api/notify)
 //   SUPABASE_* (optional)      = used only to honour the unsubscribe opt-out
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 import { unsubscribeUrl } from '../../lib/unsubToken';
 
-const LOGIN_URL = process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app';
+const SITE_URL = (process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '');
 
 const SUBJECT = 'Task Submission Returned for Corrections';
 
@@ -24,7 +24,7 @@ Reason for Correction:
 
 Failure to make the required corrections may result in your account being placed on hold.
 
-Log in to ${LOGIN_URL} to view the correction details.
+Continue to your dashboard to open the task and view the correction details: {DASHBOARD_LINK}
 
 Reference Task:
 {TASK_NAME}
@@ -48,7 +48,8 @@ function fillTemplate(str, vars) {
     .replace(/\{USER_EMAIL\}/g,        vars.userEmail)
     .replace(/\{TASK_NAME\}/g,         vars.taskName)
     .replace(/\{CORRECTION_REASON\}/g, vars.reason)
-    .replace(/\{UNSUBSCRIBE_LINK\}/g,  vars.unsubscribeLink);
+    .replace(/\{UNSUBSCRIBE_LINK\}/g,  vars.unsubscribeLink)
+    .replace(/\{DASHBOARD_LINK\}/g, vars.dashboardLink);
 }
 
 function toHtml(vars) {
@@ -61,7 +62,7 @@ function toHtml(vars) {
         <div style="white-space:pre-wrap;color:#1f2937;">${esc(vars.reason) || '—'}</div>
       </div>
       <p style="color:#1f2937;"><strong>Failure to make the required corrections may result in your account being placed on hold.</strong></p>
-      <p>Log in to <a href="${LOGIN_URL}" style="color:#111827;font-weight:600;">${LOGIN_URL}</a> to view the correction details.</p>
+      <p><a href="${esc(vars.dashboardLink)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;padding:11px 16px;border-radius:7px;">Continue to Your Dashboard</a></p><p>This link opens the relevant task automatically. From there, review the correction and continue your work.</p>
       <p style="margin:14px 0;">
         <span style="font-weight:700;color:#374151;">Reference Task:</span><br/>
         <span style="display:inline-block;margin-top:4px;background:#F1F5F9;border-radius:6px;padding:6px 10px;font-weight:700;color:#0F172A;">${esc(vars.taskName) || '—'}</span>
@@ -83,7 +84,7 @@ function getTransporter() {
   if (!user || !pass) return null;
   const port = Number(process.env.SMTP_PORT || 465);
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: process.env.SMTP_HOST || 'mail.privateemail.com',
     port,
     secure: process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : port === 465,
     auth: { user, pass },
@@ -93,7 +94,7 @@ function getTransporter() {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
 
-  const { adminSecret, taskName, userName, userEmail, userId, reason } = req.body || {};
+  const { adminSecret, taskName, userName, userEmail, userId, reason, taskId, targetType, targetId } = req.body || {};
 
   if (!process.env.ADMIN_SECRET || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ success: false, message: 'Unauthorized' });
@@ -126,6 +127,7 @@ export default async function handler(req, res) {
     taskName:        taskName || 'your task',
     reason:          (reason && String(reason).trim()) || 'Please review and resubmit your work.',
     unsubscribeLink: unsubscribeUrl(userId || userEmail),
+    dashboardLink: `${SITE_URL}/dashboard?correctionTask=${encodeURIComponent(String(taskId || ''))}&correctionType=${encodeURIComponent(String(targetType || 'submission'))}&correctionId=${encodeURIComponent(String(targetId || ''))}`,
   };
 
   try {

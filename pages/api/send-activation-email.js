@@ -4,8 +4,8 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
-const ACTIVATION_MESSAGE = (name) =>
-  `Thank you ${name} for activating your account with Gweno Hub. We appreciate you joining our team and look forward to having you on board.You can now apply for tasks, wait for approval, complete and submit the approved tasks, and receive your payment once the submission is approved. Once the funds are credited to your account, you can withdraw them instantly.`;
+const SITE_URL = (process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '');
+const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 function esc(value) {
   return String(value || '')
@@ -24,7 +24,7 @@ function getTransporter() {
   const port = Number(process.env.SMTP_PORT || 465);
 
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: process.env.SMTP_HOST || 'mail.privateemail.com',
     port,
     secure:
       process.env.SMTP_SECURE !== undefined
@@ -45,7 +45,8 @@ export default async function handler(req, res) {
     });
   }
 
-  const { email, name } = req.body || {};
+  const { email, name, type = 'activation', wasPremium = false } = req.body || {};
+  const subscriptionType = type === 'premium' ? 'premium' : 'activation';
 
   const clientEmail = String(email || '').trim().toLowerCase();
   const clientName = String(name || '').trim() || 'Client';
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
   // Confirm that this is a real activated client account.
   const { data: rows, error } = await db
     .from('users')
-    .select('email, full_name, activated')
+    .select('id, email, full_name, premium, premium_paid_at, activated, task_submissions, unsubscribed')
     .ilike('email', clientEmail)
     .limit(1);
 
@@ -102,11 +103,19 @@ export default async function handler(req, res) {
     });
   }
 
-  if (!client.activated) {
-    return res.status(403).json({
-      success: false,
-      message: 'Account is not activated.',
-    });
+  const taskSubs = client.task_submissions || {};
+  const activatedAt = Number(taskSubs._act || 0);
+  const isActivated = !!activatedAt && Date.now() <= activatedAt + ONE_MONTH_MS;
+  const premiumPaidAt = Number(client.premium_paid_at || 0);
+  const isPremium = !!client.premium && !!premiumPaidAt && Date.now() <= premiumPaidAt + ONE_MONTH_MS;
+  if (subscriptionType === 'activation' && !isActivated) {
+    return res.status(403).json({ success: false, message: 'Account is not activated.' });
+  }
+  if (subscriptionType === 'premium' && !isPremium) {
+    return res.status(403).json({ success: false, message: 'Premium is not active, so a successful subscription email cannot be sent.' });
+  }
+  if (client.unsubscribed) {
+    return res.status(403).json({ success: false, message: 'This client has unsubscribed from email.' });
   }
 
   const transporter = getTransporter();
@@ -121,23 +130,32 @@ export default async function handler(req, res) {
   const actualName =
     String(client.full_name || clientName || 'Client').trim();
 
-  const message = ACTIVATION_MESSAGE(actualName);
+  const isRenewal = subscriptionType === 'premium' && Boolean(wasPremium);
+  const title = subscriptionType === 'activation' ? 'Account Activation' : (isRenewal ? 'Renewed Premium' : 'Premium Subscription');
+  const amount = subscriptionType === 'activation' ? 50 : 480;
+  const subject = subscriptionType === 'activation' ? 'Your Gweno Hub Account Has Been Activated' : (isRenewal ? 'Your Gweno Hub Premium Has Been Renewed' : 'Your Gweno Hub Premium Is Active');
+  const dashboardUrl = `${SITE_URL}/dashboard`;
+  const message = `Hi ${actualName},\n\nYour ${title.toLowerCase()} payment status is Successful.\nAmount: KES ${amount.toLocaleString('en-KE')}\nSubscription: ${title}\n\nYou can now continue using your GWENO Hub account from your dashboard: ${dashboardUrl}\n\n— The Gweno Hub Team`;
 
   try {
     await transporter.sendMail({
       from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
       to: clientEmail,
-      subject: 'Your Gweno Hub Account Has Been Activated',
+      subject,
       text: message,
       html: `
         <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;max-width:600px;">
-          <p style="margin:0 0 14px;">
-            Thank you ${esc(actualName)} for activating your account with Gweno Hub. We appreciate you joining our team and look forward to having you on board.You can now apply for tasks, wait for approval, complete and submit the approved tasks, and receive your payment once the submission is approved. Once the funds are credited to your account, you can withdraw them instantly.
-          </p>
-
-          <p style="margin-top:18px;color:#1f2937;font-weight:600;">
-            — The Gweno Hub Team
-          </p>
+          <p>Hi ${esc(actualName)},</p>
+          <h2 style="margin:12px 0;color:#111827;">${esc(title)} confirmed</h2>
+          <table cellpadding="8" style="border-collapse:collapse;border:1px solid #e5e7eb;width:100%;">
+            <tr><td><strong>Client name</strong></td><td>${esc(actualName)}</td></tr>
+            <tr><td><strong>Amount</strong></td><td>KES ${amount.toLocaleString('en-KE')}</td></tr>
+            <tr><td><strong>Subscription type</strong></td><td>${esc(title)}</td></tr>
+            <tr><td><strong>Payment status</strong></td><td style="color:#166534;font-weight:700;">Successful</td></tr>
+          </table>
+          <p>Your account is ready. Click below to continue to your dashboard.</p>
+          <p><a href="${dashboardUrl}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;font-weight:700;padding:11px 16px;border-radius:7px;">Open Your Dashboard</a></p>
+          <p style="margin-top:18px;color:#1f2937;font-weight:600;">— The Gweno Hub Team</p>
         </div>
       `,
     });
@@ -148,7 +166,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: 'Activation email sent successfully.',
+      message: 'Subscription confirmation email sent successfully.',
     });
   } catch (err) {
     try {
@@ -156,14 +174,13 @@ export default async function handler(req, res) {
     } catch (_) {}
 
     console.error(
-      '[activation-email] Send error:',
+      '[subscription-email] Send error:',
       err
     );
 
     return res.status(500).json({
       success: false,
-      message:
-        'The account was activated, but the confirmation email could not be sent.',
+      message: 'The subscription is active, but the confirmation email could not be sent.',
     });
   }
 }

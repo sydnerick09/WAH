@@ -2,10 +2,10 @@
 // Automated email: notifies the admin of a client message (task submission,
 // withdrawal request, etc.) AND sends the client an automatic confirmation reply.
 // Requires SMTP credentials in the environment (see setup notes below):
-//   SMTP_USER   = your Gmail address (e.g. businesshub.comke@gmail.com)
-//   SMTP_PASS   = a Gmail *App Password* (16 chars), NOT your normal password
+//   SMTP_USER   = your Namecheap Private Email address (e.g. businesshub.comke@gmail.com)
+//   SMTP_PASS   = your Namecheap Private Email password
 //   NOTIFY_EMAIL= where admin notifications should land (defaults to SMTP_USER)
-//   SMTP_HOST / SMTP_PORT / SMTP_SECURE are optional (default Gmail SSL:465)
+//   SMTP_HOST / SMTP_PORT / SMTP_SECURE default to Namecheap Private Email SSL:465
 import nodemailer from 'nodemailer';
 
 function getTransporter() {
@@ -14,7 +14,7 @@ function getTransporter() {
   if (!user || !pass) return null;
   const port = Number(process.env.SMTP_PORT || 465);
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: process.env.SMTP_HOST || 'mail.privateemail.com',
     port,
     secure: process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : port === 465,
     auth: { user, pass },

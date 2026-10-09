@@ -35,7 +35,7 @@ function getTransporter() {
   const port = Number(process.env.SMTP_PORT || 465);
 
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: process.env.SMTP_HOST || 'mail.privateemail.com',
     port,
     secure: process.env.SMTP_SECURE !== undefined
       ? process.env.SMTP_SECURE === 'true'

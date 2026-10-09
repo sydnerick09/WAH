@@ -2024,7 +2024,7 @@ export default async function handler(req, res) {
         // A user's own submissions (used by the dashboard to show "already
         // submitted / already done" and auto-clear after 3 hours).
         const { userId, email } = p;
-        let query = db.from('submissions').select('task_id,status,created_at');
+        let query = db.from('submissions').select('id,task_id,task_title,status,reason,note,created_at,updated_at');
         if (userId)      query = query.eq('user_id', userId);
         else if (email)  query = query.eq('user_email', email);
         else return res.json({ data: [] });
@@ -2035,8 +2035,13 @@ export default async function handler(req, res) {
         const CLEAR_MS = 3 * 60 * 60 * 1000;
         const nowMs = Date.now();
         return res.json({ data: (data || []).map(r => ({
+          id:        r.id,
           taskId:    r.task_id,
+          taskTitle: r.task_title,
           status:    r.status,
+          reason:    r.reason || '',
+          note:      r.note || '',
+          updatedAt: r.updated_at || null,
           createdAt: r.created_at,   // used only to pick the latest submission per task
           cleared:   r.created_at ? (nowMs - new Date(r.created_at).getTime() > CLEAR_MS) : false,
         })) });

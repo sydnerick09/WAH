@@ -64,7 +64,7 @@ export default async function handler(req, res) {
 
   const smtpPort = Number(process.env.SMTP_PORT || 465);
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    host: process.env.SMTP_HOST || "mail.privateemail.com",
     port: smtpPort,
     secure: process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === "true" : smtpPort === 465,
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },

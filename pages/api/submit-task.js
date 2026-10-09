@@ -50,6 +50,7 @@ export default async function handler(req, res) {
   const userEmail = get("userEmail");
   const userName  = get("userName");
   const note      = get("note");
+  const correctionSubmissionId = get("correctionSubmissionId") !== "N/A" ? String(get("correctionSubmissionId")) : "";
 
   // ── 2a. Authenticate: in production derive the user id from the signed token
   // so a submission can never be attributed to another user via a spoofed form
@@ -64,7 +65,7 @@ export default async function handler(req, res) {
   // ── 2b. Proposal gate, regular tasks require an APPROVED application ──────
   // Offer tasks (offer_…) are exempt. Best-effort: if the DB isn't configured we
   // can't verify, so we don't block (matches the rest of this endpoint).
-  const isOfferTask = String(taskId || "").startsWith("offer_");
+  const isOfferTask = String(taskId || "").startsWith("offer_") || String(taskId || "").includes("~");
   if (!isOfferTask && taskId && taskId !== "N/A" && effectiveUserId && effectiveUserId !== "N/A"
       && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
@@ -142,7 +143,7 @@ export default async function handler(req, res) {
   // ── 6. SMTP transporter ───────────────────────────────────────────────────
   const smtpPort = Number(process.env.SMTP_PORT || 465);
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    host: process.env.SMTP_HOST || "mail.privateemail.com",
     port: smtpPort,
     // port 465 requires SSL; fall back to env override if provided
     secure: process.env.SMTP_SECURE !== undefined
@@ -161,7 +162,7 @@ export default async function handler(req, res) {
     from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
     to: destination,
     replyTo: userEmail && userEmail !== "N/A" ? userEmail : undefined,
-    subject: `[Task Submission] ${taskTitle} (${paymentDisplay}), ${userName !== "N/A" ? userName : "User " + userId}`,
+    subject: `${correctionSubmissionId ? "[Corrected Task Submission]" : "[Task Submission]"} ${taskTitle} (${paymentDisplay}), ${userName !== "N/A" ? userName : "User " + userId}`,
     html: `
       <h2>New Task Submission</h2>
       <table cellpadding="8" style="border-collapse:collapse;font-family:Inter,sans-serif;font-size:14px;">
@@ -219,16 +220,40 @@ export default async function handler(req, res) {
         process.env.SUPABASE_SERVICE_ROLE_KEY,
         { auth: { persistSession: false } }
       );
-      await db.from("submissions").insert({
-        user_id:    effectiveUserId !== "N/A" ? effectiveUserId : null,
-        user_email: userEmail !== "N/A" ? userEmail : null,
-        user_name:  userName  !== "N/A" ? userName  : null,
-        task_id:    taskId    !== "N/A" ? taskId    : null,
-        task_title: taskTitle,
-        reward:     !Number.isNaN(paymentNum) ? paymentNum : 0,
-        note:       note !== "N/A" ? note : "",
-        status:     "pending",
-      });
+      if (correctionSubmissionId) {
+        // Only the owner can resubmit, and only while that exact submission is awaiting correction.
+        const { data: prior, error: priorErr } = await db.from("submissions")
+          .select("id,user_id,task_id,status")
+          .eq("id", correctionSubmissionId)
+          .eq("user_id", effectiveUserId)
+          .eq("task_id", String(taskId))
+          .maybeSingle();
+        if (priorErr || !prior || prior.status !== "correction") {
+          return res.status(403).json({ success: false, message: "This submission is not available for correction. Please open the correction link from your email." });
+        }
+        const { error: updateErr } = await db.from("submissions").update({
+          user_email: userEmail !== "N/A" ? userEmail : null,
+          user_name: userName !== "N/A" ? userName : null,
+          task_title: taskTitle,
+          reward: !Number.isNaN(paymentNum) ? paymentNum : 0,
+          note: note !== "N/A" ? note : "",
+          status: "pending",
+          reason: "",
+          updated_at: new Date().toISOString(),
+        }).eq("id", correctionSubmissionId);
+        if (updateErr) throw updateErr;
+      } else {
+        await db.from("submissions").insert({
+          user_id: effectiveUserId !== "N/A" ? effectiveUserId : null,
+          user_email: userEmail !== "N/A" ? userEmail : null,
+          user_name: userName !== "N/A" ? userName : null,
+          task_id: taskId !== "N/A" ? taskId : null,
+          task_title: taskTitle,
+          reward: !Number.isNaN(paymentNum) ? paymentNum : 0,
+          note: note !== "N/A" ? note : "",
+          status: "pending",
+        });
+      }
 
       // Offer tasks are one-submission-only, mark claimed so the offer is
       // removed from everyone else's dashboard once someone submits it.
