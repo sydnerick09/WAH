@@ -552,10 +552,18 @@ export default async function handler(req, res) {
           .select('id,email,full_name,password').ilike('email', email).limit(5);
         const u = (rows || []).find(r => String(r.email).toLowerCase() === email);
         if (u) {
-          const token    = issueResetToken(u.id, u.password);
-          const base     = process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app';
+          const token = issueResetToken(u.id, u.password);
+          const configuredBase = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL;
+          const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+          const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+          const base = String(configuredBase || (requestHost ? `${requestProto}://${requestHost}` : 'https://onlinejob-pi.vercel.app')).replace(/\/$/, '');
           const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
-          await sendResetEmail({ userEmail: u.email, userName: u.full_name, resetUrl });
+          const delivery = await sendResetEmail({ userEmail: u.email, userName: u.full_name, resetUrl });
+          if (!delivery?.success) {
+            console.error('[password-reset] email delivery failed:', delivery?.message || 'Unknown mail error');
+            // The message is generic and does not reveal whether the account exists.
+            return res.status(503).json({ success: false, message: 'We could not send the reset email right now. Please try again shortly.' });
+          }
         }
         return res.json(genericOk);
       }
@@ -1909,12 +1917,16 @@ export default async function handler(req, res) {
       }
 
       case 'unsubscribeUser': {
-        // Public but token-protected: sets the user's email opt-out flag.
+        // Public but token-protected. Broadcast opt-out must not disable password
+        // resets, security notices, or transactional account email.
         const { uid, token } = p;
         if (!verifyUnsubToken(uid, token)) return res.json({ success: false, error: 'Invalid or expired unsubscribe link.' });
-        const { error } = await db.from('users').update({ unsubscribed: true }).eq('id', uid);
-        if (error) return res.json({ success: false, error: error.message });
-        await logAction(db, { action: 'unsubscribe', entity: 'user', entityId: uid, detail: 'User opted out of emails' });
+        const { data: user, error: readError } = await db.from('users').select('task_submissions').eq('id', uid).maybeSingle();
+        if (readError || !user) return res.json({ success: false, error: 'Could not update email preferences. Please contact support.' });
+        const submissions = { ...(user.task_submissions || {}), _marketingUnsubscribed: true };
+        const { error } = await db.from('users').update({ task_submissions: submissions }).eq('id', uid);
+        if (error) return res.json({ success: false, error: 'Could not update email preferences. Please contact support.' });
+        await logAction(db, { action: 'unsubscribe', entity: 'user', entityId: uid, detail: 'User opted out of promotional/broadcast emails' });
         return res.json({ success: true });
       }
 

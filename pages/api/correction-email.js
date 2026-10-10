@@ -29,9 +29,7 @@ Continue to your dashboard to open the task and view the correction details: {DA
 Reference Task:
 {TASK_NAME}
 
-If you no longer wish to receive account-related emails, including OTPs and important account notifications, you may unsubscribe using the link below.
-
-Please note that unsubscribing will permanently stop all OTP and account-related email communications.
+If you no longer wish to receive promotional and broadcast emails, you may use the link below. Password resets and essential account emails will continue to work.
 
 This message was sent to {USER_EMAIL}.
 
@@ -69,10 +67,8 @@ function toHtml(vars) {
       </p>
       <hr style="border:none;border-top:1px solid #E2E8F0;margin:18px 0;"/>
       <p style="font-size:12px;color:#94A3B8;">
-        This message was sent to ${esc(vars.userEmail)}. If you no longer wish to receive account-related emails,
-        including OTPs and important account notifications, you may
-        <a href="${esc(vars.unsubscribeLink)}" style="color:#94A3B8;">unsubscribe</a>.
-        Unsubscribing will permanently stop all OTP and account-related email communications.
+        This message was sent to ${esc(vars.userEmail)}. If you no longer wish to receive promotional and broadcast emails, you may
+        <a href="${esc(vars.unsubscribeLink)}" style="color:#94A3B8;">unsubscribe</a>. Password resets and essential account emails will continue to work.
       </p>
       <p style="margin-top:16px;color:#1f2937;font-weight:600;">— The Gweno Hub Team</p>
     </div>`;

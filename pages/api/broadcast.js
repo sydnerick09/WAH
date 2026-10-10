@@ -34,7 +34,7 @@ function bodyToHtml(body, name, optOutUrl) {
     .map(p => `<p style="margin:0 0 14px;">${esc(p).replace(/\n/g, '<br/>')}</p>`)
     .join('');
   const optOutFooter = optOutUrl
-    ? `<p style="margin-top:22px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;">To stop receiving emails from Gweno Hub, including account notices, <a href="${esc(optOutUrl)}">unsubscribe here</a>.</p>`
+    ? `<p style="margin-top:22px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;">To stop receiving promotional and broadcast emails from Gweno Hub, <a href="${esc(optOutUrl)}">unsubscribe here</a>.</p>`
     : '';
   return `
     <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;max-width:600px;">
@@ -60,9 +60,12 @@ export default async function handler(req, res) {
     return res.status(403).json({ success: false, message: 'Unauthorized' });
   }
 
-  const transporter = getTransporter();
-  if (!transporter) {
-    return res.status(200).json({ success: false, configured: false, message: 'Email (SMTP) is not configured.' });
+  let transporter;
+  try {
+    transporter = getTransporter();
+  } catch (err) {
+    console.error('[broadcast] SMTP configuration error:', err?.message || err);
+    return res.status(503).json({ success: false, configured: false, message: err?.message || 'Namecheap SMTP is not configured.' });
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -119,7 +122,7 @@ export default async function handler(req, res) {
 
   const seen = new Set();
   let recipients = rows
-    .filter(r => !r.unsubscribed && matchesGroup(r))
+    .filter(r => !r.unsubscribed && !(r.task_submissions || {})._marketingUnsubscribed && matchesGroup(r))
     .map(r => ({ id: r.id, email: String(r.email || '').trim().toLowerCase(), name: r.full_name || '' }))
     .filter(r => {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email) || seen.has(r.email)) return false;
@@ -147,7 +150,7 @@ export default async function handler(req, res) {
     try {
       const optOutUrl = r.id && baseUrl ? unsubscribeUrl(r.id, baseUrl) : '';
       const textBody = optOutUrl
-        ? `${rawBody}\n\n— The Gweno Hub Team\n\nTo stop receiving emails from Gweno Hub, including account notices, unsubscribe here: ${optOutUrl}`
+        ? `${rawBody}\n\n— The Gweno Hub Team\n\nTo stop receiving promotional and broadcast emails from Gweno Hub, unsubscribe here: ${optOutUrl}`
         : `${rawBody}\n\n— The Gweno Hub Team`;
       const message = {
         to: r.email,

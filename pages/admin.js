@@ -18,12 +18,24 @@ Our mission is to create opportunities, empower our community, and give back to 
 Thank you for choosing Gweno Hub. We look forward to supporting your success.`;
 
 async function dbProxy(op, params = {}) {
-  const r = await fetch('/api/db', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ op, ...params }),
-  });
-  return r.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const r = await fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op, ...params }),
+      signal: controller.signal,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok && !data.error) data.error = `Request failed (${r.status}).`;
+    return data;
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new Error('The server took too long to respond. Please try again.');
+    throw new Error('Could not connect to the server. Check your connection and try again.');
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Sends the "Task Submission Returned for Corrections" email to one user.
@@ -1946,28 +1958,52 @@ export default function AdminPanel() {
     e.preventDefault();
     setLoading(true);
     setAuthErr('');
-    const [uRes, wRes, mwRes] = await Promise.all([
-      dbProxy('listUsers',                 { adminSecret: secret }),
-      dbProxy('adminListWithdrawals',      { adminSecret: secret }),
-      dbProxy('adminListManualWithdrawals',{ adminSecret: secret }),
-    ]);
-    setLoading(false);
-    if (uRes.error === 'Unauthorized') { setAuthErr('Wrong admin password.'); return; }
-    setUsers(uRes.data || []);
-    setWithdrawals(wRes.data || []);
-    setManualWithdrawals(mwRes.data || []);
-    setAuthed(true);
+    const enteredSecret = secret.trim();
+    try {
+      // Validate the password using the users endpoint first. Optional withdrawal
+      // tables must never prevent an otherwise valid admin from opening the panel.
+      const uRes = await dbProxy('listUsers', { adminSecret: enteredSecret });
+      if (uRes.error === 'Unauthorized' || uRes.status === 403) {
+        setAuthErr('Wrong admin password.');
+        return;
+      }
+      if (uRes.error || !Array.isArray(uRes.data)) {
+        setAuthErr(uRes.error || 'Could not load admin data. Please try again.');
+        return;
+      }
+      setSecret(enteredSecret);
+      setUsers(uRes.data);
+      setAuthed(true);
+
+      // Load secondary panels after opening the admin panel, independently.
+      Promise.allSettled([
+        dbProxy('adminListWithdrawals', { adminSecret: enteredSecret }),
+        dbProxy('adminListManualWithdrawals', { adminSecret: enteredSecret }),
+      ]).then(([wResult, mwResult]) => {
+        if (wResult.status === 'fulfilled' && Array.isArray(wResult.value.data)) setWithdrawals(wResult.value.data);
+        if (mwResult.status === 'fulfilled' && Array.isArray(mwResult.value.data)) setManualWithdrawals(mwResult.value.data);
+      });
+    } catch (err) {
+      setAuthErr(err?.message || 'Could not verify the admin password. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function refresh() {
-    const [uRes, wRes, mwRes] = await Promise.all([
-      dbProxy('listUsers',                 { adminSecret: secret }),
-      dbProxy('adminListWithdrawals',      { adminSecret: secret }),
-      dbProxy('adminListManualWithdrawals',{ adminSecret: secret }),
-    ]);
-    if (uRes.data)  setUsers(uRes.data);
-    if (wRes.data)  setWithdrawals(wRes.data);
-    if (mwRes.data) setManualWithdrawals(mwRes.data);
+    try {
+      const results = await Promise.allSettled([
+        dbProxy('listUsers', { adminSecret: secret }),
+        dbProxy('adminListWithdrawals', { adminSecret: secret }),
+        dbProxy('adminListManualWithdrawals', { adminSecret: secret }),
+      ]);
+      const [uRes, wRes, mwRes] = results.map(r => r.status === 'fulfilled' ? r.value : null);
+      if (uRes && Array.isArray(uRes.data)) setUsers(uRes.data);
+      if (wRes && Array.isArray(wRes.data)) setWithdrawals(wRes.data);
+      if (mwRes && Array.isArray(mwRes.data)) setManualWithdrawals(mwRes.data);
+    } catch (err) {
+      console.error('Admin refresh failed:', err);
+    }
   }
 
   if (!authed) {

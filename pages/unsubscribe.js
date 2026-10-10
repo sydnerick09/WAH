@@ -37,7 +37,7 @@ export default function Unsubscribe() {
             <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={44} /></div>
             <h1 style={title}>You’ve been unsubscribed</h1>
             <p style={text}>
-              You will no longer receive account-related emails, including OTPs and important account notifications.
+              You will no longer receive promotional and broadcast emails from Gweno Hub.
             </p>
             <p style={{ ...text, color: '#4b5563' }}>
               Note: this permanently stops all OTP and account-related email communications. If this was a mistake,

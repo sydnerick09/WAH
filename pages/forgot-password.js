@@ -22,12 +22,17 @@ export default function ForgotPassword() {
   async function sendReset() {
     setError('');
     try {
-      await fetch('/api/db', {
+      const response = await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ op: 'requestPasswordReset', email: email.trim().toLowerCase() }),
       });
-      // Always show success — we never reveal whether the account exists.
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) {
+        setError(data.message || 'We could not send the reset email right now. Please try again shortly.');
+        return false;
+      }
+      // The normal success response stays generic so account existence is not revealed.
       setSent(true);
       setCooldown(RESEND_SECONDS);
       return true;
