@@ -143,7 +143,7 @@ export default async function handler(req, res) {
   // ── 6. SMTP transporter ───────────────────────────────────────────────────
   const transporter = createEmailTransport('admin');
 
-  const destination = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || "gweno_admin@gweno.business";
+  const destination = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || "businesshub.comke@gmail.com";
 
   // ── 7. Send email ─────────────────────────────────────────────────────────
   const mailOptions = {

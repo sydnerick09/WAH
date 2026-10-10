@@ -809,7 +809,7 @@ export default async function handler(req, res) {
         try {
           const { data: account } = await db.from('users').select('email,full_name').eq('id', userId).maybeSingle();
           const transporter = createEmailTransport('withdrawal');
-          const adminTo = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.SMTP_USER;
+          const adminTo = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || 'businesshub.comke@gmail.com';
           const subject = `Withdrawal request received — ${fullName}`;
           const details = `Withdrawal ID: ${data.id}\nName: ${fullName}\nEmail: ${account?.email || 'Not available'}\nAmount: KES ${amount.toLocaleString('en-KE')}\nMethod: ${method}\nPhone: ${phone || 'Not provided'}\nStatus: Pending`;
           if (adminTo) {

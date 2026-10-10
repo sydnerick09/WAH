@@ -1,6 +1,6 @@
 // pages/api/broadcast.js
 // Admin-only: sends a message to a selected registered-client group.
-// Protected by ADMIN_SECRET; sends through Namecheap Private Email SMTP.
+// Protected by ADMIN_SECRET; sends through Resend.
 
 import { createClient } from '@supabase/supabase-js';
 import { createEmailTransport } from '../../lib/emailTransport';
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
     transporter = getTransporter();
   } catch (err) {
     console.error('[broadcast] SMTP configuration error:', err?.message || err);
-    return res.status(503).json({ success: false, configured: false, message: err?.message || 'Namecheap SMTP is not configured.' });
+    return res.status(503).json({ success: false, configured: false, message: err?.message || 'Resend is not configured.' });
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -131,7 +131,7 @@ export default async function handler(req, res) {
     });
 
   if (test) {
-    const adminEmail = (process.env.NOTIFY_EMAIL || process.env.SMTP_USER || '').toLowerCase();
+    const adminEmail = (process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || '').toLowerCase();
     recipients = adminEmail ? [{ email: adminEmail, name: 'Admin (test)' }] : [];
   }
 

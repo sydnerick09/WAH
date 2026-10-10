@@ -1,12 +1,5 @@
 // pages/api/notify.js
-// Automated email: notifies the admin of a client message (task submission,
-// withdrawal request, etc.) AND sends the client an automatic confirmation reply.
-// Requires SMTP credentials in the environment (see setup notes below):
-//   SMTP_USER   = your Namecheap Private Email address (e.g. gweno_support@gweno.business)
-//   SMTP_PASS   = your Namecheap Private Email password
-//   NOTIFY_EMAIL= where admin notifications should land (defaults to SMTP_USER)
-//   SMTP_HOST / SMTP_PORT / SMTP_SECURE default to Namecheap Private Email SSL:465
-import { createEmailTransport } from '../../lib/emailTransport';
+// Automated email: notifies the admin of a client message and sends the client an automatic confirmation reply.\n// Delivery uses the shared Resend API configuration.\nimport { createEmailTransport } from '../../lib/emailTransport';
 
 function getTransporter() {
   return createEmailTransport('support');
@@ -35,7 +28,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: false, configured: false, message: 'Email is not configured yet.' });
   }
 
-  const admin = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.SMTP_USER;
+  const admin = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || 'businesshub.comke@gmail.com';
   const adminTransporter = createEmailTransport('admin');
 
   const detailRows = `

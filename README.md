@@ -10,7 +10,7 @@ A full-stack Next.js web app for task management and earning, targeting East Afr
 | Styling | Custom CSS with CSS Variables |
 | Database | Supabase (PostgreSQL) |
 | Payments | Paystack (KES, M-Pesa support) |
-| Email | Nodemailer (SMTP) |
+| Email | Resend API |
 | Deployment | Vercel |
 
 ## Features
@@ -39,12 +39,10 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_live_xxxx
 PAYSTACK_SECRET_KEY=sk_live_xxxx
 
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=your@gmail.com
-SMTP_PASS=your_app_password
-NOTIFY_EMAIL=businesshub.comke@gmail.com
+RESEND_API_KEY=re_your_api_key
+RESEND_FROM_EMAIL=onboarding@resend.dev
+RESEND_REPLY_TO_EMAIL=businesshub.comke@gmail.com
+EMAIL_FROM_NAME=Gweno Hub
 ```
 
 ## Supabase Schema
