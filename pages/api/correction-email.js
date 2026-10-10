@@ -4,7 +4,7 @@
 // Reason is editable from the admin panel before sending. Dynamic placeholders
 // ({TASK_NAME}, {USER_NAME}, {USER_EMAIL}, {UNSUBSCRIBE_LINK}) are replaced here.
 //   ADMIN_SECRET               = same secret the admin panel uses
-// Email delivery uses RESEND_API_KEY and the shared Resend sender configuration.
+// Email delivery uses SMTP_USER and SMTP_PASS for Gmail SMTP.
 //   SUPABASE_* (optional)      = used only to honour the unsubscribe opt-out
 import { createEmailTransport } from '../../lib/emailTransport';
 import { createClient } from '@supabase/supabase-js';

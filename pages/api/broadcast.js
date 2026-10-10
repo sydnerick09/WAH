@@ -1,6 +1,6 @@
 // pages/api/broadcast.js
 // Admin-only: sends a message to a selected registered-client group.
-// Protected by ADMIN_SECRET; sends through Resend.
+// Protected by ADMIN_SECRET; sends through the configured Gmail SMTP account.
 
 import { createClient } from '@supabase/supabase-js';
 import { createEmailTransport } from '../../lib/emailTransport';
@@ -64,25 +64,10 @@ export default async function handler(req, res) {
   try {
     transporter = getTransporter();
   } catch (err) {
-    console.error('[broadcast] Resend configuration error:', err?.message || err);
-    return res.status(503).json({ success: false, configured: false, message: err?.message || 'Resend is not configured.' });
+    console.error('[broadcast] SMTP configuration error:', err?.message || err);
+    return res.status(503).json({ success: false, configured: false, message: err?.message || 'Gmail SMTP is not configured.' });
   }
 
-  // Resend's shared onboarding sender is restricted to testing and cannot be
-  // used for a real client broadcast. Stop early instead of reporting hundreds
-  // of predictable recipient failures.
-  if (!test) {
-    const configuredFrom = String(process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev').trim().toLowerCase();
-    if (configuredFrom === 'onboarding@resend.dev') {
-      try { transporter.close(); } catch (_) {}
-      return res.status(400).json({
-        success: false,
-        configured: true,
-        requiresVerifiedSender: true,
-        message: 'Client broadcasts require a sender address on a domain verified in Resend. In Vercel, set RESEND_FROM_EMAIL to your verified domain address (not onboarding@resend.dev), then redeploy. You can still use businesshub.comke@gmail.com as the reply-to address.',
-      });
-    }
-  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -158,18 +143,16 @@ export default async function handler(req, res) {
   const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
   const baseUrl = (configuredBase || (requestHost ? `${requestProto}://${requestHost}` : '')).replace(/\/$/, '');
 
-  let sent = 0; // Accepted by Resend; this does not guarantee inbox delivery.
+  let sent = 0; // Accepted by Gmail SMTP; acceptance does not guarantee inbox delivery.
   let failed = 0;
   const errors = [];
   const recordError = (email, err) => {
     failed += 1;
-    if (errors.length < 20) errors.push({ email, error: String(err?.message || err || 'Unknown Resend error') });
+    if (errors.length < 20) errors.push({ email, error: String(err?.message || err || 'Unknown Gmail SMTP error') });
     console.error('[broadcast] send error:', email, err?.message || err);
   };
 
-  // Resend supports up to 100 messages per batch. If a batch fails, retry each
-  // email individually so one malformed address does not block valid clients,
-  // and return concrete errors for the admin to review.
+  // Process recipients in manageable groups. Gmail SMTP sends one message per connection.
   const BATCH_SIZE = 100;
   for (let offset = 0; offset < recipients.length; offset += BATCH_SIZE) {
     const batch = recipients.slice(offset, offset + BATCH_SIZE);
@@ -210,7 +193,7 @@ export default async function handler(req, res) {
           }
           continue;
         }
-        throw new Error('Resend returned an unexpected batch response.');
+        throw new Error('Email provider returned an unexpected batch response.');
       } catch (batchErr) {
         const batchMessage = String(batchErr?.message || batchErr);
         console.error('[broadcast] batch failed:', batchMessage);
@@ -238,14 +221,19 @@ export default async function handler(req, res) {
         }
       }
     } else {
-      for (const item of prepared) {
-        try {
-          await transporter.sendMail(item.message);
-          sent += 1;
-        } catch (err) {
-          recordError(item.recipient.email, err);
-        }
-        await new Promise(resolve => setTimeout(resolve, 550));
+      // A small concurrency limit keeps a 159-recipient broadcast from spending
+      // more than a minute waiting on sequential SMTP connections.
+      const CONCURRENCY = 3;
+      for (let i = 0; i < prepared.length; i += CONCURRENCY) {
+        const group = prepared.slice(i, i + CONCURRENCY);
+        await Promise.all(group.map(async (item) => {
+          try {
+            await transporter.sendMail(item.message);
+            sent += 1;
+          } catch (err) {
+            recordError(item.recipient.email, err);
+          }
+        }));
       }
     }
   }
@@ -263,7 +251,7 @@ export default async function handler(req, res) {
     recipientType: test ? 'test' : recipientType,
     errors,
     message: failed > 0
-      ? `Resend accepted ${sent} email(s); ${failed} failed. Review the returned errors. Accepted means Resend accepted the request, not that the email reached the inbox.`
-      : `Resend accepted ${sent} email(s). Delivery to inboxes is not guaranteed; check Resend email logs for delivered, bounced, or suppressed status.`,
+      ? `Gmail SMTP accepted ${sent} email(s); ${failed} failed. Acceptance does not guarantee inbox delivery. Review the returned errors.`
+      : `Gmail SMTP accepted ${sent} email(s). Acceptance does not guarantee inbox delivery.`,
   });
 }

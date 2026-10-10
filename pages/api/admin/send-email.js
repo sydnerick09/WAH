@@ -1,5 +1,5 @@
 // pages/api/admin/send-email.js
-// Admin-only: send an email to one registered client through Resend.
+// Admin-only: send an email to one registered client through Gmail SMTP.
 import { createEmailTransport } from '../../../lib/emailTransport';
 
 function esc(s) {
@@ -55,16 +55,16 @@ export default async function handler(req, res) {
     });
     return res.status(200).json({
       success: true,
-      provider: 'resend',
-      message: `Resend accepted the email request for ${email}. This does not guarantee inbox delivery; check Resend email logs for the final status.`,
+      provider: 'gmail-smtp',
+      message: `Gmail SMTP accepted the email request for ${email}. This does not guarantee inbox delivery.`,
       id: result?.id || result?.data?.id || null,
     });
   } catch (err) {
-    console.error('[admin/send-email] Resend send error:', err?.message || err);
+    console.error('[admin/send-email] Gmail SMTP send error:', err?.message || err);
     return res.status(502).json({
       success: false,
-      configured: Boolean(process.env.RESEND_API_KEY),
-      message: err?.message || 'Resend failed to send the email.',
+      configured: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
+      message: err?.message || 'Gmail SMTP failed to send the email.',
     });
   } finally {
     try { transporter?.close(); } catch (_) {}
