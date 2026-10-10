@@ -1156,7 +1156,7 @@ function BroadcastTab({ secret, userCount }) {
       setResult({ ok: false, text: 'Subject and message cannot be empty.' });
       return;
     }
-    const groupLabel = ({ all: 'all clients', active: 'active clients', inactive: 'inactive clients', premium: 'premium subscribers', basic: 'clients without premium' })[recipientType] || 'selected clients';
+    const groupLabel = ({ all: 'all eligible clients', active: 'clients with currently activated accounts', inactive: 'clients without a current activation', premium: 'current Premium subscribers', basic: 'clients without a current Premium subscription' })[recipientType] || 'selected clients';
     if (!test && !confirm(`Send this email to ${groupLabel}? This cannot be undone.`)) {
       return;
     }
@@ -1192,17 +1192,21 @@ function BroadcastTab({ secret, userCount }) {
           📣 Email Client Groups
         </div>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
-          Choose a recipient group below to target all clients, active or inactive clients, premium subscribers, or clients without premium. Use “Send test to myself” first to preview the message.
+          Choose a client group. Activation and Premium status are checked against the account records, expired 30-day periods are excluded, and clients who unsubscribed or have invalid/duplicate email addresses are skipped. Send a test to yourself before sending to a group.
         </p>
 
         <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Recipient group</label>
         <select style={{ ...styles.input, marginBottom: 16 }} value={recipientType} onChange={e => setRecipientType(e.target.value)}>
           <option value="all">All clients</option>
-          <option value="active">Active clients</option>
-          <option value="inactive">Inactive clients</option>
-          <option value="premium">Premium subscribers</option>
-          <option value="basic">Clients without premium</option>
+          <option value="active">Clients with activated accounts (current)</option>
+          <option value="inactive">Clients without activated accounts (current)</option>
+          <option value="premium">Current Premium subscribers</option>
+          <option value="basic">Clients without current Premium</option>
         </select>
+
+        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 13, color: '#475569' }}>
+          <strong style={{ color: '#334155' }}>Selected audience:</strong> {{ all: 'All eligible clients', active: 'Currently activated accounts', inactive: 'No current activation', premium: 'Current Premium subscriptions', basic: 'No current Premium subscription' }[recipientType]}. Unsubscribed clients are always excluded.
+        </div>
 
         <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Subject</label>
         <input style={{ ...styles.input, marginBottom: 16 }} value={subject} onChange={e => setSubject(e.target.value)} />
