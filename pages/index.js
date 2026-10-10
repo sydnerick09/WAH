@@ -758,7 +758,7 @@ export default function Home() {
               fontWeight: 600,
             }}
           >
-            <Icon name="mail" size={18} /> businesshub.comke@gmail.com
+            <Icon name="mail" size={18} /> gweno_support@gweno.business
           </div>
         </div>
       </section>
@@ -857,8 +857,8 @@ export default function Home() {
   </li>
 
   <li>
-    <a href="mailto:businesshub.comke@gmail.com">
-      businesshub.comke@gmail.com
+    <a href="mailto:gweno_support@gweno.business">
+      gweno_support@gweno.business
     </a>
   </li>
 </ul>

@@ -875,7 +875,7 @@ export default function Dashboard() {
           )}
           <p style={{ fontSize: 13, color: '#9CA3AF' }}>
             If you believe this is a mistake, please contact support at{' '}
-            <a href="mailto:businesshub.comke@gmail.com" style={{ color: '#374151' }}>businesshub.comke@gmail.com</a>
+            <a href="mailto:gweno_support@gweno.business" style={{ color: '#374151' }}>gweno_support@gweno.business</a>
           </p>
         </div>
       </div>

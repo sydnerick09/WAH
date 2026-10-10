@@ -10,7 +10,7 @@ const TERMS_HTML = `<header>
     <a href="/terms">Terms &amp; Conditions</a>
     <a href="/privacy">Privacy Policy</a>
     <a href="/conduct">Conduct Policy</a>
-    <a href="mailto:businesshub.comke@gmail.com">Support</a>
+    <a href="mailto:gweno_support@gweno.business">Support</a>
   </div>
 </nav>
 
@@ -976,8 +976,8 @@ const TERMS_HTML = `<header>
 
 <p>
   Email support:
-  <a href="mailto:businesshub.comke@gmail.com">
-    businesshub.comke@gmail.com
+  <a href="mailto:gweno_support@gweno.business">
+    gweno_support@gweno.business
   </a>
 </p>
 
@@ -1351,8 +1351,8 @@ const TERMS_HTML = `<header>
 
 <p>
   Email:
-  <a href="mailto:businesshub.comke@gmail.com">
-    businesshub.comke@gmail.com
+  <a href="mailto:gweno_support@gweno.business">
+    gweno_support@gweno.business
   </a>
 </p>
 
@@ -1398,12 +1398,12 @@ const TERMS_HTML = `<header>
     <li><a href="/terms">Terms of Service</a></li>
     <li><a href="/conduct">Conduct and Policies</a></li>
     <li><a href="/privacy">Privacy Policy</a></li>
-    <li><a href="mailto:businesshub.comke@gmail.com">businesshub.comke@gmail.com</a></li>
+    <li><a href="mailto:gweno_support@gweno.business">gweno_support@gweno.business</a></li>
   </ul>
 
   <p>
     Support:
-    <a href="mailto:businesshub.comke@gmail.com">businesshub.comke@gmail.com</a>
+    <a href="mailto:gweno_support@gweno.business">gweno_support@gweno.business</a>
   </p>
 </footer>`;
 

@@ -70,7 +70,7 @@ export default function CookiePolicy() {
         </Section>
 
         <Section title="Contact">
-          Questions about this policy? Email <a href="mailto:businesshub.comke@gmail.com" style={{ color: '#000', textDecoration: 'underline' }}>businesshub.comke@gmail.com</a>.
+          Questions about this policy? Email <a href="mailto:gweno_support@gweno.business" style={{ color: '#000', textDecoration: 'underline' }}>gweno_support@gweno.business</a>.
         </Section>
 
         <div style={{ borderTop: '1px solid var(--gray-light)', paddingTop: 20, marginTop: 8 }}>

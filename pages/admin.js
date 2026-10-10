@@ -1148,6 +1148,7 @@ function BroadcastTab({ secret, userCount }) {
   const [subject, setSubject] = useState(BROADCAST_DEFAULT_SUBJECT);
   const [body,    setBody]    = useState(BROADCAST_DEFAULT_BODY);
   const [sending, setSending] = useState(false);
+  const [recipientType, setRecipientType] = useState('all');
   const [result,  setResult]  = useState(null);
 
   async function send(test) {
@@ -1155,7 +1156,8 @@ function BroadcastTab({ secret, userCount }) {
       setResult({ ok: false, text: 'Subject and message cannot be empty.' });
       return;
     }
-    if (!test && !confirm(`Send this email to ALL ${userCount} client(s) in the database? This cannot be undone.`)) {
+    const groupLabel = ({ all: 'all clients', active: 'active clients', inactive: 'inactive clients', premium: 'premium subscribers', basic: 'clients without premium' })[recipientType] || 'selected clients';
+    if (!test && !confirm(`Send this email to ${groupLabel}? This cannot be undone.`)) {
       return;
     }
     setSending(true);
@@ -1164,7 +1166,7 @@ function BroadcastTab({ secret, userCount }) {
       const r = await fetch('/api/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminSecret: secret, subject, body, test }),
+        body: JSON.stringify({ adminSecret: secret, subject, body, test, recipientType }),
       });
       const data = await r.json();
       if (data.success) {
@@ -1172,7 +1174,7 @@ function BroadcastTab({ secret, userCount }) {
           ok: true,
           text: test
             ? `Test email sent to your own inbox (${data.sent} sent).`
-            : `Done, ${data.sent} sent, ${data.failed} failed out of ${data.total} client(s).`,
+            : `Done, ${data.sent} sent, ${data.failed} failed out of ${data.total} matching client(s).`,
         });
       } else {
         setResult({ ok: false, text: data.message || 'Failed to send.' });
@@ -1187,11 +1189,20 @@ function BroadcastTab({ secret, userCount }) {
     <div style={{ padding: '20px 32px', maxWidth: 720 }}>
       <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: 24 }}>
         <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 17, color: '#111827', marginBottom: 4 }}>
-          📣 Email All Clients
+          📣 Email Client Groups
         </div>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
-          This sends the message below to every registered client&apos;s email address ({userCount} on file). Use “Send test to myself” first to preview it.
+          Choose a recipient group below to target all clients, active or inactive clients, premium subscribers, or clients without premium. Use “Send test to myself” first to preview the message.
         </p>
+
+        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Recipient group</label>
+        <select style={{ ...styles.input, marginBottom: 16 }} value={recipientType} onChange={e => setRecipientType(e.target.value)}>
+          <option value="all">All clients</option>
+          <option value="active">Active clients</option>
+          <option value="inactive">Inactive clients</option>
+          <option value="premium">Premium subscribers</option>
+          <option value="basic">Clients without premium</option>
+        </select>
 
         <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Subject</label>
         <input style={{ ...styles.input, marginBottom: 16 }} value={subject} onChange={e => setSubject(e.target.value)} />
@@ -1216,7 +1227,7 @@ function BroadcastTab({ secret, userCount }) {
             disabled={sending}
             onClick={() => send(false)}
           >
-            {sending ? 'Sending…' : `📣 Send to all ${userCount} client(s)`}
+            {sending ? 'Sending…' : `📣 Send to selected group`}
           </button>
         </div>
 

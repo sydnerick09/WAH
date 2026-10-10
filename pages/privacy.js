@@ -166,7 +166,7 @@ export default function PrivacyPage() {
           <Link href="/terms" >Terms &amp; Conditions</Link>
           <Link href="/privacy" >Privacy Policy</Link>
           <Link href="/conduct" >Conduct Policy</Link>
-          <a href="mailto:businesshub.comke@gmail.com">Support</a>
+          <a href="mailto:gweno_support@gweno.business">Support</a>
         </div>
       </nav>
 
@@ -408,7 +408,7 @@ export default function PrivacyPage() {
 
         <h2>29. Contact Us</h2>
         <p>If you have questions, concerns, requests, or complaints regarding privacy or personal information, contact GWENO Hub through the official support channels.</p>
-        <p>Email: <a href="mailto:businesshub.comke@gmail.com">businesshub.comke@gmail.com</a></p>
+        <p>Email: <a href="mailto:gweno_support@gweno.business">gweno_support@gweno.business</a></p>
         <p>
           WhatsApp:{" "}
           <a href="https://wa.me/254765772203" target="_blank" rel="noopener noreferrer">
@@ -430,7 +430,7 @@ export default function PrivacyPage() {
           <li><Link href="/manual" >Help Center</Link></li>
         </ul>
         <p>
-          Support: <a href="mailto:businesshub.comke@gmail.com">businesshub.comke@gmail.com</a>
+          Support: <a href="mailto:gweno_support@gweno.business">gweno_support@gweno.business</a>
           &nbsp;·&nbsp;
           <a href="https://wa.me/254765772203" target="_blank" rel="noopener noreferrer">
             WhatsApp Support

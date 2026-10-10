@@ -2274,8 +2274,8 @@ export default function Manual() {
     </li>
 
     <li>
-      <a href="mailto:businesshub.comke@gmail.com">
-        businesshub.comke@gmail.com
+      <a href="mailto:gweno_support@gweno.business">
+        gweno_support@gweno.business
       </a>
     </li>
   </ul>

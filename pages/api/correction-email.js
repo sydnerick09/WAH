@@ -123,7 +123,6 @@ export default async function handler(req, res) {
 
   try {
     await transporter.sendMail({
-      from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
       to: vars.userEmail,
       subject: SUBJECT,
       text: fillTemplate(TEMPLATE, vars),

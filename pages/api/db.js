@@ -819,8 +819,8 @@ export default async function handler(req, res) {
               await transporter.sendMail({
                 to: account.email,
                 subject: 'We received your withdrawal request',
-                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\n\nWithdrawal reference: ${data.id}\n\nGweno Hub Team`,
-                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Gweno Hub Team</p>`,
+                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\nWithdrawal reference: ${data.id}\n\nPlease ensure the account holder name and payment details match the details on your GWENO Hub account. Read the withdrawal Terms & Conditions before proceeding: ${(process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '')}/terms\n\nGweno Hub Team`,
+                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Please ensure your account holder name and payment details match the details on your GWENO Hub account. Please read the <a href="${(process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '')}/terms">Withdrawal Terms &amp; Conditions</a> before proceeding.</p><p>Gweno Hub Team</p>`,
               });
             } catch (mailErr) { console.error('[withdrawal-email] client confirmation failed:', mailErr?.message || mailErr); }
           }
@@ -1953,7 +1953,7 @@ export default async function handler(req, res) {
                 completed_tasks: Number(u.completed_tasks || 0) + 1,
               }).eq('id', sub.user_id);
               if (!balErr) {
-                creditUser = { email: u.email, name: u.full_name, newBalance, unsubscribed: !!u.unsubscribed };
+                creditUser = { email: u.email, name: u.full_name, previousBalance: Number(u.balance || 0), newBalance, unsubscribed: !!u.unsubscribed };
               }
             }
           }
@@ -1987,7 +1987,7 @@ export default async function handler(req, res) {
             } else {
               const mail = await sendApprovalEmail({
                 userEmail: creditUser.email, userName: creditUser.name,
-                taskName: sub.task_title, amount: reward, updatedBalance: creditUser.newBalance,
+                taskName: sub.task_title, amount: reward, previousBalance: creditUser.previousBalance, updatedBalance: creditUser.newBalance,
               });
               email = { attempted: true, sent: !!mail.success, status: mail.success ? 'Sent' : 'Failed', message: mail.message || '' };
             }
@@ -2027,7 +2027,7 @@ export default async function handler(req, res) {
 
         const mail = await sendApprovalEmail({
           userEmail: u.email, userName: u.full_name,
-          taskName: sub.task_title, amount: reward, updatedBalance: Number(u.balance || 0),
+          taskName: sub.task_title, amount: reward, previousBalance: Math.max(0, Number(u.balance || 0) - reward), updatedBalance: Number(u.balance || 0),
         });
         await logAction(db, { action: 'approval_email_resend', entity: 'submission', entityId: submissionId,
           detail: `user:${sub.user_id} task:${sub.task_id} amount:${amtStr} status:${mail.success ? 'Sent' : 'Failed'}${mail.message ? ` (${mail.message})` : ''}` });

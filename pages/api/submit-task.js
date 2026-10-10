@@ -143,11 +143,10 @@ export default async function handler(req, res) {
   // ── 6. SMTP transporter ───────────────────────────────────────────────────
   const transporter = createEmailTransport('admin');
 
-  const destination = process.env.NOTIFY_EMAIL || "businesshub.comke@gmail.com";
+  const destination = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || "gweno_admin@gweno.business";
 
   // ── 7. Send email ─────────────────────────────────────────────────────────
   const mailOptions = {
-    from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
     to: destination,
     replyTo: userEmail && userEmail !== "N/A" ? userEmail : undefined,
     subject: `${correctionSubmissionId ? "[Corrected Task Submission]" : "[Task Submission]"} ${taskTitle} (${paymentDisplay}), ${userName !== "N/A" ? userName : "User " + userId}`,
@@ -179,11 +178,11 @@ export default async function handler(req, res) {
     console.error("[submit-task] Email send error:", err);
   }
 
-  // Auto-reply confirmation to the client
+  // Auto-reply confirmation to the client uses the no-reply sender.
   if (userEmail && userEmail !== "N/A") {
+    const clientTransporter = createEmailTransport("noreply");
     try {
-      await transporter.sendMail({
-        from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
+      await clientTransporter.sendMail({
         to: userEmail,
         subject: `We received your submission, ${taskTitle}`,
         html: `
@@ -195,6 +194,8 @@ export default async function handler(req, res) {
       });
     } catch (err) {
       console.error("[submit-task] client auto-reply error:", err.message);
+    } finally {
+      try { clientTransporter.close(); } catch (_) {}
     }
   }
 

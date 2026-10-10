@@ -8,7 +8,7 @@ import Icon from './Icon';
 import { sendNotify } from '../lib/notify';
 import { logTillPayment } from '../lib/auth';
 
-const SUPPORT_EMAIL = 'businesshub.comke@gmail.com';
+const SUPPORT_EMAIL = 'gweno_support@gweno.business';
 
 // Map a human "purpose" to a ledger payment type.
 function purposeType(p) {

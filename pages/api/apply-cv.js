@@ -62,14 +62,13 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "File processing failed." });
   }
 
-  const transporter = createEmailTransport('support');
+  const transporter = createEmailTransport('admin');
 
-  const destination = process.env.NOTIFY_EMAIL || process.env.SMTP_USER || "businesshub.comke@gmail.com";
+  const destination = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || "gweno_admin@gweno.business";
 
   let emailSent = true;
   try {
     await transporter.sendMail({
-      from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
       to: destination,
       replyTo: email && email !== "N/A" ? email : undefined,
       subject: `[New Applicant CV] ${fullName !== "N/A" ? fullName : email}`,

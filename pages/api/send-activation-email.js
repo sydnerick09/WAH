@@ -121,7 +121,6 @@ export default async function handler(req, res) {
 
   try {
     await transporter.sendMail({
-      from: `"Gweno Hub" <${process.env.SMTP_USER}>`,
       to: clientEmail,
       subject,
       text: message,
@@ -135,7 +134,7 @@ export default async function handler(req, res) {
             <tr><td><strong>Subscription type</strong></td><td>${esc(title)}</td></tr>
             <tr><td><strong>Payment status</strong></td><td style="color:#166534;font-weight:700;">Successful</td></tr>
           </table>
-          <p>Your account is ready. Click below to continue to your dashboard.</p>
+          <p>Your account is ready. Open your dashboard, select available tasks, and start working on them.</p>
           <p><a href="${dashboardUrl}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;font-weight:700;padding:11px 16px;border-radius:7px;">Open Your Dashboard</a></p>
           <p style="margin-top:18px;color:#1f2937;font-weight:600;">— The Gweno Hub Team</p>
         </div>

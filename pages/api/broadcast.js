@@ -106,7 +106,6 @@ export default async function handler(req, res) {
 
   const subj = (subject && String(subject).trim()) || DEFAULT_SUBJECT;
   const rawBody = (body && String(body).trim()) || DEFAULT_BODY;
-  const from = `"Gweno Hub" <${process.env.SMTP_USER}>`;
 
   let sent = 0;
   let failed = 0;
@@ -115,7 +114,6 @@ export default async function handler(req, res) {
   for (const r of recipients) {
     try {
       await transporter.sendMail({
-        from,
         to: r.email,
         subject: subj,
         text: rawBody,
