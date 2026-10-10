@@ -4,7 +4,6 @@ const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 const BROADCAST_DEFAULT_SUBJECT = 'Welcome to Gweno Hub';
 const BROADCAST_DEFAULT_BODY = `Dear Client,
-
 Welcome to Gweno Hub! We are delighted to have you as part of our community.
 
 We have been working hard to improve our services and address your concerns. We are pleased to introduce a few simple steps that will make it easier for you to manage your Activation Fee and Premium Fee at your convenience.
@@ -182,7 +181,7 @@ function SendEmailModal({ modal, secret, onClose }) {
 
       const data = await r.json();
       if (data.success) {
-        setResult({ ok: true, text: `Email sent successfully to ${modal.user.email}.` });
+        setResult({ ok: true, text: data.message || `Resend accepted the email request for ${modal.user.email}. Check Resend email logs for final delivery status.` });
         setTimeout(() => onClose(), 1200);
       } else {
         setResult({ ok: false, text: data.message || data.error || 'Failed to send email.' });
@@ -1181,13 +1180,18 @@ function BroadcastTab({ secret, userCount }) {
         body: JSON.stringify({ adminSecret: secret, subject, body, test, recipientType }),
       });
       const data = await r.json();
-      if (data.success) {
-        setResult({
-          ok: true,
-          text: test
-            ? `Test email sent to your own inbox (${data.sent} sent).`
-            : `Done, ${data.sent} sent, ${data.failed} failed out of ${data.total} matching client(s).`,
-        });
+      if (data.requiresVerifiedSender) {
+        setResult({ ok: false, text: data.message || 'A verified Resend sender is required for broadcasts.' });
+      } else if (typeof data.sent === 'number' && typeof data.failed === 'number') {
+        const summary = test
+          ? `Test email: Resend accepted ${data.sent}; ${data.failed} failed.`
+          : `Resend accepted ${data.sent} email(s); ${data.failed} failed out of ${data.total} eligible client(s). Accepted does not guarantee inbox delivery.`;
+        const examples = Array.isArray(data.errors) && data.errors.length
+          ? ` First errors: ${data.errors.slice(0, 3).map(item => `${item.email}: ${item.error}`).join(' | ')}`
+          : '';
+        setResult({ ok: data.failed === 0 && data.sent > 0, text: `${summary}${examples}` });
+      } else if (data.success) {
+        setResult({ ok: true, text: data.message || 'Email request accepted by Resend.' });
       } else {
         setResult({ ok: false, text: data.message || 'Failed to send.' });
       }

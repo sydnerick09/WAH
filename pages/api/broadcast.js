@@ -64,8 +64,24 @@ export default async function handler(req, res) {
   try {
     transporter = getTransporter();
   } catch (err) {
-    console.error('[broadcast] SMTP configuration error:', err?.message || err);
+    console.error('[broadcast] Resend configuration error:', err?.message || err);
     return res.status(503).json({ success: false, configured: false, message: err?.message || 'Resend is not configured.' });
+  }
+
+  // Resend's shared onboarding sender is restricted to testing and cannot be
+  // used for a real client broadcast. Stop early instead of reporting hundreds
+  // of predictable recipient failures.
+  if (!test) {
+    const configuredFrom = String(process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev').trim().toLowerCase();
+    if (configuredFrom === 'onboarding@resend.dev') {
+      try { transporter.close(); } catch (_) {}
+      return res.status(400).json({
+        success: false,
+        configured: true,
+        requiresVerifiedSender: true,
+        message: 'Client broadcasts require a sender address on a domain verified in Resend. In Vercel, set RESEND_FROM_EMAIL to your verified domain address (not onboarding@resend.dev), then redeploy. You can still use businesshub.comke@gmail.com as the reply-to address.',
+      });
+    }
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -131,7 +147,7 @@ export default async function handler(req, res) {
     });
 
   if (test) {
-    const adminEmail = (process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || '').toLowerCase();
+    const adminEmail = (process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || '').trim().toLowerCase();
     recipients = adminEmail ? [{ email: adminEmail, name: 'Admin (test)' }] : [];
   }
 
@@ -142,12 +158,22 @@ export default async function handler(req, res) {
   const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
   const baseUrl = (configuredBase || (requestHost ? `${requestProto}://${requestHost}` : '')).replace(/\/$/, '');
 
-  let sent = 0;
+  let sent = 0; // Accepted by Resend; this does not guarantee inbox delivery.
   let failed = 0;
   const errors = [];
+  const recordError = (email, err) => {
+    failed += 1;
+    if (errors.length < 20) errors.push({ email, error: String(err?.message || err || 'Unknown Resend error') });
+    console.error('[broadcast] send error:', email, err?.message || err);
+  };
 
-  for (const r of recipients) {
-    try {
+  // Resend supports up to 100 messages per batch. If a batch fails, retry each
+  // email individually so one malformed address does not block valid clients,
+  // and return concrete errors for the admin to review.
+  const BATCH_SIZE = 100;
+  for (let offset = 0; offset < recipients.length; offset += BATCH_SIZE) {
+    const batch = recipients.slice(offset, offset + BATCH_SIZE);
+    const prepared = batch.map((r) => {
       const optOutUrl = r.id && baseUrl ? unsubscribeUrl(r.id, baseUrl) : '';
       const textBody = optOutUrl
         ? `${rawBody}\n\n— The Gweno Hub Team\n\nTo stop receiving promotional and broadcast emails from Gweno Hub, unsubscribe here: ${optOutUrl}`
@@ -159,12 +185,68 @@ export default async function handler(req, res) {
         html: bodyToHtml(rawBody, r.name, optOutUrl),
       };
       if (optOutUrl) message.headers = { 'List-Unsubscribe': `<${optOutUrl}>` };
-      await transporter.sendMail(message);
-      sent += 1;
-    } catch (err) {
-      failed += 1;
-      if (errors.length < 20) errors.push({ email: r.email, error: err.message });
-      console.error('[broadcast] send error:', r.email, err.message);
+      return { recipient: r, message };
+    });
+
+    if (typeof transporter.sendBatch === 'function' && prepared.length > 1) {
+      try {
+        const result = await transporter.sendBatch(prepared.map(item => item.message));
+        const accepted = Array.isArray(result?.data) ? result.data : null;
+        if (accepted && accepted.length === prepared.length) {
+          sent += prepared.length;
+          continue;
+        }
+        // A successful HTTP response without one result per message is
+        // ambiguous; fall back to individual sends for accurate accounting.
+        if (accepted && accepted.length > 0) {
+          sent += accepted.length;
+          for (let i = accepted.length; i < prepared.length; i += 1) {
+            try {
+              await transporter.sendMail(prepared[i].message);
+              sent += 1;
+            } catch (err) {
+              recordError(prepared[i].recipient.email, err);
+            }
+          }
+          continue;
+        }
+        throw new Error('Resend returned an unexpected batch response.');
+      } catch (batchErr) {
+        const batchMessage = String(batchErr?.message || batchErr);
+        console.error('[broadcast] batch failed:', batchMessage);
+        const systemicFailure = /domain.*not verified|verify.*domain|testing.*email|only.*test|api key|unauthorized|forbidden|rate limit|monthly.*limit|quota|restricted/i.test(batchMessage);
+        if (systemicFailure) {
+          // These errors affect the sender/account rather than one recipient;
+          // retrying every address would waste execution time and repeat failures.
+          for (const item of prepared) recordError(item.recipient.email, batchMessage);
+          for (let remaining = offset + BATCH_SIZE; remaining < recipients.length; remaining += BATCH_SIZE) {
+            for (const item of recipients.slice(remaining, remaining + BATCH_SIZE)) recordError(item.email, batchMessage);
+          }
+          break;
+        }
+        // Retry individually when a batch-level validation error may have been
+        // caused by one recipient; this lets valid recipients still be sent.
+        for (const item of prepared) {
+          try {
+            await transporter.sendMail(item.message);
+            sent += 1;
+          } catch (err) {
+            recordError(item.recipient.email, err);
+          }
+          // Stay under common per-second API rate limits during fallback.
+          await new Promise(resolve => setTimeout(resolve, 550));
+        }
+      }
+    } else {
+      for (const item of prepared) {
+        try {
+          await transporter.sendMail(item.message);
+          sent += 1;
+        } catch (err) {
+          recordError(item.recipient.email, err);
+        }
+        await new Promise(resolve => setTimeout(resolve, 550));
+      }
     }
   }
 
@@ -172,6 +254,7 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     success: sent > 0 || recipients.length === 0,
+    complete: failed === 0,
     configured: true,
     total: recipients.length,
     sent,
@@ -179,5 +262,8 @@ export default async function handler(req, res) {
     test: Boolean(test),
     recipientType: test ? 'test' : recipientType,
     errors,
+    message: failed > 0
+      ? `Resend accepted ${sent} email(s); ${failed} failed. Review the returned errors. Accepted means Resend accepted the request, not that the email reached the inbox.`
+      : `Resend accepted ${sent} email(s). Delivery to inboxes is not guaranteed; check Resend email logs for delivered, bounced, or suppressed status.`,
   });
 }

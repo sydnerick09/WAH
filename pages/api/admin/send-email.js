@@ -1,7 +1,5 @@
 // pages/api/admin/send-email.js
-// Admin-only: send an email to one registered client.
-// SMTP credentials stay server-side and are never exposed to the browser.
-
+// Admin-only: send an email to one registered client through Resend.
 import { createEmailTransport } from '../../../lib/emailTransport';
 
 function esc(s) {
@@ -19,7 +17,6 @@ function bodyToHtml(body, name) {
     .split(/\n{2,}/)
     .map(p => `<p style="margin:0 0 14px;">${esc(p).replace(/\n/g, '<br/>')}</p>`)
     .join('');
-
   return `
     <div style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6;max-width:600px;">
       ${intro}${paragraphs}
@@ -27,77 +24,49 @@ function bodyToHtml(body, name) {
     </div>`;
 }
 
-function getTransporter() {
-  return createEmailTransport('admin');
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      success: false,
-      message: 'Method not allowed',
-    });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
   const { adminSecret, to, name, subject, body } = req.body || {};
-
   if (!process.env.ADMIN_SECRET || adminSecret !== process.env.ADMIN_SECRET) {
-    return res.status(403).json({
-      success: false,
-      message: 'Unauthorized',
-    });
+    return res.status(403).json({ success: false, message: 'Unauthorized' });
   }
 
   const email = String(to || '').trim().toLowerCase();
   const subj = String(subject || '').trim();
   const rawBody = String(body || '').trim();
-
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({
-      success: false,
-      message: 'A valid recipient email is required.',
-    });
+    return res.status(400).json({ success: false, message: 'A valid recipient email is required.' });
   }
-
   if (!subj || !rawBody) {
-    return res.status(400).json({
-      success: false,
-      message: 'Subject and message cannot be empty.',
-    });
+    return res.status(400).json({ success: false, message: 'Subject and message cannot be empty.' });
   }
 
-  const transporter = getTransporter();
-
-  if (!transporter) {
-    return res.status(500).json({
-      success: false,
-      configured: false,
-      message: 'Email (SMTP) is not configured.',
-    });
-  }
-
+  let transporter;
   try {
-    await transporter.sendMail({
+    transporter = createEmailTransport('admin');
+    const result = await transporter.sendMail({
       to: email,
       subject: subj,
       text: rawBody,
       html: bodyToHtml(rawBody, name),
     });
-
-    try { transporter.close(); } catch (_) {}
-
     return res.status(200).json({
       success: true,
-      message: `Email sent to ${email}.`,
+      provider: 'resend',
+      message: `Resend accepted the email request for ${email}. This does not guarantee inbox delivery; check Resend email logs for the final status.`,
+      id: result?.id || result?.data?.id || null,
     });
   } catch (err) {
-    try { transporter.close(); } catch (_) {}
-
-    console.error('[admin/send-email] send error:', err);
-
-    return res.status(500).json({
+    console.error('[admin/send-email] Resend send error:', err?.message || err);
+    return res.status(502).json({
       success: false,
-      message: err?.message || 'Failed to send email.',
+      configured: Boolean(process.env.RESEND_API_KEY),
+      message: err?.message || 'Resend failed to send the email.',
     });
+  } finally {
+    try { transporter?.close(); } catch (_) {}
   }
 }

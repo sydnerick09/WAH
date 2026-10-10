@@ -758,7 +758,7 @@ export default function Home() {
               fontWeight: 600,
             }}
           >
-            <Icon name="mail" size={18} /> gweno_support@gweno.business
+            <Icon name="mail" size={18} /> <a href="mailto:businesshub.comke@gmail.com" aria-label="Email Gweno Hub support" style={{ color: "inherit", textDecoration: "none" }}>businesshub.comke@gmail.com</a>
           </div>
         </div>
       </section>
@@ -857,8 +857,8 @@ export default function Home() {
   </li>
 
   <li>
-    <a href="mailto:gweno_support@gweno.business">
-      gweno_support@gweno.business
+    <a href="mailto:businesshub.comke@gmail.com" aria-label="Email Gweno Hub support">
+      businesshub.comke@gmail.com
     </a>
   </li>
 </ul>
