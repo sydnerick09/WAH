@@ -5,6 +5,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createEmailTransport } from '../../lib/emailTransport';
 import { unsubscribeUrl } from '../../lib/unsubToken';
+import crypto from 'node:crypto';
 
 const DEFAULT_SUBJECT = 'Welcome to Gweno Hub';
 const DEFAULT_BODY = `Dear Client,
@@ -138,6 +139,47 @@ export default async function handler(req, res) {
 
   const subj = (subject && String(subject).trim()) || DEFAULT_SUBJECT;
   const rawBody = (body && String(body).trim()) || DEFAULT_BODY;
+  // A stable campaign key lets interrupted broadcasts resume without resending
+  // messages Gmail already accepted. Run db/broadcast-tracking.sql once in Supabase.
+  const campaignKey = crypto.createHash('sha256')
+    .update(JSON.stringify({ subject: subj, body: rawBody, recipientType: test ? 'test' : recipientType }))
+    .digest('hex');
+  let trackingReady = false;
+  const trackingByEmail = new Map();
+  if (!test) {
+    const { data: tracked, error: trackingError } = await db.from('broadcast_recipients')
+      .select('email,status').eq('campaign_key', campaignKey);
+    if (trackingError) {
+      try { transporter.close(); } catch (_) {}
+      return res.status(503).json({
+        success: false, configured: true,
+        message: 'Broadcast tracking is not ready. Run db/broadcast-tracking.sql in Supabase, then retry.',
+      });
+    }
+    (tracked || []).forEach(row => trackingByEmail.set(String(row.email).toLowerCase(), row.status));
+    const missing = recipients.filter(r => !trackingByEmail.has(r.email));
+    if (missing.length) {
+      const { error: insertError } = await db.from('broadcast_recipients').insert(missing.map(r => ({
+        campaign_key: campaignKey, email: r.email, user_id: r.id || null,
+        full_name: r.name || '', status: 'pending', last_error: null,
+      })));
+      if (insertError) {
+        try { transporter.close(); } catch (_) {}
+        return res.status(503).json({ success: false, configured: true, message: 'Could not initialize broadcast tracking: ' + insertError.message });
+      }
+      missing.forEach(r => trackingByEmail.set(r.email, 'pending'));
+    }
+    recipients = recipients.filter(r => trackingByEmail.get(r.email) !== 'accepted');
+    trackingReady = true;
+  }
+  const markRecipient = async (email, status, errorText = null) => {
+    if (!trackingReady) return;
+    const { error } = await db.from('broadcast_recipients').update({
+      status, last_error: errorText, updated_at: new Date().toISOString(),
+    }).eq('campaign_key', campaignKey).eq('email', email);
+    if (error) console.error('[broadcast] tracking update failed:', email, error.message);
+    trackingByEmail.set(email, status);
+  };
   const configuredBase = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL;
   const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
   const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
@@ -152,90 +194,41 @@ export default async function handler(req, res) {
     console.error('[broadcast] send error:', email, err?.message || err);
   };
 
-  // Process recipients in manageable groups. Gmail SMTP sends one message per connection.
-  const BATCH_SIZE = 100;
-  for (let offset = 0; offset < recipients.length; offset += BATCH_SIZE) {
-    const batch = recipients.slice(offset, offset + BATCH_SIZE);
-    const prepared = batch.map((r) => {
-      const optOutUrl = r.id && baseUrl ? unsubscribeUrl(r.id, baseUrl) : '';
-      const textBody = optOutUrl
-        ? `${rawBody}\n\n— The Gweno Hub Team\n\nTo stop receiving promotional and broadcast emails from Gweno Hub, unsubscribe here: ${optOutUrl}`
-        : `${rawBody}\n\n— The Gweno Hub Team`;
-      const message = {
-        to: r.email,
-        subject: subj,
-        text: textBody,
-        html: bodyToHtml(rawBody, r.name, optOutUrl),
-      };
-      if (optOutUrl) message.headers = { 'List-Unsubscribe': `<${optOutUrl}>` };
-      return { recipient: r, message };
-    });
+  // Send with low concurrency and bounded exponential backoff for temporary SMTP errors.
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const isTemporary = err => /(?:^|\\D)(?:421|450|451|452|454)(?:\\D|$)|4\\.7\\.0|temporar|timeout|timed out|connection reset|socket hang up|try again/i.test(String(err?.message || err));
+  const MAX_ATTEMPTS = 4;
+  for (const r of recipients) {
+    const optOutUrl = r.id && baseUrl ? unsubscribeUrl(r.id, baseUrl) : '';
+    const textBody = optOutUrl
+      ? `${rawBody}\\n\\n— The Gweno Hub Team\\n\\nTo stop receiving promotional and broadcast emails from Gweno Hub, unsubscribe here: ${optOutUrl}`
+      : `${rawBody}\\n\\n— The Gweno Hub Team`;
+    const message = {
+      to: r.email, subject: subj, text: textBody,
+      html: bodyToHtml(rawBody, r.name, optOutUrl),
+    };
+    if (optOutUrl) message.headers = { 'List-Unsubscribe': `<${optOutUrl}>` };
 
-    if (typeof transporter.sendBatch === 'function' && prepared.length > 1) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       try {
-        const result = await transporter.sendBatch(prepared.map(item => item.message));
-        const accepted = Array.isArray(result?.data) ? result.data : null;
-        if (accepted && accepted.length === prepared.length) {
-          sent += prepared.length;
-          continue;
-        }
-        // A successful HTTP response without one result per message is
-        // ambiguous; fall back to individual sends for accurate accounting.
-        if (accepted && accepted.length > 0) {
-          sent += accepted.length;
-          for (let i = accepted.length; i < prepared.length; i += 1) {
-            try {
-              await transporter.sendMail(prepared[i].message);
-              sent += 1;
-            } catch (err) {
-              recordError(prepared[i].recipient.email, err);
-            }
-          }
-          continue;
-        }
-        throw new Error('Email provider returned an unexpected batch response.');
-      } catch (batchErr) {
-        const batchMessage = String(batchErr?.message || batchErr);
-        console.error('[broadcast] batch failed:', batchMessage);
-        const systemicFailure = /domain.*not verified|verify.*domain|testing.*email|only.*test|api key|unauthorized|forbidden|rate limit|monthly.*limit|quota|restricted/i.test(batchMessage);
-        if (systemicFailure) {
-          // These errors affect the sender/account rather than one recipient;
-          // retrying every address would waste execution time and repeat failures.
-          for (const item of prepared) recordError(item.recipient.email, batchMessage);
-          for (let remaining = offset + BATCH_SIZE; remaining < recipients.length; remaining += BATCH_SIZE) {
-            for (const item of recipients.slice(remaining, remaining + BATCH_SIZE)) recordError(item.email, batchMessage);
-          }
-          break;
-        }
-        // Retry individually when a batch-level validation error may have been
-        // caused by one recipient; this lets valid recipients still be sent.
-        for (const item of prepared) {
-          try {
-            await transporter.sendMail(item.message);
-            sent += 1;
-          } catch (err) {
-            recordError(item.recipient.email, err);
-          }
-          // Stay under common per-second API rate limits during fallback.
-          await new Promise(resolve => setTimeout(resolve, 550));
-        }
-      }
-    } else {
-      // A small concurrency limit keeps a 159-recipient broadcast from spending
-      // more than a minute waiting on sequential SMTP connections.
-      const CONCURRENCY = 3;
-      for (let i = 0; i < prepared.length; i += CONCURRENCY) {
-        const group = prepared.slice(i, i + CONCURRENCY);
-        await Promise.all(group.map(async (item) => {
-          try {
-            await transporter.sendMail(item.message);
-            sent += 1;
-          } catch (err) {
-            recordError(item.recipient.email, err);
-          }
-        }));
+        await transporter.sendMail(message);
+        sent += 1;
+        await markRecipient(r.email, 'accepted');
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        if (!isTemporary(err) || attempt === MAX_ATTEMPTS) break;
+        await sleep(Math.min(30000, 1000 * (2 ** (attempt - 1))));
       }
     }
+    if (lastError) {
+      await markRecipient(r.email, 'failed', String(lastError.message || lastError).slice(0, 1000));
+      recordError(r.email, lastError);
+    }
+    // Keep Gmail request pressure low, even when the provider responds quickly.
+    await sleep(350);
   }
 
   try { transporter.close(); } catch (_) {}
@@ -245,6 +238,8 @@ export default async function handler(req, res) {
     complete: failed === 0,
     configured: true,
     total: recipients.length,
+    campaignKey: test ? undefined : campaignKey,
+    skippedPreviouslyAccepted: test ? 0 : [...trackingByEmail.values()].filter(status => status === 'accepted').length - sent,
     sent,
     failed,
     test: Boolean(test),

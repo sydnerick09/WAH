@@ -268,6 +268,8 @@ function UsersTab({ users, secret, onRefresh }) {
   const [suspendModal, setSuspendModal] = useState(null);
   const [suspendReason, setSuspendReason] = useState('');
   const [emailModal, setEmailModal] = useState(null);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   function setEdit(uid, field, val) {
     setEdits(prev => ({ ...prev, [uid]: { ...(prev[uid] || {}), [field]: val } }));
@@ -359,6 +361,37 @@ function UsersTab({ users, secret, onRefresh }) {
     }
   }
 
+  function toggleUserSelected(userId) {
+    setSelectedUserIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
+  }
+
+  function toggleAllFiltered() {
+    const ids = filtered.map(user => user.id);
+    const allSelected = ids.length > 0 && ids.every(id => selectedUserIds.includes(id));
+    setSelectedUserIds(prev => allSelected ? prev.filter(id => !ids.includes(id)) : [...new Set([...prev, ...ids])]);
+  }
+
+  async function deleteSelectedUsers() {
+    const ids = selectedUserIds.filter(id => users.some(user => user.id === id));
+    if (!ids.length) return;
+    if (!confirm(`Permanently delete ${ids.length} selected account(s)?\\n\\nThis cannot be undone.`)) return;
+    setBulkDeleting(true);
+    try {
+      const res = await dbProxy('adminDeleteUsersById', { adminSecret: secret, userIds: ids });
+      if (res.success) {
+        setSelectedUserIds([]);
+        alert(`Deleted ${res.deleted || 0} account(s).`);
+        await onRefresh();
+      } else {
+        alert(res.error || 'Could not delete the selected accounts.');
+      }
+    } catch (err) {
+      alert(err?.message || 'Could not delete the selected accounts.');
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   const filtered = users.filter(u => {
     const q = search.toLowerCase();
     return !q || u.fullName?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.phone?.includes(q);
@@ -384,12 +417,22 @@ function UsersTab({ users, secret, onRefresh }) {
           onChange={e => setSearch(e.target.value)}
         />
         <span style={{ fontSize: 13, color: '#64748B', marginLeft: 12 }}>{filtered.length} users</span>
+        <button type="button" style={{ ...styles.btn, width: 'auto', padding: '8px 14px' }} onClick={toggleAllFiltered}>
+          {filtered.length > 0 && filtered.every(user => selectedUserIds.includes(user.id)) ? 'Deselect visible' : 'Select visible'}
+        </button>
+        <button type="button" style={{ ...styles.btn, width: 'auto', padding: '8px 14px', background: '#b91c1c' }}
+          disabled={bulkDeleting || selectedUserIds.length === 0} onClick={deleteSelectedUsers}>
+          {bulkDeleting ? 'Deleting…' : `Delete selected (${selectedUserIds.length})`}
+        </button>
       </div>
 
       <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>
+              <th style={styles.th}><input aria-label="Select all visible clients" type="checkbox"
+                checked={filtered.length > 0 && filtered.every(user => selectedUserIds.includes(user.id))}
+                onChange={toggleAllFiltered} /></th>
               {['Name / Email / Phone / Password', 'Dates', 'Balance (KES)', 'Activation', 'Premium', 'Status', 'Actions'].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
@@ -412,7 +455,8 @@ function UsersTab({ users, secret, onRefresh }) {
 
               return (
                 <tr key={user.id} style={{ ...styles.tr, background: isSusp ? '#f9fafb' : undefined }}>
-
+                  <td style={styles.td}><input aria-label={`Select ${user.fullName || user.email || 'client'}`} type="checkbox"
+                    checked={selectedUserIds.includes(user.id)} onChange={() => toggleUserSelected(user.id)} /></td>
                   {/* Name / Email / Phone */}
                   <td style={styles.td}>
                     {isSusp && <span style={{ ...styles.badge, background: '#111827', color: '#fff', fontSize: 10, marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}><HoldIcon size={10} /> ON HOLD</span>}
@@ -577,7 +621,7 @@ function UsersTab({ users, secret, onRefresh }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No users found.</td></tr>
+              <tr><td colSpan={8} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No users found.</td></tr>
             )}
           </tbody>
         </table>

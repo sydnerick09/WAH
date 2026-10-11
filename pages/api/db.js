@@ -1353,6 +1353,24 @@ export default async function handler(req, res) {
         return res.json({ success: true });
       }
 
+      case 'adminDeleteUsersById': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const ids = [...new Set((Array.isArray(p.userIds) ? p.userIds : [])
+          .map(id => String(id || '').trim()).filter(Boolean))];
+        if (!ids.length) return res.json({ success: false, error: 'Select at least one client.' });
+        if (ids.length > 500) return res.json({ success: false, error: 'Select no more than 500 accounts at a time.' });
+        const { data: matched, error: selErr } = await db.from('users').select('id').in('id', ids);
+        if (selErr) return res.json({ success: false, error: selErr.message });
+        const foundIds = (matched || []).map(row => row.id);
+        if (foundIds.length) {
+          const { error: delErr } = await db.from('users').delete().in('id', foundIds);
+          if (delErr) return res.json({ success: false, error: delErr.message });
+        }
+        return res.json({ success: true, deleted: foundIds.length });
+      }
+
       case 'adminDeleteUsersByEmail': {
         if (p.adminSecret !== process.env.ADMIN_SECRET) {
           return res.status(403).json({ error: 'Unauthorized' });
