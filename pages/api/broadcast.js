@@ -160,7 +160,10 @@ export default async function handler(req, res) {
     const missing = recipients.filter(r => !trackingByEmail.has(r.email));
     if (missing.length) {
       const { error: insertError } = await db.from('broadcast_recipients').insert(missing.map(r => ({
-        campaign_key: campaignKey, email: r.email, user_id: r.id || null,
+        campaign_key: campaignKey, email: r.email,
+        // The users table may use timestamp/string IDs rather than UUIDs.
+        // broadcast_recipients.user_id is UUID, so only store IDs that are valid UUIDs.
+        user_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(r.id || '')) ? String(r.id) : null,
         full_name: r.name || '', status: 'pending', last_error: null,
       })));
       if (insertError) {
