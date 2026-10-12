@@ -10,7 +10,13 @@ const TERMS_HTML = `<header>
     <a href="/terms">Terms &amp; Conditions</a>
     <a href="/privacy">Privacy Policy</a>
     <a href="/conduct">Conduct Policy</a>
-    <a href="mailto:gweno_support@gweno.business">Support</a>
+    <a class="support-email-link" href="mailto:businesshub.comke@gmail.com" aria-label="Email GWENO Hub Support" title="Email GWENO Hub Support">
+      <svg class="support-email-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+        <path d="m3 7 9 6 9-6"></path>
+      </svg>
+      Support
+    </a>
   </div>
 </nav>
 
@@ -18,7 +24,7 @@ const TERMS_HTML = `<header>
 
   <h1>Terms & Conditions</h1>
 
-  <p class="updated">Last updated: April 1, 2026</p>
+  <p class="updated">Last updated: October 11, 2026</p>
 
   <!-- SEARCH -->
 
@@ -582,296 +588,92 @@ const TERMS_HTML = `<header>
   review.
 </p>
 
-<h3>Supported Withdrawal Banks and Applicable Withdrawal Fees</h3>
+<h3>Withdrawal Identity Verification and Matching of Registered Details</h3>
 
 <p>
-  GWENO Hub may make bank withdrawals available through selected financial
-  institutions. The applicable withdrawal fee depends on the selected bank,
-  withdrawal method, transaction requirements, verification status, and other
-  applicable processing conditions.
+  All withdrawals are subject to identity, account-ownership, security, and
+  transaction verification. The details supplied for a withdrawal must be
+  accurate, current, and consistent with the client's registered GWENO Hub
+  information and the requirements of the selected payment provider.
+</p>
+
+<h3>Safaricom M-Pesa Withdrawals</h3>
+
+<p>
+  Where Safaricom M-Pesa is available, clients may request a withdrawal through
+  the GWENO Hub dashboard using the required mobile money details. The name and
+  other identity information associated with the M-Pesa account must reasonably
+  match the client's verified identity and registered GWENO Hub details.
 </p>
 
 <p>
-  The following withdrawal banks and applicable withdrawal fees or fee ranges
-  may apply where the relevant withdrawal option is available:
+  GWENO Hub may ask the client to verify their registered name, email address,
+  identification information, telephone number, or ownership of the mobile
+  money account before processing a withdrawal. A telephone number or email
+  address by itself does not prove ownership of a mobile money account.
 </p>
 
-<ol>
-  <li>KCB Bank — <strong>USD 23</strong></li>
-  <li>NCBA Bank — <strong>USD 27</strong></li>
-  <li>Co-operative Bank of Kenya — <strong>NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li>Equity Bank — <strong>NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li>Absa Bank Kenya — <strong>NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li>Standard Chartered Bank — <strong>USD 34</strong></li>
-  <li>Stanbic Bank Kenya — <strong>USD 67</strong></li>
-  <li>Postbank Kenya — <strong>USD 51</strong></li>
-  <li>Family Bank of Kenya — <strong>NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li>DTB Bank — <strong>USD 19</strong></li>
-
-  <li>Stanbic Bank Uganda — <strong>NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li>Centenary Bank — <strong>NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li>Absa Bank Uganda — <strong>USD 26–80</strong></li>
-  <li>Bank of Uganda — <strong>USD 26–80</strong></li>
-
-  <li>Bank of Khartoum — <strong>USD 26–80</strong></li>
-  <li>Faisal Islamic Bank — <strong>USD 26–80</strong></li>
-  <li>Omdurman National Bank — <strong>USD 26–80</strong></li>
-
-  <li>CRDB Bank — <strong>USD 26–80</strong></li>
-  <li>NMB Bank — <strong>USD 26–80</strong></li>
-  <li>NBC Bank — <strong>USD 26–80</strong></li>
-
-  <li>Banco do Brasil — <strong>USD 26–80</strong></li>
-  <li>Itaú Unibanco — <strong>USD 26–80</strong></li>
-  <li>Bradesco — <strong>USD 26–80</strong></li>
-  <li>Santander — <strong>USD 26–80</strong></li>
-  <li>Banco de Bogotá — <strong>USD 26–80</strong></li>
-  <li>Bancolombia — <strong>USD 26–80</strong></li>
-  <li>BCI — <strong>USD 26–80</strong></li>
-  <li>Banco de Chile — <strong>USD 26–80</strong></li>
-
-  <li>JPMorgan Chase — <strong>USD 60–86</strong></li>
-  <li>Bank of America — <strong>USD 60–86</strong></li>
-  <li>Wells Fargo — <strong>USD 60–86</strong></li>
-  <li>Citibank — <strong>USD 60–86</strong></li>
-  <li>U.S. Bank — <strong>USD 60–86</strong></li>
-  <li>PNC Bank — <strong>USD 60–86</strong></li>
-  <li>Truist Bank — <strong>USD 60–86</strong></li>
-  <li>Capital One — <strong>USD 60–86</strong></li>
-</ol>
-
-<h3>SafariCom M-Pesa Withdrawals</h3>
+<h3>Airtel Money Withdrawals</h3>
 
 <p>
-  GWENO Hub may provide SafariCom M-Pesa as a supported withdrawal method for
-  eligible users. Where SafariCom M-Pesa is available, users may initiate a
-  withdrawal directly from their GWENO Hub dashboard using the required M-Pesa
-  account and withdrawal information.
+  Where Airtel Money is available as a supported withdrawal method, the same
+  identity and account-matching requirements apply. The Airtel Money account
+  details and account-holder identity must reasonably match the client's
+  verified identity and registered GWENO Hub details, subject to any additional
+  requirements imposed by the payment provider.
+</p>
+
+<h3>Bank Withdrawals</h3>
+
+<p>
+  For bank withdrawals, the client must provide accurate bank details and the
+  account-holder name. The bank account-holder name must match the client's
+  verified identity unless GWENO Hub expressly reviews and approves an
+  exception before the withdrawal is processed. An exception is not automatic
+  and may require additional documents or verification.
 </p>
 
 <p>
-  The applicable withdrawal fee for a SafariCom M-Pesa withdrawal is
-  <strong>USD 29</strong>. This fee applies to the withdrawal transaction and
-  may be payable before the withdrawal is processed, as indicated through the
-  GWENO Hub withdrawal process.
+  Bank withdrawals may be available only through supported payment methods and
+  financial institutions. Availability and any transaction-specific charges or
+  requirements will be shown through the platform or communicated before the
+  relevant withdrawal is confirmed. GWENO Hub does not publish fixed bank fee
+  amounts or fee ranges in these Terms; applicable information may change based
+  on the selected method, provider, location, and transaction requirements.
+</p>
+
+<h3>Email, Telephone, and Identification Verification</h3>
+
+<p>
+  Clients must use an email address they control and must provide a telephone
+  number and identification information that can be reasonably verified.
+  Providing an email address alone does not prove ownership of a bank account,
+  M-Pesa account, or Airtel Money account.
 </p>
 
 <p>
-  Subject to account eligibility, verification, platform availability, and
-  applicable security or compliance checks, users may initiate SafariCom
-  M-Pesa withdrawals at any time and from any location where the service is
-  available. The availability of the M-Pesa service may also depend on the
-  relevant payment provider and network conditions.
+  GWENO Hub may request identification documents, confirmation of a telephone
+  number, proof of account ownership, or other reasonable supporting
+  information to verify a withdrawal. If the details are incorrect,
+  inconsistent, incomplete, or cannot be verified, GWENO Hub may delay, reject,
+  cancel, or place the request under review.
 </p>
 
 <p>
-  Users are responsible for providing accurate SafariCom M-Pesa details and
-  for ensuring that the mobile money account information submitted for the
-  withdrawal is correct. GWENO Hub may delay, reject, or require additional
-  verification for a withdrawal where the submitted information is incorrect,
-  incomplete, inconsistent, or cannot be reasonably verified.
-</p>
-
-<h3>Restricted Kenyan Banks</h3>
-
-<p>
-  For the avoidance of doubt, the following Kenyan banks are
-  <strong>NOT ELIGIBLE FOR WITHDRAWALS through GWENO Hub</strong>:
-</p>
-
-<ul>
-  <li><strong>Co-operative Bank of Kenya — NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li><strong>Equity Bank — NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li><strong>Absa Bank Kenya — NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li><strong>Family Bank of Kenya — NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-</ul>
-
-<p>
-  Users must not submit withdrawal details for any of the restricted Kenyan
-  banks listed above. GWENO Hub may reject, cancel, delay, or otherwise
-  restrict a withdrawal request submitted using an account belonging to a
-  restricted bank.
-</p>
-
-<h3>Restricted Ugandan Banks</h3>
-
-<p>
-  The following Ugandan banks are also
-  <strong>NOT ELIGIBLE FOR WITHDRAWALS through GWENO Hub</strong>:
-</p>
-
-<ul>
-  <li><strong>Stanbic Bank Uganda — NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-  <li><strong>Centenary Bank — NOT ELIGIBLE FOR WITHDRAWALS</strong></li>
-</ul>
-
-<p>
-  Users must not submit withdrawal details for any of the restricted Ugandan
-  banks listed above. GWENO Hub may reject, cancel, delay, or otherwise
-  restrict a withdrawal request submitted using an account belonging to a
-  restricted bank.
-</p>
-
-<h3>Restricted and Unsupported Withdrawal Accounts</h3>
-
-<p>
-  A withdrawal request submitted using a restricted or unsupported bank
-  account will not be processed to that bank. The user is responsible for
-  selecting an eligible and supported withdrawal method before confirming
-  the withdrawal request.
+  Clients are responsible for checking all withdrawal details before submitting
+  a request. GWENO Hub may delay, restrict, withhold, or reverse a withdrawal
+  while conducting a reasonable fraud, security, identity, compliance, or
+  account review. Processing times may vary based on verification requirements,
+  payment providers, financial institutions, network conditions, weekends,
+  holidays, and other circumstances outside GWENO Hub's immediate control.
 </p>
 
 <p>
-  The restrictions apply whether the bank account belongs to the user or to
-  another person. Use of another person's bank account does not bypass any
-  restricted-bank rule.
-</p>
-
-<h3>Withdrawal Fee Conditions</h3>
-
-<p>
-  The USD amounts stated above represent the applicable withdrawal fee or
-  published fee range associated with the relevant bank where that withdrawal
-  option is available.
-</p>
-
-<p>
-  Where a fee range is shown, the actual applicable fee may vary within that
-  range depending on the transaction, payment method, processing
-  requirements, currency conversion, financial institution, payment provider,
-  verification status, or other applicable conditions.
-</p>
-
-<p>
-  GWENO Hub may update supported banks, restricted banks, withdrawal fees,
-  fee ranges, or withdrawal availability where reasonably necessary for
-  operational, security, payment-processing, regulatory, or compliance
-  purposes.
-</p>
-
-<h3>Withdrawal Requests Using Restricted Banks</h3>
-
-<p>
-  If a client initiates a withdrawal through a restricted or unsupported bank,
-  GWENO Hub will not initiate the withdrawal to that restricted bank. The
-  withdrawal request is initiated by the client through the GWENO Hub
-  dashboard, and the client is responsible for selecting an authorized and
-  supported bank or withdrawal option.
-</p>
-
-<p>
-  Where a withdrawal cannot be processed because the client selected a
-  restricted or unsupported bank, the amount the client attempted to withdraw
-  may, where applicable, be returned to the client's GWENO Hub dashboard
-  account balance. The client may then initiate a new withdrawal using an
-  eligible and authorized withdrawal method.
-</p>
-
-<h3>Withdrawal Fee Return for Restricted or Unsupported Banks</h3>
-
-<p>
-  If the client has already paid a withdrawal fee for a withdrawal that cannot
-  be processed because a restricted or unsupported bank was selected, only
-  <strong>3% of the withdrawal fee paid</strong> will be deducted.
-</p>
-
-<p>
-  The remaining <strong>97% of the withdrawal fee paid</strong> will be
-  returned directly to the client's GWENO Hub dashboard account balance,
-  subject to applicable verification, security, account, and processing
-  requirements.
-</p>
-
-<p>
-  For clarity, the 3% deduction applies only to the
-  <strong>withdrawal fee that the client paid</strong>. It does not apply to
-  the client's normal GWENO Hub account balance.
-</p>
-
-<p>
-  The 3% deduction does not mean that 3% of the amount the client intended to
-  withdraw will be deducted. The calculation is made only against the
-  withdrawal fee previously paid for that withdrawal request.
-</p>
-
-<h3>Example of the Withdrawal Fee Return</h3>
-
-<p>
-  For example, if a client pays a USD 20 withdrawal fee and the withdrawal
-  cannot be processed because a restricted or unsupported bank was selected,
-  3% of the USD 20 fee would be USD 0.60.
-</p>
-
-<p>
-  The USD 0.60 would be deducted from the withdrawal fee, while the remaining
-  USD 19.40, representing 97% of the withdrawal fee paid, would be returned
-  to the client's GWENO Hub dashboard account balance, subject to applicable
-  requirements.
-</p>
-
-<p>
-  This calculation is made against the withdrawal fee only. It is not
-  calculated against the client's normal dashboard balance and is not
-  calculated against the amount the client attempted to withdraw.
-</p>
-
-<h3>Withdrawals Using Another Person's Bank Account</h3>
-
-<p>
-  GWENO Hub may allow a client to use another person's bank account details
-  when initiating a bank withdrawal, but this is permitted only where the
-  GWENO Hub team has reviewed and accepted the use of those third-party bank
-  details.
-</p>
-
-<p>
-  A client must not use another person's bank account details for a withdrawal
-  without the acceptance or authorization of the GWENO Hub team.
-</p>
-
-<p>
-  Where GWENO Hub accepts the use of another person's bank details, the client
-  must still use their own correct GWENO Hub account information and provide
-  accurate withdrawal information.
-</p>
-
-<p>
-  The use of another person's bank account details does not transfer ownership
-  of the client's GWENO Hub account, earnings, or dashboard balance to that
-  person. The GWENO Hub account remains associated with the registered client
-  who initiated the withdrawal.
-</p>
-
-<p>
-  Third-party bank withdrawals are permitted only through banks and withdrawal
-  channels that are authorized and supported by GWENO Hub.
-</p>
-
-<p>
-  A client must not use another person's bank details to bypass restricted-bank
-  rules, account verification requirements, security controls, geographic
-  restrictions, withdrawal requirements, or any other GWENO Hub policy.
-</p>
-
-<p>
-  GWENO Hub may request additional verification, supporting information, or
-  confirmation from the client before accepting a withdrawal involving
-  another person's bank account details.
-</p>
-
-<p>
-  GWENO Hub may reject, delay, cancel, or return a withdrawal involving
-  third-party bank details where the transaction cannot be reasonably
-  verified, where the bank is not an authorized withdrawal channel, or where
-  the transaction presents a security, fraud, compliance, or account-integrity
-  concern.
-</p>
-
-<p>
-  By submitting a withdrawal request, the client confirms that the bank
-  details provided are accurate and that, where third-party bank details are
-  used, the client has obtained any necessary permission from the account
-  holder and has received the required acceptance from GWENO Hub.
+  Clients must never share their GWENO Hub password, mobile money PIN, bank PIN,
+  one-time password (OTP), or other confidential security credentials with
+  support staff or any other person. GWENO Hub may update supported withdrawal
+  methods and verification requirements where reasonably necessary for
+  operational, security, payment-processing, or compliance purposes.
 </p>
 
 <h2>13. Fees and Account Services</h2>
@@ -884,7 +686,7 @@ const TERMS_HTML = `<header>
 </p>
 
 <p>
-  The current fee for a name update is <strong>kes 310 (Four Hundred and
+  The current fee for a name update is <strong>KES 480 (Four Hundred and
   Eighty Kenyan Shillings)</strong>, unless GWENO Hub publishes a revised
   fee.
 </p>
@@ -976,8 +778,12 @@ const TERMS_HTML = `<header>
 
 <p>
   Email support:
-  <a href="mailto:gweno_support@gweno.business">
-    gweno_support@gweno.business
+  <a class="support-email-link" href="mailto:businesshub.comke@gmail.com" aria-label="Email GWENO Hub Support">
+    <svg class="support-email-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+      <path d="m3 7 9 6 9-6"></path>
+    </svg>
+    businesshub.comke@gmail.com
   </a>
 </p>
 
@@ -1351,8 +1157,12 @@ const TERMS_HTML = `<header>
 
 <p>
   Email:
-  <a href="mailto:gweno_support@gweno.business">
-    gweno_support@gweno.business
+  <a class="support-email-link" href="mailto:businesshub.comke@gmail.com" aria-label="Email GWENO Hub Support">
+    <svg class="support-email-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+      <path d="m3 7 9 6 9-6"></path>
+    </svg>
+    businesshub.comke@gmail.com
   </a>
 </p>
 
@@ -1398,12 +1208,12 @@ const TERMS_HTML = `<header>
     <li><a href="/terms">Terms of Service</a></li>
     <li><a href="/conduct">Conduct and Policies</a></li>
     <li><a href="/privacy">Privacy Policy</a></li>
-    <li><a href="mailto:gweno_support@gweno.business">gweno_support@gweno.business</a></li>
+    <li><a href="mailto:businesshub.comke@gmail.com">businesshub.comke@gmail.com</a></li>
   </ul>
 
   <p>
     Support:
-    <a href="mailto:gweno_support@gweno.business">gweno_support@gweno.business</a>
+    <a href="mailto:businesshub.comke@gmail.com">businesshub.comke@gmail.com</a>
   </p>
 </footer>`;
 
@@ -1769,6 +1579,19 @@ export default function Terms() {
       flex-wrap: wrap;
       gap: 18px;
       font-size: 14px;
+    }
+
+    .support-email-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .support-email-icon {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 17px;
+      vertical-align: middle;
     }
 
     .notice {
