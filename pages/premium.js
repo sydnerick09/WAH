@@ -11,7 +11,7 @@ import { FlowSkeleton } from '../components/Skeleton';
 import { fetchTill } from '../lib/settings';
 import { useMpesaEnabled } from '../lib/useMpesaEnabled';
 
-const PREMIUM_FEE = 480;
+const PREMIUM_FEE = 310;
 
 export default function PremiumPage() {
   const router = useRouter();

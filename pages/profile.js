@@ -22,7 +22,7 @@ import Icon from '../components/Icon';
 import { ProfileSkeleton } from '../components/Skeleton';
 import MpesaPay from '../components/MpesaPay';
 
-const PROFILE_FEE = 480;   // KES fee (via Daraja) to change personal name / email / phone
+const PROFILE_FEE = 310;   // KES fee (via Daraja) to change personal name / email / phone
 
 // Validate a chosen image file and return a data URL (cropping happens later,
 // in the interactive AvatarCropper).
