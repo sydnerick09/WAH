@@ -20,10 +20,10 @@ A full-stack Next.js web app for task management and earning, targeting East Afr
 - **Dashboard** — Live user stats (balance, completed tasks, active bids), task feed with search & category filter
 - **80+ Tasks** — Real tasks priced KES 1,200–4,600 across Writing, Research, Data Entry, Design, Marketing, and more
 - **Task Submission** — File upload (PDF, Word, Excel, audio, video) sent to admin via email attachment
-- **Withdrawal Flow** — KES 480 Paystack processing fee → withdrawal details form → 2-hour countdown → auto-fail on expiry
+- **Withdrawal Flow** — kes 310 Paystack processing fee → withdrawal details form → 2-hour countdown → auto-fail on expiry
 - **Live Withdrawals Ticker** — Animated real-time payout feed
 - **Referral System** — Unique referral links, KES 70 earned per activated referral
-- **Premium Upgrade** — KES 480/month premium plan via Paystack
+- **Premium Upgrade** — kes 310/month premium plan via Paystack
 - **Training Registration** — KES 132 one-time training fee via Paystack
 - **Space Background** — Full-bleed asteroid/particle backdrop on the dashboard
 

@@ -245,7 +245,7 @@ export default function ProfilePage() {
   }
 
   // ── Fee-gated personal fields (Full Name, Email, Phone) ──────────────────────
-  // Changing a personal name / email / phone requires a KES 480 fee paid via
+  // Changing a personal name / email / phone requires a kes 310 fee paid via
   // Safaricom Daraja (M-Pesa). Flow: notice → pay (STK) → enter new value → save.
   // The server re-verifies the paid fee before applying the change.
   const fieldLabel = f => f === 'fullName' ? 'Full Name' : f === 'email' ? 'Email Address' : 'Phone Number';
@@ -257,7 +257,7 @@ export default function ProfilePage() {
     const { field, value, feeRef } = feeEdit;
     const v = String(value || '').trim();
     if (!v) { setToast('Please enter a value'); return; }
-    if (!feeRef) { setToast('Please complete the KES 480 payment first'); return; }
+    if (!feeRef) { setToast('Please complete the kes 310 payment first'); return; }
     setBusy(true);
     const res = await changeContact(user.id, { [field]: v, feeRef });
     setBusy(false);
@@ -513,7 +513,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ── Personal field change (Full Name / Email / Phone) — KES 480 via Daraja ── */}
+      {/* ── Personal field change (Full Name / Email / Phone) — kes 310 via Daraja ── */}
       {feeEdit && (
         <div className="profile-dialog-overlay" onClick={() => setFeeEdit(null)}>
           <div className="profile-dialog" onClick={e => e.stopPropagation()}>
