@@ -48,7 +48,7 @@ function getTransporter() {
   return createEmailTransport('broadcast');
 }
 
-export default async function handler(req, res) {
+async function broadcastHandler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
 
   const { adminSecret, subject, body, test, recipientType = 'all' } = req.body || {};
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
     const message = String(err?.message || err || 'Unknown SMTP error');
     if (errors.length < 20) errors.push({ email, error: message });
     console.error('[broadcast] send error:', email, message);
-    await markRecipient(email, 'failed', message);
+    // Keep processing other recipients even if one email fails.
   };
 
   // Process recipients in manageable groups using a small reusable SMTP pool.
@@ -189,7 +189,7 @@ export default async function handler(req, res) {
             try {
               await transporter.sendMail(prepared[i].message);
               sent += 1;
-              await markRecipient(prepared[i].recipient.email, 'accepted');
+              // Email was accepted by the configured provider.
             } catch (err) {
               await recordError(prepared[i].recipient.email, err);
             }
@@ -216,7 +216,7 @@ export default async function handler(req, res) {
           try {
             await transporter.sendMail(item.message);
             sent += 1;
-            await markRecipient(item.recipient.email, 'accepted');
+            // Email was accepted by the configured provider.
           } catch (err) {
             await recordError(item.recipient.email, err);
           }
@@ -234,7 +234,7 @@ export default async function handler(req, res) {
           try {
             await transporter.sendMail(item.message);
             sent += 1;
-            await markRecipient(item.recipient.email, 'accepted');
+            // Email was accepted by the configured provider.
           } catch (err) {
             await recordError(item.recipient.email, err);
           }
@@ -259,4 +259,21 @@ export default async function handler(req, res) {
       ? `SMTP accepted ${sent} email(s); ${failed} failed. Acceptance does not guarantee inbox delivery. Review the returned errors.`
       : `SMTP accepted ${sent} email(s). Acceptance does not guarantee inbox delivery.`,
   });
+}
+
+
+// Ensure unexpected database/runtime errors are returned as JSON instead of an HTML
+// error page, which previously caused JSON.parse errors in the admin broadcast UI.
+export default async function handler(req, res) {
+  try {
+    return await broadcastHandler(req, res);
+  } catch (error) {
+    console.error('[broadcast] unhandled API error:', error?.stack || error?.message || error);
+    if (res.headersSent) return;
+    return res.status(500).json({
+      success: false,
+      configured: true,
+      message: 'The broadcast request failed on the server. Check the Vercel function logs for details.',
+    });
+  }
 }

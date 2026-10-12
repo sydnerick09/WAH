@@ -1223,7 +1223,17 @@ function BroadcastTab({ secret, userCount }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminSecret: secret, subject, body, test, recipientType }),
       });
-      const data = await r.json();
+      const responseText = await r.text();
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (_) {
+        const preview = responseText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 220);
+        throw new Error(preview || `The broadcast API returned a non-JSON response (HTTP ${r.status}). Check the Vercel deployment logs.`);
+      }
+      if (!r.ok && !data.message) {
+        data.message = `Broadcast request failed with HTTP ${r.status}.`;
+      }
       if (data.requiresVerifiedSender) {
         setResult({ ok: false, text: data.message || 'A verified Resend sender is required for broadcasts.' });
       } else if (typeof data.sent === 'number' && typeof data.failed === 'number') {
