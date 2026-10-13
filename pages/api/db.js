@@ -2167,7 +2167,7 @@ export default async function handler(req, res) {
       // ─── Profile (self-service) ───────────────────────────────────────────
       case 'updateProfile': {
         // Username is freely editable. Full Name is NOT changed here — it now
-        // requires the kes 310 profile-change fee (handled in changeContact).
+        // requires the kes 480 profile-change fee (handled in changeContact).
         // Extended fields (address, postalCode, state) are stored in _profile so
         // the page can round-trip them, but the UI keeps them read-only.
         const userId = clean(p.userId, 64);
@@ -2222,7 +2222,7 @@ export default async function handler(req, res) {
 
       case 'changeContact': {
         // Changing personal name / email / phone requires a verified, single-use
-        // kes 310 profile-change fee paid via Daraja (recorded by the STK callback
+        // kes 480 profile-change fee paid via Daraja (recorded by the STK callback
         // in mpesa_transactions). Values arrive as newFullName/newEmail/newPhone
         // (the uid-based auth guard strips a body `email`). Cannot be bypassed.
         const userId = clean(p.userId, 64);
@@ -2230,7 +2230,7 @@ export default async function handler(req, res) {
 
         const feeRef = clean(p.feeRef, 120);
         if (!nonEmpty(feeRef)) {
-          return res.json({ success: false, needsFee: true, error: 'A kes 310 profile-change fee is required.' });
+          return res.json({ success: false, needsFee: true, error: 'A kes 480 profile-change fee is required.' });
         }
         const { data: fee } = await db.from('mpesa_transactions')
           .select('*').eq('checkout_request_id', feeRef).maybeSingle();
@@ -2240,7 +2240,7 @@ export default async function handler(req, res) {
           const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
             : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
           await logAction(db, { action: 'profile_fee_verify_failed', entity: 'user', entityId: userId, detail: `fee:${feeRef} reason:${reason}` });
-          return res.json({ success: false, needsFee: true, error: 'Your kes 310 payment could not be verified. Please pay the fee and try again.' });
+          return res.json({ success: false, needsFee: true, error: 'Your kes 480 payment could not be verified. Please pay the fee and try again.' });
         }
 
         const updates = {};

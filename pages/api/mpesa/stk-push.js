@@ -10,9 +10,9 @@ import { createTransaction } from '../../../lib/mpesaStore';
 import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../../lib/withdrawalFees';
 
 const ACTIVATION_FEE = 50;
-const PREMIUM_FEE    = 310;
+const PREMIUM_FEE    = 480;
 const TRAINING_FEE   = 132;
-const PROFILE_FEE    = 310;   // kes 310 fee to change personal name / email / phone
+const PROFILE_FEE    = 480;   // kes 480 fee to change personal name / email / phone
 
 function adminDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -1,4 +1,4 @@
-// pages/premium.js — full-page premium upgrade (kes 310 / month via M-Pesa Buy Goods till)
+// pages/premium.js — full-page premium upgrade (kes 480 / month via M-Pesa Buy Goods till)
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
@@ -11,7 +11,7 @@ import { FlowSkeleton } from '../components/Skeleton';
 import { fetchTill } from '../lib/settings';
 import { useMpesaEnabled } from '../lib/useMpesaEnabled';
 
-const PREMIUM_FEE = 310;
+const PREMIUM_FEE = 480;
 
 export default function PremiumPage() {
   const router = useRouter();
@@ -54,7 +54,7 @@ export default function PremiumPage() {
   }
 
   return (
-    <FlowShell title="Premium" subtitle="kes 310 / month • required to submit tasks" icon="star">
+    <FlowShell title="Premium" subtitle="kes 480 / month • required to submit tasks" icon="star">
       <div className="premium-features" style={{ marginBottom: 20 }}>
         {[
           ['upload', 'Unlimited task bidding'],
