@@ -137,9 +137,9 @@ function isValidKenyanMobilePhone(value) {
   return /^(?:0[17]\d{8}|\+254[17]\d{8})$/.test(normalized);
 }
 
-// National ID must contain exactly 8 digits.
+// National ID must contain between 8 and 10 digits.
 function isValidKenyanNationalId(value) {
-  return /^\d{8}$/.test(String(value || '').trim());
+  return /^\d{8,10}$/.test(String(value || '').trim());
 }
 
 // Bank withdrawal fees are fixed in USD (Option A).
@@ -282,7 +282,7 @@ function MpesaFlow({ user }) {
     if (!phone.trim()) errs.phone = 'Phone number is required';
     else if (!isValidKenyanMobilePhone(phone)) errs.phone = 'Enter a valid Kenyan phone number (07/01XXXXXXXX or +2547/+2541XXXXXXXX)';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
-    else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be exactly 8 digits';
+    else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be 8 to 10 digits';
 
     if (Object.keys(errs).length) {
       setErrors(errs);
@@ -399,9 +399,9 @@ function MpesaFlow({ user }) {
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
-          <input className="pay-phone-input" type="text" inputMode="numeric" autoComplete="off" maxLength={8} value={idNumber}
-             onChange={e => { setIdNumber(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrors(p => ({ ...p, idNumber: undefined })); }}
-             placeholder="e.g. 12345678" pattern="\d{8}" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
+          <input className="pay-phone-input" type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={idNumber}
+             onChange={e => { setIdNumber(e.target.value.replace(/\D/g, '').slice(0, 10)); setErrors(p => ({ ...p, idNumber: undefined })); }}
+             placeholder="e.g. 12345678" pattern="\d{8,10}" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
 
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
@@ -529,7 +529,7 @@ function AirtelFlow({ user }) {
     if (!airtelPhone.trim()) errs.phone = 'Phone number is required';
     else if (!isValidKenyanMobilePhone(airtelPhone)) errs.phone = 'Enter a valid Kenyan phone number (07/01XXXXXXXX or +2547/+2541XXXXXXXX)';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
-    else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be exactly 8 digits';
+    else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be 8 to 10 digits';
 
     if (Object.keys(errs).length) {
       setErrors(errs);
@@ -646,9 +646,9 @@ function AirtelFlow({ user }) {
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
-          <input className="pay-phone-input" type="text" inputMode="numeric" autoComplete="off" maxLength={8} value={idNumber}
-             onChange={e => { setIdNumber(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrors(p => ({ ...p, idNumber: undefined })); }}
-             placeholder="e.g. 12345678" pattern="\d{8}" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
+          <input className="pay-phone-input" type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={idNumber}
+             onChange={e => { setIdNumber(e.target.value.replace(/\D/g, '').slice(0, 10)); setErrors(p => ({ ...p, idNumber: undefined })); }}
+             placeholder="e.g. 12345678" pattern="\d{8,10}" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
 
           {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}

@@ -293,6 +293,16 @@ const TERMS_HTML = `<header>
 </p>
 
 <p>
+  If a task reviewer or task provider requests a correction, clarification, or
+  resubmission, you must complete the requested changes within the stated
+  deadline or within a reasonable time if no deadline is stated. Failure to
+  correct work as requested may result in rejection of the task, suspension of
+  task access, or temporary placement of your account on hold while the matter
+  is reviewed. Repeated or deliberate failure to follow correction instructions
+  may result in further account restrictions, subject to applicable law.
+</p>
+
+<p>
   Task availability is not guaranteed. The number, type, value, and timing of
   available tasks may change according to platform operations and third-party
   demand.
@@ -580,6 +590,19 @@ const TERMS_HTML = `<header>
   GWENO Hub does not guarantee that every withdrawal will be completed within
   a particular period unless a specific processing commitment has expressly
   been provided for that transaction.
+</p>
+
+<p>
+  GWENO Hub is a task-marketplace intermediary that connects clients with task
+  opportunities; it is not a bank or a deposit-taking institution. Users are
+  responsible for requesting withdrawal of available funds and keeping their
+  account and payment details current. If funds remain unclaimed for more than
+  one month, including after a withdrawal notice or reminder has been issued,
+  GWENO Hub may restrict the funds and handle or transfer them as unclaimed
+  funds only as permitted or required by applicable law. Where reasonably
+  practicable, GWENO Hub may send a notice and provide an opportunity to resolve
+  the matter before taking action. Nothing in this clause authorizes GWENO Hub
+  to confiscate funds contrary to applicable law.
 </p>
 
 <p>
