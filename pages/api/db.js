@@ -1132,18 +1132,8 @@ export default async function handler(req, res) {
         if (!(amount > 0) || !Number.isFinite(amount)) return res.json({ success: false, error: 'Amount must be greater than 0.' });
         if (!validManualWithdrawalStatus(status)) return res.json({ success: false, error: 'Invalid withdrawal status.' });
 
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data: recent, error: recentErr } = await db.from('manual_withdrawals')
-          .select('id,status,created_at').eq('phone_masked', phone).neq('id', p.requestId)
-          .gte('created_at', since).order('created_at', { ascending: false }).limit(1);
-        if (recentErr) return res.json({ success: false, error: recentErr.message });
-        const latest = recent?.[0];
-        if (latest && latest.status !== 'failed') {
-          return res.json({ success: false, error: 'This masked phone number already has another withdrawal within the last 24 hours.' });
-        }
-        if (latest && latest.status === 'failed' && status === 'failed') {
-          return res.json({ success: false, error: 'A failed withdrawal cannot be recorded twice within 24 hours.' });
-        }
+        // Do not run the duplicate-create guard when editing an existing record.
+        // Admins must be able to correct Pending/Failed to Successful after payment.
 
         const { data, error } = await db.from('manual_withdrawals').update({
           full_name: name,

@@ -192,26 +192,16 @@ export default function WithdrawalReviews() {
   const [reviewMessage, setReviewMessage] = useState(null);
   const [visibleIndex, setVisibleIndex] = useState(0);
 
+  // Keep the existing rotating sample review statements and approved client
+  // reviews in this feed. Withdrawal transactions belong only in the Withdrawals tab.
   const mixedRecords = useMemo(() => {
     const genuine = approvedReviews.map((review) => ({
       ...review,
       kind: 'real',
-      status: 'approved',
       rating: 5,
     }));
-    const manual = manualWithdrawals.map((withdrawal) => ({
-      id: `manual-withdrawal-${withdrawal.id}`,
-      name: withdrawal.name || 'Client',
-      phone: withdrawal.phone || '',
-      country: withdrawal.country || '',
-      amount: Number(withdrawal.amount || 0),
-      status: withdrawal.status || 'pending',
-      text: `${formatKes(Number(withdrawal.amount || 0))} withdrawal • ${withdrawal.phone || 'masked number'}`,
-      rating: 5,
-      kind: 'manual',
-    }));
-    return shuffleRealAndDemo([...records, ...genuine, ...manual], getDaySeed() ^ 0x9e3779b9);
-  }, [records, approvedReviews, manualWithdrawals]);
+    return shuffleRealAndDemo([...records, ...genuine], getDaySeed() ^ 0x9e3779b9);
+  }, [records, approvedReviews]);
 
   useEffect(() => {
     let cancelled = false;
@@ -249,7 +239,14 @@ export default function WithdrawalReviews() {
     loadReviews();
     loadManualWithdrawals();
     loadUser();
-    return () => { cancelled = true; };
+    const refreshTimer = window.setInterval(() => {
+      loadReviews();
+      loadManualWithdrawals();
+    }, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
   }, []);
 
   // The ticker moves one complete review at a time. Long reviews stay on screen
@@ -331,7 +328,7 @@ export default function WithdrawalReviews() {
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Withdrawal Reviews &amp; Testimonies</h1>
-            <p style={{ margin: '3px 0 0', color: '#bdbdbd', fontSize: 12 }}>Rotating withdrawal notifications and approved client reviews</p>
+            <p style={{ margin: '3px 0 0', color: '#bdbdbd', fontSize: 12 }}>Rotating sample review statements and approved client reviews</p>
           </div>
         </div>
       </header>
@@ -341,7 +338,7 @@ export default function WithdrawalReviews() {
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 14px',
           marginBottom: 18, color: '#475569', fontSize: 12, lineHeight: 1.55,
         }}>
-          <strong>Real data:</strong>  the rotating withdrawal records are real withdrawals and records. Genuine client reviews appear only after the client submits them and an admin approves them.
+          <strong>About these entries:</strong> Existing sample review entries are illustrative examples. Client-submitted reviews appear after an admin approves them. Withdrawal records are shown separately under Withdrawals.
         </div>
 
         <div style={{
@@ -478,21 +475,6 @@ export default function WithdrawalReviews() {
                     </div>
                   </div>
 
-                  <div style={{
-                    flexShrink: 0,
-                    fontSize: 9,
-                    fontWeight: 800,
-                    opacity: .55,
-                    textTransform: 'uppercase',
-                    letterSpacing: '.05em',
-                    paddingTop: 2,
-                  }}>
-                    {visibleRecord.status === 'failed'
-                      ? 'Failed'
-                      : visibleRecord.status === 'pending'
-                        ? 'Pending'
-                        : 'Successful'}
-                  </div>
                 </article>
               )}
             </div>
