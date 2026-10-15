@@ -686,8 +686,8 @@ const TERMS_HTML = `<header>
 </p>
 
 <p>
-  The current fee for a name update is <strong>kes 480 (Four Hundred and
-  Eighty Kenyan Shillings)</strong>, unless GWENO Hub publishes a revised
+  The current fee for a name update is <strong>kes 240 (Two Hundred and
+  Forty Kenyan Shillings)</strong>, unless GWENO Hub publishes a revised
   fee.
 </p>
 

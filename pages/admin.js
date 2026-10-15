@@ -536,11 +536,11 @@ function UsersTab({ users, secret, onRefresh }) {
                   <td style={styles.td}>
                     <input type="number" min="0" style={styles.numInput} value={balVal}
                       onChange={e => setEdit(user.id, 'balance', e.target.value)} />
-                    <div style={{ fontSize: 11, color: '#64748B', margin: '10px 0 3px' }}>M-Pesa fees paid (×650)</div>
+                    <div style={{ fontSize: 11, color: '#64748B', margin: '10px 0 3px' }}>M-Pesa fees paid (×325)</div>
                     <select
                       style={{ ...styles.numInput, width: 70 }}
                       value={getEdit(user.id, 'mpesaFeesPaid', user.mpesaFeesPaid ?? 0)}
-                      title="Verified number of KES 650 M-Pesa fees this client has paid. This is the credit applied on a bank/international withdrawal (KES 650 × count, up to 3 = KES 1,950); the client pays the remaining amount."
+                      title="Verified number of KES 325 M-Pesa fees this client has paid. This is the credit applied on a bank/international withdrawal (KES 325 × count, up to 3 = KES 975); the client pays the remaining amount."
                       onChange={e => setEdit(user.id, 'mpesaFeesPaid', e.target.value)}
                     >
                       <option value={0}>0</option>
@@ -548,7 +548,7 @@ function UsersTab({ users, secret, onRefresh }) {
                       <option value={2}>2</option>
                       <option value={3}>3</option>
                     </select>
-                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>KES 650 × count credited</div>
+                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>KES 325 × count credited</div>
                   </td>
 
                   {/* Activation */}

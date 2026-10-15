@@ -22,7 +22,7 @@ import Icon from '../components/Icon';
 import { ProfileSkeleton } from '../components/Skeleton';
 import MpesaPay from '../components/MpesaPay';
 
-const PROFILE_FEE = 480;   // kes fee (via Daraja) to change personal name / email / phone
+const PROFILE_FEE = 240   // kes fee (via Daraja) to change personal name / email / phone
 
 // Validate a chosen image file and return a data URL (cropping happens later,
 // in the interactive AvatarCropper).
@@ -245,7 +245,7 @@ export default function ProfilePage() {
   }
 
   // ── Fee-gated personal fields (Full Name, Email, Phone) ──────────────────────
-  // Changing a personal name / email / phone requires a kes 480 fee paid via
+  // Changing a personal name / email / phone requires a kes 240 fee paid via
   // Safaricom Daraja (M-Pesa). Flow: notice → pay (STK) → enter new value → save.
   // The server re-verifies the paid fee before applying the change.
   const fieldLabel = f => f === 'fullName' ? 'Full Name' : f === 'email' ? 'Email Address' : 'Phone Number';
@@ -257,7 +257,7 @@ export default function ProfilePage() {
     const { field, value, feeRef } = feeEdit;
     const v = String(value || '').trim();
     if (!v) { setToast('Please enter a value'); return; }
-    if (!feeRef) { setToast('Please complete the kes 480 payment first'); return; }
+    if (!feeRef) { setToast('Please complete the kes 240 payment first'); return; }
     setBusy(true);
     const res = await changeContact(user.id, { [field]: v, feeRef });
     setBusy(false);
@@ -513,7 +513,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ── Personal field change (Full Name / Email / Phone) — kes 480 via Daraja ── */}
+      {/* ── Personal field change (Full Name / Email / Phone) — kes 240 via Daraja ── */}
       {feeEdit && (
         <div className="profile-dialog-overlay" onClick={() => setFeeEdit(null)}>
           <div className="profile-dialog" onClick={e => e.stopPropagation()}>
