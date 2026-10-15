@@ -24,7 +24,7 @@ const TERMS_HTML = `<header>
 
   <h1>Terms & Conditions</h1>
 
-  <p class="updated">Last updated: October 11, 2026</p>
+  <p class="updated">Last updated: June 15, 2026</p>
 
   <!-- SEARCH -->
 
@@ -558,7 +558,7 @@ const TERMS_HTML = `<header>
   constitute amounts owed to the user.
 </p>
     
-<h2>12. Withdrawals</h2>
+<h2 id="withdrawal-and-unclaimed-funds">12. Withdrawals</h2>
 
 <p>
   Users must initiate withdrawals through the official withdrawal process
@@ -592,7 +592,7 @@ const TERMS_HTML = `<header>
   been provided for that transaction.
 </p>
 
-<p>
+<p id="unclaimed-funds-policy">
   GWENO Hub is a task-marketplace intermediary that connects clients with task
   opportunities; it is not a bank or a deposit-taking institution. Users are
   responsible for requesting withdrawal of available funds and keeping their
@@ -601,8 +601,10 @@ const TERMS_HTML = `<header>
   GWENO Hub may restrict the funds and handle or transfer them as unclaimed
   funds only as permitted or required by applicable law. Where reasonably
   practicable, GWENO Hub may send a notice and provide an opportunity to resolve
-  the matter before taking action. Nothing in this clause authorizes GWENO Hub
-  to confiscate funds contrary to applicable law.
+  the matter before taking action. A reminder or promotional offer does not by
+  itself shorten the one-month period stated in this clause or override any
+  notice, procedure, or protection required by applicable law. Nothing in this
+  clause authorizes GWENO Hub to confiscate funds contrary to applicable law.
 </p>
 
 <p>
@@ -706,6 +708,17 @@ const TERMS_HTML = `<header>
   withdrawal, premium, administrative, or profile-update charges.
   Applicable charges will be communicated through the platform before the
   relevant transaction is completed.
+</p>
+
+<p id="temporary-fee-reductions">
+  GWENO Hub may occasionally offer temporary reductions on eligible fees,
+  including withdrawal, profile-change, account-activation, and Premium
+  subscription fees. The offer notice will state the discount, eligible
+  services, and duration. A 50% reduction applies only to the fees and
+  transactions expressly covered by the relevant notice and only during the
+  stated offer period. Users should review the fee shown on the platform before
+  confirming a transaction. An offer does not change the rules governing
+  unclaimed funds in Section 12.
 </p>
 
 <p>
