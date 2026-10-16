@@ -114,7 +114,7 @@ export default async function handler(req, res) {
 
   const isRenewal = subscriptionType === 'premium' && Boolean(wasPremium);
   const title = subscriptionType === 'activation' ? 'Account Activation' : (isRenewal ? 'Renewed Premium' : 'Premium Subscription');
-  const amount = subscriptionType === 'activation' ? 50 : 480;
+  const amount = subscriptionType === 'activation' ? 100 : 480;
   const subject = subscriptionType === 'activation' ? 'Your Gweno Hub Account Has Been Activated' : (isRenewal ? 'Your Gweno Hub Premium Has Been Renewed' : 'Your Gweno Hub Premium Is Active');
   const dashboardUrl = `${SITE_URL}/dashboard`;
   const message = `Hi ${actualName},\n\nYour ${title.toLowerCase()} payment status is Successful.\nAmount: KES ${amount.toLocaleString('en-KE')}\nSubscription: ${title}\n\nYou can now continue using your GWENO Hub account from your dashboard: ${dashboardUrl}\n\n— The Gweno Hub Team`;

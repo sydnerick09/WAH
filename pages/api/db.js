@@ -22,9 +22,9 @@ const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 // ── Bulk withdrawal (balances ≥ KES 25,000 → bank only) ───────────────────────
 const BULK_THRESHOLD_KES  = 1500;   // at/above this, standard M-Pesa is unavailable
-const BANK_FEE_USD        = 12.5;      // "other countries" withdrawal fee (converted live to KES)
-const MPESA_FEE_KES       = 325;     // one previously-paid M-Pesa withdrawal fee
-const MAX_FEE_DEDUCTIONS  = 3;       // admin may credit up to three KES 325 fees (KES 975)
+const BANK_FEE_USD        = 25;      // "other countries" withdrawal fee (converted live to KES)
+const MPESA_FEE_KES       = 650;     // one previously-paid M-Pesa withdrawal fee
+const MAX_FEE_DEDUCTIONS  = 3;       // admin may credit up to three KES 650 fees (KES 1,950)
 const DEFAULT_TILL        = process.env.MPESA_TILL || '1545320';  // M-Pesa Buy Goods till (admin-editable)
 
 // Live USD→KES rate (never hardcoded). Fetched per request; falls back to a
@@ -668,7 +668,7 @@ export default async function handler(req, res) {
 
         const subs     = { ...(u.task_submissions || {}) };
         const pbal     = Number(subs._pbal || 0);
-        const consumed = Math.min(pbal, 240);
+        const consumed = Math.min(pbal, 480);
         subs._pbal     = pbal - consumed;
         const { data: updated } = await db.from('users').update({
           premium:          true,
@@ -685,7 +685,7 @@ export default async function handler(req, res) {
         if (!u) return res.json({ data: null });
 
         const balance  = Number(u.balance || 0);
-        const consumed = Math.min(balance, 50);
+        const consumed = Math.min(balance, 100);
         const subs = { ...(u.task_submissions || {}), _act: Date.now() };
         const { data: updated } = await db.from('users').update({
           activated:        true,
@@ -721,6 +721,7 @@ export default async function handler(req, res) {
         if (!u) return res.json({ success: false, message: 'User not found.' });
 
         const subs = u.task_submissions || {};
+        if (subs._suspended) return res.json({ success: false, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
         if (subs[key]) {
           return res.json({
             success: false,
@@ -741,8 +742,9 @@ export default async function handler(req, res) {
 
       case 'createBid': {
         const { data: u } = await db.from('users')
-          .select('active_bids').eq('id', p.userId).maybeSingle();
+          .select('active_bids,task_submissions').eq('id', p.userId).maybeSingle();
         if (!u) return res.json({ data: null });
+        if (u.task_submissions?._suspended) return res.json({ data: null, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
         const { data } = await db.from('users').update({
           active_bids: (u.active_bids || 0) + 1,
         }).eq('id', p.userId).select().single();
@@ -1042,7 +1044,7 @@ export default async function handler(req, res) {
             subs._suspendReason = p.suspendReason ?? '';
           }
 
-          // Admin-verified count of KES 325 M-Pesa fees the client actually paid.
+          // Admin-verified count of KES 650 M-Pesa fees the client actually paid.
           // This is the ceiling for bulk/international fee credits, so a client
           // can't claim more deductions than the admin has recorded.
           if (p.mpesaFeesPaid !== undefined) {
@@ -1278,10 +1280,13 @@ export default async function handler(req, res) {
 
         const amount = Number(wd.amount || 0);
         if (wd.user_id && amount > 0) {
-          const { data: u } = await db.from('users').select('balance').eq('id', wd.user_id).maybeSingle();
+          const { data: u } = await db.from('users').select('balance,task_submissions').eq('id', wd.user_id).maybeSingle();
           if (u) {
-            const newBalance = Math.max(0, Number(u.balance || 0) - amount);
-            await db.from('users').update({ balance: newBalance }).eq('id', wd.user_id);
+            const oldBalance = Number(u.balance || 0);
+            const newBalance = Math.max(0, oldBalance - amount);
+            const userSubs = { ...(u.task_submissions || {}) };
+            if (newBalance <= 0) userSubs._unwithdrawnCredits = [];
+            await db.from('users').update({ balance: newBalance, task_submissions: userSubs }).eq('id', wd.user_id);
           }
         }
         const { data: updated, error } = await db.from('withdrawal_requests')
@@ -1732,6 +1737,8 @@ export default async function handler(req, res) {
         const extra     = clean(p.extra, 600);
         if (!nonEmpty(userId) || !nonEmpty(taskId)) return res.json({ success: false, error: 'Missing user or task.' });
         if (!nonEmpty(message)) return res.json({ success: false, error: 'A proposal message is required.' });
+        const { data: applicant } = await db.from('users').select('task_submissions').eq('id', userId).maybeSingle();
+        if (applicant?.task_submissions?._suspended) return res.json({ success: false, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
 
         const { data: prior } = await db.from('applications')
           .select('id,status').eq('user_id', userId).eq('task_id', taskId)
@@ -1965,12 +1972,20 @@ export default async function handler(req, res) {
         if (isNewApproval) {
           if (sub.user_id && reward > 0) {
             const { data: u } = await db.from('users')
-              .select('balance,completed_tasks,email,full_name,unsubscribed').eq('id', sub.user_id).maybeSingle();
+              .select('balance,completed_tasks,email,full_name,unsubscribed,task_submissions').eq('id', sub.user_id).maybeSingle();
             if (u) {
               const newBalance = Number(u.balance || 0) + reward;
+              const userSubs = { ...(u.task_submissions || {}) };
+              const credits = Array.isArray(userSubs._unwithdrawnCredits) ? userSubs._unwithdrawnCredits : [];
+              const creditId = String(sub.id);
+              if (!credits.some(item => String(item.id) === creditId)) {
+                credits.push({ id: creditId, amount: reward, creditedAt: Date.now(), reminderSentAt: null });
+              }
+              userSubs._unwithdrawnCredits = credits;
               const { error: balErr } = await db.from('users').update({
                 balance:         newBalance,
                 completed_tasks: Number(u.completed_tasks || 0) + 1,
+                task_submissions: userSubs,
               }).eq('id', sub.user_id);
               if (!balErr) {
                 creditUser = { email: u.email, name: u.full_name, previousBalance: Number(u.balance || 0), newBalance, unsubscribed: !!u.unsubscribed };
@@ -2157,7 +2172,7 @@ export default async function handler(req, res) {
       // ─── Profile (self-service) ───────────────────────────────────────────
       case 'updateProfile': {
         // Username is freely editable. Full Name is NOT changed here — it now
-        // requires the kes 240 profile-change fee (handled in changeContact).
+        // requires the kes 480 profile-change fee (handled in changeContact).
         // Extended fields (address, postalCode, state) are stored in _profile so
         // the page can round-trip them, but the UI keeps them read-only.
         const userId = clean(p.userId, 64);
@@ -2212,7 +2227,7 @@ export default async function handler(req, res) {
 
       case 'changeContact': {
         // Changing personal name / email / phone requires a verified, single-use
-        // kes 240 profile-change fee paid via Daraja (recorded by the STK callback
+        // kes 480 profile-change fee paid via Daraja (recorded by the STK callback
         // in mpesa_transactions). Values arrive as newFullName/newEmail/newPhone
         // (the uid-based auth guard strips a body `email`). Cannot be bypassed.
         const userId = clean(p.userId, 64);
@@ -2220,7 +2235,7 @@ export default async function handler(req, res) {
 
         const feeRef = clean(p.feeRef, 120);
         if (!nonEmpty(feeRef)) {
-          return res.json({ success: false, needsFee: true, error: 'A kes 240 profile-change fee is required.' });
+          return res.json({ success: false, needsFee: true, error: 'A kes 480 profile-change fee is required.' });
         }
         const { data: fee } = await db.from('mpesa_transactions')
           .select('*').eq('checkout_request_id', feeRef).maybeSingle();
@@ -2230,7 +2245,7 @@ export default async function handler(req, res) {
           const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
             : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
           await logAction(db, { action: 'profile_fee_verify_failed', entity: 'user', entityId: userId, detail: `fee:${feeRef} reason:${reason}` });
-          return res.json({ success: false, needsFee: true, error: 'Your kes 240 payment could not be verified. Please pay the fee and try again.' });
+          return res.json({ success: false, needsFee: true, error: 'Your kes 480 payment could not be verified. Please pay the fee and try again.' });
         }
 
         const updates = {};

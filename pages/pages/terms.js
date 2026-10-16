@@ -722,9 +722,12 @@ const TERMS_HTML = `<header>
 </p>
 
 <p>
-  The current fee for a name update is <strong>KES 240 (Two Hundred and
-  Forty Kenyan Shillings)</strong>, unless GWENO Hub publishes a revised
-  fee.
+  The current one-time account activation fee is <strong>KES 100</strong>,
+  the Premium subscription fee is <strong>KES 480 per month</strong>, and the
+  fee for a name or profile contact-detail update is <strong>KES 480</strong>,
+  unless GWENO Hub publishes a revised fee. Withdrawal processing fees vary by
+  withdrawal method and balance amount; the applicable fee is shown before
+  the payment is confirmed.
 </p>
 
 <p>

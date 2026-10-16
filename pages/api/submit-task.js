@@ -60,6 +60,13 @@ export default async function handler(req, res) {
     const uid = verifyToken(get("authToken"));
     if (!uid) return res.status(401).json({ success: false, message: "Please sign in again." });
     effectiveUserId = uid;
+    try {
+      const holdDb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+      const { data: holdUser } = await holdDb.from("users").select("task_submissions").eq("id", effectiveUserId).maybeSingle();
+      if (holdUser?.task_submissions?._suspended) {
+        return res.status(403).json({ success: false, message: "Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released." });
+      }
+    } catch (_) { /* continue only if the hold status cannot be checked */ }
   }
 
   // ── 2b. Proposal gate, regular tasks require an APPROVED application ──────

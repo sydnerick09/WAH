@@ -108,7 +108,7 @@ function SuspendModal({ modal, reason, setReason, onConfirm, onCancel }) {
           {isHolding ? (
             <>
               <p style={{ fontSize: 14, color: '#374151', marginBottom: 14 }}>
-                This immediately places the account on hold and blocks the client from signing in until it is released.
+                This places the account on hold. The client can still sign in, view their balance, and request a withdrawal, but earning activities remain paused until the hold is released.
               </p>
               <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
                 Reason for hold (shown to client)
@@ -270,6 +270,12 @@ function UsersTab({ users, secret, onRefresh }) {
   const [emailModal, setEmailModal] = useState(null);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [holdDays, setHoldDays] = useState('30');
+  const [holdPreviewUsers, setHoldPreviewUsers] = useState([]);
+  const [holdSelectedIds, setHoldSelectedIds] = useState([]);
+  const [holdReason, setHoldReason] = useState('Your account has been placed on hold because approved task earnings have remained unwithdrawn beyond the selected period. You may still sign in, view your balance, and request a withdrawal. Earning activities are paused until the hold is released.');
+  const [holdBusy, setHoldBusy] = useState(false);
+  const [holdResult, setHoldResult] = useState('');
 
   function setEdit(uid, field, val) {
     setEdits(prev => ({ ...prev, [uid]: { ...(prev[uid] || {}), [field]: val } }));
@@ -397,6 +403,35 @@ function UsersTab({ users, secret, onRefresh }) {
     return !q || u.fullName?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.phone?.includes(q);
   });
 
+  async function previewBalanceAge() {
+    setHoldBusy(true); setHoldResult('');
+    try {
+      const r = await fetch('/api/admin/bulk-hold', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminSecret: secret, action: 'preview', days: Number(holdDays) }) });
+      const data = await r.json();
+      if (!r.ok || !data.success) throw new Error(data.error || 'Could not find matching accounts.');
+      setHoldPreviewUsers(data.users || []);
+      setHoldSelectedIds((data.users || []).map(u => u.id));
+      setHoldResult(`${(data.users || []).length} account(s) match the selected age threshold.`);
+    } catch (e) { setHoldResult(e.message || 'Could not find matching accounts.'); }
+    finally { setHoldBusy(false); }
+  }
+
+  async function applyBulkHold() {
+    if (!holdSelectedIds.length) { setHoldResult('Select at least one client.'); return; }
+    if (!holdReason.trim()) { setHoldResult('Enter a reason for the hold.'); return; }
+    if (!confirm(`Place ${holdSelectedIds.length} selected account(s) on hold and email the reason to each client?`)) return;
+    setHoldBusy(true); setHoldResult('');
+    try {
+      const r = await fetch('/api/admin/bulk-hold', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminSecret: secret, action: 'hold', days: Number(holdDays), userIds: holdSelectedIds, reason: holdReason }) });
+      const data = await r.json();
+      if (!r.ok || !data.success) throw new Error(data.error || 'Bulk hold failed.');
+      setHoldResult(data.message || 'Bulk hold completed.');
+      await onRefresh();
+      await previewBalanceAge();
+    } catch (e) { setHoldResult(e.message || 'Bulk hold failed.'); }
+    finally { setHoldBusy(false); }
+  }
+
   return (
     <>
       <SendEmailModal modal={emailModal} secret={secret} onClose={() => setEmailModal(null)} />
@@ -425,6 +460,35 @@ function UsersTab({ users, secret, onRefresh }) {
           {bulkDeleting ? 'Deleting…' : `Delete selected (${selectedUserIds.length})`}
         </button>
       </div>
+
+      <section style={{ border: '1px solid #D1D5DB', borderRadius: 12, padding: 16, margin: '14px 0', background: '#F9FAFB' }}>
+        <h3 style={{ margin: '0 0 8px', fontSize: 16, color: '#111827' }}>Bulk Hold: Older Unwithdrawn Earnings</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#4B5563' }}>Find clients whose tracked approved earnings have remained unwithdrawn for the selected period. Clients can still sign in, view their balance and request withdrawals; earning activities are paused until you release the hold.</p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <label htmlFor="bulk-hold-days" style={{ fontSize: 13, fontWeight: 600 }}>Balance age:</label>
+          <select id="bulk-hold-days" value={holdDays} onChange={e => setHoldDays(e.target.value)} style={{ ...styles.input, width: 'auto', margin: 0 }}>
+            <option value="5">5 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="21">21 days</option><option value="30">1 month (30 days)</option><option value="60">2 months (60 days)</option><option value="90">3 months (90 days)</option><option value="180">6 months (180 days)</option><option value="365">12 months (365 days)</option>
+          </select>
+          <button type="button" style={{ ...styles.btn, width: 'auto' }} onClick={previewBalanceAge} disabled={holdBusy}>{holdBusy ? 'Working…' : 'Find matching clients'}</button>
+        </div>
+        {holdPreviewUsers.length > 0 && <>
+          <div style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <strong style={{ fontSize: 13 }}>{holdSelectedIds.length} of {holdPreviewUsers.length} selected</strong>
+            <button type="button" style={{ ...styles.btn, width: 'auto', padding: '6px 10px' }} onClick={() => setHoldSelectedIds(holdSelectedIds.length === holdPreviewUsers.length ? [] : holdPreviewUsers.map(u => u.id))}>{holdSelectedIds.length === holdPreviewUsers.length ? 'Deselect all' : 'Select all matching'}</button>
+          </div>
+          <div style={{ maxHeight: 220, overflow: 'auto', marginTop: 8, border: '1px solid #E5E7EB', borderRadius: 8, background: '#fff' }}>
+            {holdPreviewUsers.map(u => <label key={u.id} style={{ display: 'flex', gap: 10, padding: '9px 10px', borderBottom: '1px solid #F3F4F6', alignItems: 'center', fontSize: 12 }}>
+              <input type="checkbox" checked={holdSelectedIds.includes(u.id)} onChange={e => setHoldSelectedIds(prev => e.target.checked ? [...prev, u.id] : prev.filter(id => id !== u.id))} />
+              <span style={{ flex: 1 }}><strong>{u.fullName || 'Client'}</strong><br />{u.email || 'No email'}</span>
+              <span>KES {Number(u.balance || 0).toLocaleString()}<br /><span style={{ color: '#6B7280' }}>{u.oldestCreditAt ? `${Math.floor((Date.now() - Number(u.oldestCreditAt)) / 86400000)} days old` : ''}</span></span>
+            </label>)}
+          </div>
+          <label style={{ display: 'block', margin: '12px 0 6px', fontSize: 13, fontWeight: 600 }}>Reason to send to every selected client</label>
+          <textarea value={holdReason} onChange={e => setHoldReason(e.target.value)} style={{ ...styles.input, minHeight: 82, resize: 'vertical', marginBottom: 10 }} />
+          <button type="button" style={{ ...styles.btn, width: 'auto', background: '#111827' }} onClick={applyBulkHold} disabled={holdBusy || !holdSelectedIds.length}>{holdBusy ? 'Applying hold…' : `Place selected on hold and email (${holdSelectedIds.length})`}</button>
+        </>}
+        {holdResult && <p role="status" style={{ margin: '10px 0 0', fontSize: 12, color: '#374151' }}>{holdResult}</p>}
+      </section>
 
       <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
@@ -536,11 +600,11 @@ function UsersTab({ users, secret, onRefresh }) {
                   <td style={styles.td}>
                     <input type="number" min="0" style={styles.numInput} value={balVal}
                       onChange={e => setEdit(user.id, 'balance', e.target.value)} />
-                    <div style={{ fontSize: 11, color: '#64748B', margin: '10px 0 3px' }}>M-Pesa fees paid (×325)</div>
+                    <div style={{ fontSize: 11, color: '#64748B', margin: '10px 0 3px' }}>M-Pesa fees paid (×650)</div>
                     <select
                       style={{ ...styles.numInput, width: 70 }}
                       value={getEdit(user.id, 'mpesaFeesPaid', user.mpesaFeesPaid ?? 0)}
-                      title="Verified number of KES 325 M-Pesa fees this client has paid. This is the credit applied on a bank/international withdrawal (KES 325 × count, up to 3 = KES 975); the client pays the remaining amount."
+                      title="Verified number of KES 650 M-Pesa fees this client has paid. This is the credit applied on a bank/international withdrawal (KES 650 × count, up to 3 = KES 1,950); the client pays the remaining amount."
                       onChange={e => setEdit(user.id, 'mpesaFeesPaid', e.target.value)}
                     >
                       <option value={0}>0</option>
@@ -548,7 +612,7 @@ function UsersTab({ users, secret, onRefresh }) {
                       <option value={2}>2</option>
                       <option value={3}>3</option>
                     </select>
-                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>KES 325 × count credited</div>
+                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>KES 650 × count credited</div>
                   </td>
 
                   {/* Activation */}

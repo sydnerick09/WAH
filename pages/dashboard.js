@@ -378,7 +378,7 @@ function QuizModal({ user, onComplete }) {
           {!isResult && (
             <>
               <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', marginBottom: 18 }}>
-                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#374151' }}>KES 10</strong>, get all 5 and your <strong>KES 50</strong> activation is covered!
+                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#374151' }}>KES 10</strong>, get all 5 and earn <strong>KES 50</strong> toward the <strong>KES 100</strong> activation fee!
               </div>
 
               {/* Progress bar */}
@@ -441,10 +441,10 @@ function QuizModal({ user, onComplete }) {
               </div>
               <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 16 }}>
                 {result.earned === 50
-                  ? 'Perfect score! Your full KES 50 joining gift has been added to your balance, it fully covers your account activation.'
+                  ? 'Perfect score! Your KES 50 joining gift has been added to your balance. You will need another KES 50 to cover the KES 100 activation fee.'
                   : result.earned > 0
-                  ? `KES ${result.earned} has been added to your balance. When you activate, you can top up the remaining KES ${50 - result.earned} to reach the KES 50 activation fee.`
-                  : 'No reward earned this time. You will need to pay the KES 50 activation fee when you choose to start bidding on tasks.'}
+                  ? `KES ${result.earned} has been added to your balance. When you activate, you can top up the remaining KES ${100 - result.earned} to reach the KES 100 activation fee.`
+                  : 'No reward earned this time. You will need to pay the KES 100 activation fee when you choose to start bidding on tasks.'}
               </div>
               <button
                 className="pay-btn"
@@ -918,7 +918,7 @@ export default function Dashboard() {
             <div style={{ marginTop: 12 }}>
               <span className={`status-badge ${user.activated ? 'status-active' : 'status-inactive'}`}>
                 <Icon name={user.activated ? 'check' : 'warning'} size={13} />
-                {user.activated ? 'Active, Access valid 1 month' : 'Inactive, Pay KES 50 to Bid'}
+                {user.activated ? 'Active, Access valid 1 month' : 'Inactive, Pay KES 100 to Bid'}
               </span>
             </div>
           </div>
