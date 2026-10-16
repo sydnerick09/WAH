@@ -2,11 +2,5 @@
   "framework": "nextjs",
   "buildCommand": "next build",
   "outputDirectory": ".next",
-  "devCommand": "next dev",
-  "crons": [
-    {
-      "path": "/api/cron/withdrawal-reminders",
-      "schedule": "0 * * * *"
-    }
-  ]
+  "devCommand": "next dev"
 }
