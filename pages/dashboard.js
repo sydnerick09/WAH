@@ -796,14 +796,15 @@ export default function Dashboard() {
 
   function handleSubmitTask(task) {
     if (!user?.activated) { router.push('/activate'); return; }        // active account required first
-    // Offers and community (user-posted) tasks skip the proposal + premium gates.
+    // Premium is not required to submit completed work. Regular tasks still
+    // require an approved application; offers and community tasks are exempt.
     const freeFlow = isOffer(task) || task.userPosted;
     if (!freeFlow) {
       const app = userApps[String(task.id)];
       if (!app || app.status !== 'approved') { setApplyTask(task); return; }
     }
-    if (!freeFlow && !user.premium) { router.push('/premium'); return; }
-    router.push(`/submit?task=${task.id}`);   // attach & upload your completed work
+    // Keep the original file-upload submission flow, including email notices.
+    router.push(`/submit?task=${encodeURIComponent(task.id)}`);
   }
 
   // Always include the built-in task pool so every category (Data Entry, Design,
