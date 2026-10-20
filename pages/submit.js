@@ -135,17 +135,6 @@ export default function SubmitPage() {
     );
   }
 
-  // Premium is required to submit, except OFFER and community (user-posted) tasks
-  if (!user.premium && !isOfferTask) {
-    return (
-      <FlowShell title="Submit Task" subtitle="Premium required" icon="upload">
-        <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>
-          Submitting completed tasks requires <strong>Premium</strong>. Upgrade to unlock task submissions.
-        </div>
-        <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/premium')}><Icon name="star" size={16} /> Go to Premium</button>
-      </FlowShell>
-    );
-  }
 
   if (!task) {
     return (

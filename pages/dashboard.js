@@ -67,13 +67,11 @@ const DEMO_COUNTRIES = [
 function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUpgradeClick, onSubmit }) {
   if (!task) return null;
   const isActivated = user?.activated;
-  const isPremium   = user?.premium;
   const offer       = isOffer(task) || task.userPosted;   // community tasks skip proposal + premium
   const appStatus   = application?.status || null;   // null | pending | approved | rejected | correction
   const approved    = appStatus === 'approved';
 
   function handleSubmit() {
-    if (!offer && !isPremium) { onClose(); onUpgradeClick(); return; }
     onClose();
     onSubmit(task);   // → file-upload submission page
   }
@@ -149,16 +147,7 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
                 </div>
               )}
 
-              {approved && !isPremium && (
-                <>
-                  <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Icon name="check" size={15} /> Proposal approved, this task is unlocked for you.
-                  </div>
-                  <button className="submit-btn" onClick={handleSubmit} style={{ background: '#000000' }}><Icon name="star" size={16} /> Upgrade to Premium to Submit</button>
-                </>
-              )}
-
-              {approved && isPremium && (
+              {approved && (
                 <>
                   <div style={{ background: '#e5e7eb', border: '1px solid #d1d5db', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1f2937', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Icon name="check" size={15} /> Proposal approved, this task is unlocked for you.

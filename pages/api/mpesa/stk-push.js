@@ -42,6 +42,8 @@ export default async function handler(req, res) {
     amount = Math.max(0, ACTIVATION_FEE - Number(u.balance || 0));
     if (amount <= 0) return res.json({ success: false, message: 'Your balance already covers activation.' });
   } else if (purpose === 'premium' || purpose === 'premium_topup') {
+    const { count: withdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', uid);
+    if (withdrawalCheckError || Number(withdrawalCount || 0) < 1) return res.status(403).json({ success: false, message: 'Premium upgrade becomes available after you submit a withdrawal request.' });
     amount = PREMIUM_FEE;
   } else if (purpose === 'training') {
     amount = TRAINING_FEE;

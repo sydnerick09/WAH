@@ -393,7 +393,7 @@ const USER_SCOPED = new Set([
   'createApplication',
   'updateProfile', 'updateAvatar', 'changeContact', 'deleteAccount',
   'recordMpesaFee', 'bulkWithdrawalQuote', 'submitBulkWithdrawal', 'checkWithdrawalEligibility',
-  'submitReview',
+  'submitReview', 'checkPremiumEligibility',
 ]);
 
 export default async function handler(req, res) {
@@ -662,6 +662,8 @@ export default async function handler(req, res) {
 
       case 'upgradePremiumWithBalance': {
         const { userId } = p;
+        const { count: withdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', userId);
+        if (withdrawalCheckError || Number(withdrawalCount || 0) < 1) return res.json({ data: null, error: 'Premium upgrade becomes available after you submit a withdrawal request.' });
         const { data: u } = await db.from('users')
           .select('*').eq('id', userId).maybeSingle();
         if (!u) return res.json({ data: null });
@@ -710,6 +712,8 @@ export default async function handler(req, res) {
       }
 
       case 'upgradeToPremium': {
+        const { count: withdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', p.userId);
+        if (withdrawalCheckError || Number(withdrawalCount || 0) < 1) return res.json({ data: null, error: 'Premium upgrade becomes available after you submit a withdrawal request.' });
         const { data } = await db.from('users').update({
           premium: true, premium_paid_at: Date.now(),
         }).eq('id', p.userId).select().single();
@@ -752,6 +756,12 @@ export default async function handler(req, res) {
           active_bids: (u.active_bids || 0) + 1,
         }).eq('id', p.userId).select().single();
         return res.json({ data: norm(data) });
+      }
+
+      case 'checkPremiumEligibility': {
+        const { count, error } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', p.userId);
+        if (error) return res.json({ success: false, eligible: false, error: 'Could not verify your withdrawal request yet.' });
+        return res.json({ success: true, eligible: Number(count || 0) > 0, withdrawalRequests: Number(count || 0) });
       }
 
       case 'checkWithdrawalEligibility': {
