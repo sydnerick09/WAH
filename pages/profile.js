@@ -329,7 +329,7 @@ export default function ProfilePage() {
         </div>
       </header>
 
-      <div className="profile-body">
+      <div className="profile-body" data-tour="profile">
         {showSearch && (
           <input
             autoFocus

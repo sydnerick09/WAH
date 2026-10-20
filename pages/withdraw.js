@@ -3,6 +3,7 @@
 // the admin with a client auto-reply (via /api/notify), falling back to mailto.
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
+import { getToken } from '../lib/auth';
 import { useUser } from '../lib/useUser';
 import { sendNotify } from '../lib/notify';
 import { createWithdrawalRequest } from '../lib/auth';
@@ -1272,9 +1273,36 @@ export default function WithdrawPage() {
   const { user, ready } = useUser();
   const method = router.query.method;
   const stepQ  = router.query.step;
+  const [eligibility, setEligibility] = useState(null);
 
-  if (!ready || !user) {
+  useEffect(() => {
+    let alive = true;
+    if (!ready || !user?.id) return;
+    fetch('/api/db', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'checkWithdrawalEligibility', authToken: getToken() }) })
+      .then(r => r.json()).then(j => { if (alive) setEligibility(Boolean(j.eligible)); })
+      .catch(() => { if (alive) setEligibility(false); });
+    return () => { alive = false; };
+  }, [ready, user?.id]);
+
+  if (!ready || !user || eligibility === null) {
     return <FlowSkeleton rows={3} />;
+  }
+
+  if (!eligibility) {
+    return (
+      <FlowShell title="Withdrawal Eligibility" subtitle="One more step before you can withdraw" icon="clipboard">
+        <div role="dialog" aria-modal="true" aria-labelledby="withdraw-task-gate-title" style={{ position: 'fixed', inset: 0, zIndex: 1500, background: '#11182799', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+          <div style={{ width: 'min(440px, 100%)', background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 18px 55px #0004', color: '#111827' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1, color: '#6b7280', marginBottom: 8 }}>GWENO WITHDRAWALS</div>
+            <h2 id="withdraw-task-gate-title" style={{ margin: '0 0 10px', fontSize: 23 }}>Apply for a task first</h2>
+            <p style={{ lineHeight: 1.55, margin: '0 0 18px' }}>You can initiate a withdrawal after at least one task has been approved and its earnings credited to your GWENO balance. Browse available tasks, apply, and wait for approval before returning here.</p>
+            <button className="pay-btn" style={{ marginBottom: 10 }} onClick={() => router.push('/dashboard#tasks-section')}>Browse and Apply for Tasks</button>
+            <button className="withdraw-close-btn" style={{ width: '100%' }} onClick={() => router.push('/dashboard')}>Return to Dashboard</button>
+            <p style={{ fontSize: 13, color: '#4b5563', margin: '14px 0 0' }}>Not sure how to apply? Use Help / Guided Tour on your dashboard and select “Show me how to apply for tasks.”</p>
+          </div>
+        </div>
+      </FlowShell>
+    );
   }
 
 

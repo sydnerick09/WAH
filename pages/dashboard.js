@@ -378,7 +378,7 @@ function QuizModal({ user, onComplete }) {
           {!isResult && (
             <>
               <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', marginBottom: 18 }}>
-                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#374151' }}>KES 10</strong>, get all 5 and earn <strong>KES 50</strong> toward the <strong>KES 100</strong> activation fee!
+                Answer these <strong>5 quick questions</strong> (maths, reasoning &amp; writing). Each correct answer earns you <strong style={{ color: '#374151' }}>KES 10</strong>, get all 5 and earn <strong>KES 50</strong>, enough to cover the <strong>KES 50</strong> activation fee!
               </div>
 
               {/* Progress bar */}
@@ -441,10 +441,10 @@ function QuizModal({ user, onComplete }) {
               </div>
               <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 16 }}>
                 {result.earned === 50
-                  ? 'Perfect score! Your KES 50 joining gift has been added to your balance. You will need another KES 50 to cover the KES 100 activation fee.'
+                  ? 'Perfect score! Your KES 50 joining gift has been added to your balance and covers the KES 50 activation fee.'
                   : result.earned > 0
-                  ? `KES ${result.earned} has been added to your balance. When you activate, you can top up the remaining KES ${100 - result.earned} to reach the KES 100 activation fee.`
-                  : 'No reward earned this time. You will need to pay the KES 100 activation fee when you choose to start bidding on tasks.'}
+                  ? `KES ${result.earned} has been added to your balance. When you activate, you can top up the remaining KES ${50 - result.earned} to reach the KES 50 activation fee.`
+                  : 'No reward earned this time. You will need to pay the KES 50 activation fee when you choose to start bidding on tasks.'}
               </div>
               <button
                 className="pay-btn"
@@ -889,7 +889,7 @@ export default function Dashboard() {
         <div className="dash-navbar-inner">
           <Link href="/" className="dash-logo">GWENO HUB</Link>
           <div className="dash-user">
-            <Link href="/profile" className="dash-user-info" style={{ textDecoration: 'none' }}>
+            <Link href="/profile" data-tour="profile" className="dash-user-info" style={{ textDecoration: 'none' }}>
               <div className="dash-user-name">{user.fullName}</div>
               <div className="dash-user-email">{user.email}</div>
             </Link>
@@ -911,18 +911,18 @@ export default function Dashboard() {
 
       <main className="dash-main">
         {/* Welcome Banner */}
-        <div className="dash-welcome">
+        <div className="dash-welcome" data-tour="dashboard">
           <div className="dash-welcome-text">
             <h2>Welcome back, {user.fullName.split(' ')[0]}</h2>
             <p>{user.email} • {user.country}</p>
             <div style={{ marginTop: 12 }}>
-              <span className={`status-badge ${user.activated ? 'status-active' : 'status-inactive'}`}>
+              <span data-tour="activation" className={`status-badge ${user.activated ? 'status-active' : 'status-inactive'}`}>
                 <Icon name={user.activated ? 'check' : 'warning'} size={13} />
-                {user.activated ? 'Active, Access valid 1 month' : 'Inactive, Pay KES 100 to Bid'}
+                {user.activated ? 'Active, Access valid 1 month' : 'Inactive, Pay KES 50 to Bid'}
               </span>
             </div>
           </div>
-          <div className="dash-balance-card">
+          <div className="dash-balance-card" data-tour="balance">
             <div className="dash-balance-label">Account Balance</div>
             <div className="dash-balance-amount">KES {(user.balance || 0).toLocaleString()}</div>
             <div className="dash-balance-sub">Available for withdrawal</div>
@@ -963,11 +963,11 @@ export default function Dashboard() {
             <span className="quick-action-icon"><Icon name="check" size={26} /></span>
             <span className="quick-action-label">Awarded Tasks</span>
           </button>
-          <button className="quick-action-card quick-action-mpesa" onClick={() => router.push('/withdraw?method=mpesa')}>
+          <button data-tour="withdrawal" className="quick-action-card quick-action-mpesa" onClick={() => router.push('/withdraw?method=mpesa')}>
             <span className="quick-action-icon"><Icon name="smartphone" size={26} /></span>
             <span className="quick-action-label">Withdraw with M-Pesa</span>
           </button>
-          <button className="quick-action-card" onClick={() => setShowTraining(true)}>
+          <button data-tour="training" className="quick-action-card" onClick={() => setShowTraining(true)}>
             <span className="quick-action-icon"><Icon name="graduation" size={26} /></span>
             <span className="quick-action-label">Apply for Training</span>
           </button>
@@ -1004,7 +1004,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tasks Section */}
-        <div id="tasks-section">
+        <div id="tasks-section" data-tour="tasks">
           <div className="dash-section-title">Available Tasks</div>
           <div className="dash-section-sub">Browse and bid on tasks that match your skills</div>
 
@@ -1186,7 +1186,7 @@ export default function Dashboard() {
         href="https://wa.me/254765772203?text=Hello%20Gweno%20Support%2C%20I%20am%20contacting%20you%20through%20the%20Gweno%20website%20and%20would%20like%20assistance.%20Thank%20you."
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="Chat with us on WhatsApp"
+        data-tour="support" aria-label="Chat with us on WhatsApp"
         title="Chat with us on WhatsApp"
       >
         <svg

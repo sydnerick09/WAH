@@ -9,7 +9,7 @@ import { isConfigured, stkPush, isValidMsisdn, normalizePhone } from '../../../l
 import { createTransaction } from '../../../lib/mpesaStore';
 import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../../lib/withdrawalFees';
 
-const ACTIVATION_FEE = 100;
+const ACTIVATION_FEE = 50;
 const PREMIUM_FEE    = 480;
 const TRAINING_FEE   = 132;
 const PROFILE_FEE    = 480;   // kes 480 fee to change personal name / email / phone

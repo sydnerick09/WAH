@@ -392,7 +392,7 @@ const USER_SCOPED = new Set([
   'updateWithdrawal', 'listUserSubmissions', 'listUserApplications',
   'createApplication',
   'updateProfile', 'updateAvatar', 'changeContact', 'deleteAccount',
-  'recordMpesaFee', 'bulkWithdrawalQuote', 'submitBulkWithdrawal',
+  'recordMpesaFee', 'bulkWithdrawalQuote', 'submitBulkWithdrawal', 'checkWithdrawalEligibility',
   'submitReview',
 ]);
 
@@ -682,10 +682,13 @@ export default async function handler(req, res) {
         const { userId } = p;
         const { data: u } = await db.from('users')
           .select('*').eq('id', userId).maybeSingle();
-        if (!u) return res.json({ data: null });
+        if (!u) return res.json({ data: null, error: 'User not found.' });
+        const existingAct = Number(u.task_submissions?._act || 0);
+        if (existingAct && Date.now() <= existingAct + ONE_MONTH_MS) return res.json({ data: norm(u) });
 
         const balance  = Number(u.balance || 0);
-        const consumed = Math.min(balance, 100);
+        if (balance < 50) return res.json({ data: null, error: 'Your balance is below KES 50. Top up the difference before activating.' });
+        const consumed = 50;
         const subs = { ...(u.task_submissions || {}), _act: Date.now() };
         const { data: updated } = await db.from('users').update({
           activated:        true,
@@ -751,8 +754,18 @@ export default async function handler(req, res) {
         return res.json({ data: norm(data) });
       }
 
+      case 'checkWithdrawalEligibility': {
+        const { data: account } = await db.from('users').select('completed_tasks').eq('id', p.userId).maybeSingle();
+        const completed = Number(account?.completed_tasks || 0) > 0;
+        return res.json({ success: true, eligible: completed, completedTasks: Number(account?.completed_tasks || 0) });
+      }
+
       case 'createWithdrawal': {
-        const userId   = clean(p.userId, 64);   // from the verified session token
+        const userId   = clean(p.userId, 64);
+        const { data: earningAccount } = await db.from('users').select('completed_tasks').eq('id', userId).maybeSingle();
+        if (Number(earningAccount?.completed_tasks || 0) < 1) {
+          return res.json({ data: null, error: 'You must have at least one task approved and credited to your balance before you can withdraw. Please apply for an available task first.' });
+        }   // from the verified session token
         const method   = clean(p.method, 20) || 'mpesa';
         const fullName = clean(p.fullName, 80);
         const phone    = clean(p.phone, 20);
@@ -971,6 +984,9 @@ export default async function handler(req, res) {
         const isIntl = p.context === 'international';
         const { data: u } = await db.from('users')
           .select('*').eq('id', p.userId).maybeSingle();
+        if (Number(u?.completed_tasks || 0) < 1) {
+          return res.json({ success: false, eligible: false, error: 'You must have at least one task approved and credited to your balance before you can withdraw. Please apply for an available task first.' });
+        }
         if (!u) return res.json({ success: false, error: 'User not found.' });
         if (!isIntl && Number(u.balance || 0) < BULK_THRESHOLD_KES) {
           return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });

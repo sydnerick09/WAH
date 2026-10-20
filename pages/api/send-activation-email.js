@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const { email, name, type = 'activation', wasPremium = false } = req.body || {};
+  const { email, name, type = 'activation', wasPremium = false, beforeBalance, afterBalance, deducted } = req.body || {};
   const subscriptionType = type === 'premium' ? 'premium' : 'activation';
 
   const clientEmail = String(email || '').trim().toLowerCase();
@@ -117,7 +117,9 @@ export default async function handler(req, res) {
   const amount = subscriptionType === 'activation' ? 100 : 480;
   const subject = subscriptionType === 'activation' ? 'Your Gweno Hub Account Has Been Activated' : (isRenewal ? 'Your Gweno Hub Premium Has Been Renewed' : 'Your Gweno Hub Premium Is Active');
   const dashboardUrl = `${SITE_URL}/dashboard`;
-  const message = `Hi ${actualName},\n\nYour ${title.toLowerCase()} payment status is Successful.\nAmount: KES ${amount.toLocaleString('en-KE')}\nSubscription: ${title}\n\nYou can now continue using your GWENO Hub account from your dashboard: ${dashboardUrl}\n\n— The Gweno Hub Team`;
+  const hasBalanceChange = subscriptionType === 'activation' && Number.isFinite(Number(beforeBalance)) && Number.isFinite(Number(afterBalance));
+  const balanceDetails = hasBalanceChange ? `\nBalance before activation: KES ${Number(beforeBalance).toLocaleString('en-KE')}\nActivation fee deducted: KES ${Math.max(0, Number(deducted ?? (Number(beforeBalance) - Number(afterBalance)))).toLocaleString('en-KE')}\nBalance after activation: KES ${Number(afterBalance).toLocaleString('en-KE')}` : '';
+  const message = `Hi ${actualName},\n\nYour ${title.toLowerCase()} status is Successful.\nAmount: KES ${amount.toLocaleString('en-KE')}\nSubscription: ${title}${balanceDetails}\n\nYou can continue using your GWENO Hub account from your dashboard: ${dashboardUrl}\n\n— The Gweno Hub Team`;
 
   try {
     await transporter.sendMail({
@@ -134,6 +136,7 @@ export default async function handler(req, res) {
             <tr><td><strong>Subscription type</strong></td><td>${esc(title)}</td></tr>
             <tr><td><strong>Payment status</strong></td><td style="color:#166534;font-weight:700;">Successful</td></tr>
           </table>
+          ${hasBalanceChange ? `<p><strong>Balance before activation:</strong> KES ${Number(beforeBalance).toLocaleString('en-KE')}<br><strong>Activation fee deducted:</strong> KES ${Math.max(0, Number(deducted ?? (Number(beforeBalance) - Number(afterBalance)))).toLocaleString('en-KE')}<br><strong>Balance after activation:</strong> KES ${Number(afterBalance).toLocaleString('en-KE')}</p>` : ''}
           <p>Your account is ready. Open your dashboard, select available tasks, and start working on them.</p>
           <p><a href="${dashboardUrl}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;font-weight:700;padding:11px 16px;border-radius:7px;">Open Your Dashboard</a></p>
           <p style="margin-top:18px;color:#1f2937;font-weight:600;">— The Gweno Hub Team</p>

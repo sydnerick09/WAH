@@ -11,13 +11,13 @@ import { FlowSkeleton } from '../components/Skeleton';
 import { fetchTill } from '../lib/settings';
 import { useMpesaEnabled } from '../lib/useMpesaEnabled';
 
-const FEE = 100;
+const FEE = 50;
 
-async function sendActivationEmail(activatedUser) {
-  if (!activatedUser?.email) return;
+async function sendActivationEmail(activatedUser, beforeBalance = null) {
+  if (!activatedUser?.email) return false;
 
   try {
-    await fetch('/api/send-activation-email', {
+    const response = await fetch('/api/send-activation-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -27,11 +27,17 @@ async function sendActivationEmail(activatedUser) {
           activatedUser.fullName ||
           activatedUser.name ||
           'Client',
+        beforeBalance: beforeBalance === null ? undefined : Number(beforeBalance),
+        afterBalance: Number(activatedUser.balance || 0),
+        deducted: beforeBalance === null ? undefined : 50,
       }),
     });
+    const result = await response.json().catch(() => ({}));
+    return response.ok && result.success === true;
   } catch (err) {
     // Do not undo successful activation if email sending fails.
     console.error('[activation-email]', err);
+    return false;
   }
 }
 
@@ -44,6 +50,8 @@ export default function ActivatePage() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [doneUser, setDoneUser] = useState(null);
+  const [emailFailed, setEmailFailed] = useState(false);
+  const [emailRetrying, setEmailRetrying] = useState(false);
   const [till,     setTill]     = useState('1545320');
   const mpesa = useMpesaEnabled();
 
@@ -68,7 +76,7 @@ export default function ActivatePage() {
   if (u) {
     setCurrentUser(u);
     setDoneUser(u);
-    await sendActivationEmail(u);
+    setEmailFailed(!(await sendActivationEmail(u, balance)));
   }
 
   setStep('success');
@@ -81,7 +89,7 @@ export default function ActivatePage() {
       const updated = await activateWithBalance(user.id);
       if (updated) {
   setDoneUser(updated);
-  await sendActivationEmail(updated);
+  setEmailFailed(!(await sendActivationEmail(updated, balance)));
   setStep('success');
 } else {
         setError('Activation failed. Please try again.');
@@ -93,22 +101,29 @@ export default function ActivatePage() {
     }
   }
 
+  async function retryActivationEmail() {
+    if (!doneUser || emailRetrying) return;
+    setEmailRetrying(true);
+    setEmailFailed(!(await sendActivationEmail(doneUser, balance)));
+    setEmailRetrying(false);
+  }
+
   if (!ready || !user || !step) {
     return <FlowSkeleton rows={2} />;
   }
 
   return (
-    <FlowShell title="Activate Your Account" subtitle="KES 100 one-time activation • unlocks bidding" icon="unlock">
+    <FlowShell title="Activate Your Account" subtitle="KES 50 one-time activation • unlocks bidding" icon="unlock">
       <div className="pay-amount" style={{ marginBottom: 18 }}>
         <div className="pay-amount-label">Your Balance</div>
         <div className="pay-amount-value" style={{ color: enough ? '#374151' : '#111827' }}>KES {balance.toLocaleString()}</div>
-        <div className="pay-amount-sub">Activation fee: KES 100{enough ? ' • fully covered by your balance' : ` • short by KES ${topup}`}</div>
+        <div className="pay-amount-sub">Activation fee: KES 50{enough ? ' • fully covered by your balance' : ` • short by KES ${topup}`}</div>
       </div>
 
       {step === 'confirm' && (
         <>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 18 }}>
-            Are you sure you want to use your balance to activate your account? <strong>KES 100</strong> will be deducted from your balance as the activation fee.
+            Are you sure you want to use your balance to activate your account? <strong>KES 50</strong> will be deducted from your balance as the activation fee.
           </div>
           {error && <div style={{ color: '#4b5563', fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 10 }}>
@@ -118,7 +133,7 @@ export default function ActivatePage() {
             </button>
           </div>
           <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12 }}>
-            <Icon name="lock" size={13} /> KES 100 will be deducted from your balance
+            <Icon name="lock" size={13} /> KES 50 will be deducted from your balance
           </div>
         </>
       )}
@@ -126,7 +141,7 @@ export default function ActivatePage() {
       {step === 'topup' && (
         <>
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f3f4f6', marginBottom: 18 }}>
-            Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 100</strong>. Pay <strong style={{ color: '#1f2937' }}>KES {topup}</strong> to activate your account.
+            Your balance is <strong>KES {balance}</strong>, but activation costs <strong>KES 50</strong>. Pay <strong style={{ color: '#1f2937' }}>KES {topup}</strong> to activate your account.
           </div>
 
           {mpesa ? (
@@ -157,8 +172,10 @@ export default function ActivatePage() {
             Account Activated!
           </div>
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
-            Your account is now active. KES 100 has been applied as your activation fee, you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
+            Your account is now active. KES 50 has been deducted as your activation fee, you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
           </div>
+          {emailFailed && <div className="pay-message" role="status" style={{ marginTop: 12, textAlign: 'left' }}>Your account is activated and your balance has been updated, but the confirmation email could not be sent. You can retry sending it below. Your activation will not be charged again.</div>}
+          {emailFailed && <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={retryActivationEmail} disabled={emailRetrying}>{emailRetrying ? 'Retrying email…' : 'Retry Confirmation Email'}</button>}
           <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
             Start Bidding
           </button>
