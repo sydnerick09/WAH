@@ -249,11 +249,17 @@ function MpesaFlow({ user }) {
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [phone,    setPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
+  const [withdrawalAmount, setWithdrawalAmount] = useState(() => {
+    const balance = Number(user?.balance || 0);
+    return balance >= 100 ? String(Math.min(balance, 1000)) : '';
+  });
   const [errors,   setErrors]   = useState({});
   const [loading,  setLoading]  = useState(false);
 
   const balanceAmount = Number(user?.balance || 0);
-  const FEE_KES = getWithdrawalFee(balanceAmount, 'mpesa');
+  const selectedAmount = Number(withdrawalAmount);
+  const amountValid = Number.isInteger(selectedAmount) && selectedAmount >= 100 && selectedAmount <= balanceAmount && selectedAmount <= MOBILE_WITHDRAWAL_MAX_KES;
+  const FEE_KES = amountValid ? getWithdrawalFee(selectedAmount, 'mpesa') : null;
 
   // A balance above KES 40,000 must use the bank withdrawal flow.
   useEffect(() => {
@@ -282,6 +288,7 @@ function MpesaFlow({ user }) {
     if (!fullName.trim()) errs.fullName = 'Full name is required';
     if (!phone.trim()) errs.phone = 'Phone number is required';
     else if (!isValidKenyanMobilePhone(phone)) errs.phone = 'Enter a valid Kenyan phone number (07/01XXXXXXXX or +2547/+2541XXXXXXXX)';
+    if (!amountValid) errs.amount = `Enter an amount from KES 100 up to your available balance (maximum KES ${Math.min(balanceAmount, MOBILE_WITHDRAWAL_MAX_KES).toLocaleString()}).`;
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
     else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be 8 to 10 digits';
 
@@ -302,7 +309,7 @@ function MpesaFlow({ user }) {
       return;
     }
 
-    const amount = balanceAmount;
+    const amount = selectedAmount;
     setLoading(true);
 
     let res;
@@ -361,7 +368,7 @@ function MpesaFlow({ user }) {
     );
   }
 
-  if (FEE_KES === null) {
+  if (balanceAmount < 100) {
     return (
       <FlowShell title="Withdraw with M-Pesa" subtitle="No balance to withdraw" icon="smartphone" accent="var(--mpesa-green)">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
@@ -379,7 +386,7 @@ function MpesaFlow({ user }) {
       {step === 'form' && (
         <>
           <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', marginBottom: 20 }}>
-            Fill in your withdrawal details correctly. These details are used to process your request. After you submit the form, you will be asked to pay the withdrawal fee of <strong>KES {FEE_KES.toLocaleString()}</strong>.
+            Fill in your withdrawal details correctly. These details are used to process your request. After you submit the form, you will be asked to pay the withdrawal fee of <strong>KES {FEE_KES == null ? '—' : FEE_KES.toLocaleString()}</strong>.
           </div>
 
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 20, fontSize: 13 }}>
@@ -398,6 +405,22 @@ function MpesaFlow({ user }) {
             placeholder="+254 7XX XXX XXX or +254 1XX XXX XXX"
              style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
+
+          <div className="pay-phone-label" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="cash" size={16} /> Withdrawal Amount (KES)</div>
+          <input className="pay-phone-input" type="number" inputMode="numeric" min={100} max={Math.min(balanceAmount, MOBILE_WITHDRAWAL_MAX_KES)} step={1} value={withdrawalAmount}
+            onChange={e => { setWithdrawalAmount(e.target.value); setErrors(p => ({ ...p, amount: undefined })); }}
+            placeholder="Enter amount to withdraw" style={{ borderColor: errors.amount ? '#4b5563' : undefined }} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 9 }}>
+            {[100, 500, 1000, 2000, 5000].filter(v => v <= Math.min(balanceAmount, MOBILE_WITHDRAWAL_MAX_KES)).map(v => (
+              <button key={v} type="button" onClick={() => { setWithdrawalAmount(String(v)); setErrors(p => ({ ...p, amount: undefined })); }}
+                style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', background: Number(withdrawalAmount) === v ? '#111827' : '#fff', color: Number(withdrawalAmount) === v ? '#fff' : '#111827', cursor: 'pointer', fontSize: 12 }}>
+                KES {v.toLocaleString()}
+              </button>
+            ))}
+            {balanceAmount >= 100 && balanceAmount <= MOBILE_WITHDRAWAL_MAX_KES && <button type="button" onClick={() => { setWithdrawalAmount(String(balanceAmount)); setErrors(p => ({ ...p, amount: undefined })); }} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', background: Number(withdrawalAmount) === balanceAmount ? '#111827' : '#fff', color: Number(withdrawalAmount) === balanceAmount ? '#fff' : '#111827', cursor: 'pointer', fontSize: 12 }}>Maximum</button>}
+          </div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>Available balance: KES {balanceAmount.toLocaleString()}. Minimum withdrawal: KES 100.</div>
+          {errors.amount && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.amount}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
           <input className="pay-phone-input" type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={idNumber}
@@ -423,12 +446,13 @@ function MpesaFlow({ user }) {
             Name: {fullName.trim()}<br />
             M-Pesa Phone: {phone.trim()}<br />
             National ID: {idNumber.trim()}<br />
-            Amount: KES {balanceAmount.toLocaleString()}
+            Amount: KES {selectedAmount.toLocaleString()}
           </div>
           <MpesaPay
             purpose="withdrawal_fee"
             amount={FEE_KES}
             withdrawalMethod="mpesa"
+            withdrawalAmount={selectedAmount}
             defaultPhone={phone || user?.phone || ''}
             payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
@@ -453,7 +477,7 @@ function MpesaFlow({ user }) {
             Name: {fullName.trim()}<br />
             M-Pesa Phone: {phone.trim()}<br />
             National ID: {idNumber.trim()}<br />
-            Amount: KES {balanceAmount.toLocaleString()}<br />
+            Amount: KES {selectedAmount.toLocaleString()}<br />
             Fee paid: KES {FEE_KES.toLocaleString()}
           </div>
 
@@ -496,11 +520,17 @@ function AirtelFlow({ user }) {
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [airtelPhone, setAirtelPhone]    = useState(user?.phone || '');
   const [idNumber, setIdNumber] = useState('');
+  const [withdrawalAmount, setWithdrawalAmount] = useState(() => {
+    const balance = Number(user?.balance || 0);
+    return balance >= 100 ? String(Math.min(balance, 1000)) : '';
+  });
   const [errors,   setErrors]   = useState({});
   const [loading,  setLoading]  = useState(false);
 
   const balanceAmount = Number(user?.balance || 0);
-  const FEE_KES = getWithdrawalFee(balanceAmount, 'airtel');
+  const selectedAmount = Number(withdrawalAmount);
+  const amountValid = Number.isInteger(selectedAmount) && selectedAmount >= 100 && selectedAmount <= balanceAmount && selectedAmount <= MOBILE_WITHDRAWAL_MAX_KES;
+  const FEE_KES = amountValid ? getWithdrawalFee(selectedAmount, 'airtel') : null;
 
   // A balance above KES 40,000 must use the bank withdrawal flow.
   useEffect(() => {
@@ -529,6 +559,7 @@ function AirtelFlow({ user }) {
     if (!fullName.trim()) errs.fullName = 'Full name is required';
     if (!airtelPhone.trim()) errs.phone = 'Phone number is required';
     else if (!isValidKenyanMobilePhone(airtelPhone)) errs.phone = 'Enter a valid Kenyan phone number (07/01XXXXXXXX or +2547/+2541XXXXXXXX)';
+    if (!amountValid) errs.amount = `Enter an amount from KES 100 up to your available balance (maximum KES ${Math.min(balanceAmount, MOBILE_WITHDRAWAL_MAX_KES).toLocaleString()}).`;
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
     else if (!isValidKenyanNationalId(idNumber)) errs.idNumber = 'National ID must be 8 to 10 digits';
 
@@ -549,7 +580,7 @@ function AirtelFlow({ user }) {
       return;
     }
 
-    const amount = balanceAmount;
+    const amount = selectedAmount;
     setLoading(true);
 
     let res;
@@ -608,7 +639,7 @@ function AirtelFlow({ user }) {
     );
   }
 
-  if (FEE_KES === null) {
+  if (balanceAmount < 100) {
     return (
       <FlowShell title="Airtel Withdrawal" subtitle="No balance to withdraw" icon="smartphone" accent="#E4002B">
         <div className="pay-message" style={{ borderColor: '#4b5563', background: '#f9fafb' }}>
@@ -626,7 +657,7 @@ function AirtelFlow({ user }) {
       {step === 'form' && (
         <>
           <div className="pay-message" style={{ borderColor: '#E4002B', background: '#f9fafb', marginBottom: 20 }}>
-            Fill in your withdrawal details correctly. These details are used to process your request. After you submit the form, you will be asked to pay the withdrawal fee.
+            Fill in your withdrawal details correctly. These details are used to process your request. After you submit the form, you will be asked to pay the withdrawal fee of <strong>KES {FEE_KES == null ? '—' : FEE_KES.toLocaleString()}</strong>.
           </div>
 
           <div className="pay-message" style={{ borderColor: '#1f2937', background: '#f9fafb', marginBottom: 20, fontSize: 13 }}>
@@ -645,6 +676,22 @@ function AirtelFlow({ user }) {
             placeholder="+254 7XX XXX XXX or +254 1XX XXX XXX"
              style={{ borderColor: errors.phone ? '#4b5563' : undefined }} />
           {errors.phone && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.phone}</div>}
+
+          <div className="pay-phone-label" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="cash" size={16} /> Withdrawal Amount (KES)</div>
+          <input className="pay-phone-input" type="number" inputMode="numeric" min={100} max={Math.min(balanceAmount, MOBILE_WITHDRAWAL_MAX_KES)} step={1} value={withdrawalAmount}
+            onChange={e => { setWithdrawalAmount(e.target.value); setErrors(p => ({ ...p, amount: undefined })); }}
+            placeholder="Enter amount to withdraw" style={{ borderColor: errors.amount ? '#4b5563' : undefined }} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 9 }}>
+            {[100, 500, 1000, 2000, 5000].filter(v => v <= Math.min(balanceAmount, MOBILE_WITHDRAWAL_MAX_KES)).map(v => (
+              <button key={v} type="button" onClick={() => { setWithdrawalAmount(String(v)); setErrors(p => ({ ...p, amount: undefined })); }}
+                style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', background: Number(withdrawalAmount) === v ? '#111827' : '#fff', color: Number(withdrawalAmount) === v ? '#fff' : '#111827', cursor: 'pointer', fontSize: 12 }}>
+                KES {v.toLocaleString()}
+              </button>
+            ))}
+            {balanceAmount >= 100 && balanceAmount <= MOBILE_WITHDRAWAL_MAX_KES && <button type="button" onClick={() => { setWithdrawalAmount(String(balanceAmount)); setErrors(p => ({ ...p, amount: undefined })); }} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', background: Number(withdrawalAmount) === balanceAmount ? '#111827' : '#fff', color: Number(withdrawalAmount) === balanceAmount ? '#fff' : '#111827', cursor: 'pointer', fontSize: 12 }}>Maximum</button>}
+          </div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>Available balance: KES {balanceAmount.toLocaleString()}. Minimum withdrawal: KES 100.</div>
+          {errors.amount && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.amount}</div>}
 
           <div className="pay-phone-label" style={{ marginTop: 16 }}>National ID Number</div>
           <input className="pay-phone-input" type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={idNumber}
@@ -670,12 +717,13 @@ function AirtelFlow({ user }) {
             Name: {fullName.trim()}<br />
             Airtel Phone: {airtelPhone.trim()}<br />
             National ID: {idNumber.trim()}<br />
-            Amount: KES {balanceAmount.toLocaleString()}
+            Amount: KES {selectedAmount.toLocaleString()}
           </div>
           <MpesaPay
             purpose="withdrawal_fee"
             amount={FEE_KES}
             withdrawalMethod="airtel"
+            withdrawalAmount={selectedAmount}
             defaultPhone={user?.phone || ''}
             payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
@@ -700,7 +748,7 @@ function AirtelFlow({ user }) {
             Name: {fullName.trim()}<br />
             Airtel Phone: {airtelPhone.trim()}<br />
             National ID: {idNumber.trim()}<br />
-            Amount: KES {balanceAmount.toLocaleString()}<br />
+            Amount: KES {selectedAmount.toLocaleString()}<br />
             Fee paid: KES {FEE_KES.toLocaleString()}
           </div>
 

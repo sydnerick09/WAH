@@ -53,15 +53,20 @@ export default async function handler(req, res) {
     const withdrawalMethod = String(req.body?.withdrawalMethod || '').toLowerCase();
     const requestedFee = Math.round(Number(req.body?.amount) || 0);
 
-    // Mobile withdrawal fees are server-authoritative. The client only requests
-    // the prompt; it cannot choose an arbitrary fee.
+    // Mobile withdrawal fees are calculated server-side from the selected
+    // withdrawal amount, never from a fee amount supplied by the browser.
     if (isSupportedWithdrawalMethod(withdrawalMethod)) {
-      const expectedFee = getWithdrawalFee(Number(u.balance || 0), withdrawalMethod);
+      const requestedWithdrawalAmount = Number(req.body?.withdrawalAmount);
+      const availableBalance = Number(u.balance || 0);
+      if (!Number.isInteger(requestedWithdrawalAmount) || requestedWithdrawalAmount < 100 || requestedWithdrawalAmount > availableBalance || requestedWithdrawalAmount > 40000) {
+        return res.json({ success: false, message: 'Choose a withdrawal amount from KES 100 up to your available balance (maximum KES 40,000 for mobile withdrawals).' });
+      }
+      const expectedFee = getWithdrawalFee(requestedWithdrawalAmount, withdrawalMethod);
       if (expectedFee === null) {
-        return res.json({ success: false, message: 'This withdrawal method is unavailable for your current balance.' });
+        return res.json({ success: false, message: 'This withdrawal method is unavailable for the selected amount.' });
       }
       if (requestedFee !== expectedFee) {
-        return res.json({ success: false, message: `Invalid fee amount. The required ${withdrawalMethod === 'airtel' ? 'Airtel' : 'M-Pesa'} withdrawal fee is KES ${expectedFee.toLocaleString()}.` });
+        return res.json({ success: false, message: `Invalid fee amount. The required ${withdrawalMethod === 'airtel' ? 'Airtel' : 'M-Pesa'} withdrawal fee for this amount is KES ${expectedFee.toLocaleString()}.` });
       }
       amount = expectedFee;
     } else {

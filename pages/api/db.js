@@ -9,6 +9,7 @@ import { computeXp, levelInfo } from '../../lib/gamification';
 import { sendResetEmail } from '../../lib/resetEmail';
 import { createEmailTransport } from '../../lib/emailTransport';
 import { b2cPayment, isB2CConfigured, normalizePhone, isValidMsisdn } from '../../lib/daraja';
+import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../lib/withdrawalFees';
 
 function getAdmin() {
   return createClient(
@@ -772,7 +773,7 @@ export default async function handler(req, res) {
 
       case 'createWithdrawal': {
         const userId   = clean(p.userId, 64);
-        const { data: earningAccount } = await db.from('users').select('completed_tasks').eq('id', userId).maybeSingle();
+        const { data: earningAccount } = await db.from('users').select('completed_tasks,balance').eq('id', userId).maybeSingle();
         if (Number(earningAccount?.completed_tasks || 0) < 1) {
           return res.json({ data: null, error: 'You must have at least one task approved and credited to your balance before you can withdraw. Please apply for an available task first.' });
         }   // from the verified session token
@@ -785,9 +786,12 @@ export default async function handler(req, res) {
         // Reject malformed withdrawal requests server-side.
         if (!nonEmpty(userId))          return res.json({ data: null, error: 'Missing user.' });
         if (!nonEmpty(fullName))        return res.json({ data: null, error: 'Account holder name is required.' });
-        if (!['mpesa', 'safaricom'].includes(method)) return res.json({ data: null, error: 'Unsupported withdrawal method.' });
-        if (['mpesa', 'safaricom'].includes(method) && !isPhone(phone)) return res.json({ data: null, error: 'A valid phone number is required.' });
+        if (!['mpesa', 'safaricom', 'airtel'].includes(method)) return res.json({ data: null, error: 'Unsupported withdrawal method.' });
+        if (['mpesa', 'safaricom', 'airtel'].includes(method) && !isPhone(phone)) return res.json({ data: null, error: 'A valid phone number is required.' });
         if (!isPositiveNumber(amount))  return res.json({ data: null, error: 'A valid amount is required.' });
+        if (['mpesa', 'safaricom', 'airtel'].includes(method) && (!Number.isInteger(amount) || amount < 100 || amount > 40000 || amount > Number(earningAccount?.balance || 0))) {
+          return res.json({ data: null, error: 'Choose a mobile withdrawal amount from KES 100 up to your available balance, with a maximum of KES 40,000.' });
+        }
 
         // ── Enforce a real, verified, single-use Daraja withdrawal-fee payment ──
         // The fee must have been paid via M-Pesa STK (recorded server-side by the
@@ -799,11 +803,13 @@ export default async function handler(req, res) {
         }
         const { data: fee } = await db.from('mpesa_transactions')
           .select('*').eq('checkout_request_id', feeRef).maybeSingle();
+        const expectedMobileFee = isSupportedWithdrawalMethod(method) ? getWithdrawalFee(amount, method) : null;
         const feeOk = fee
           && fee.status === 'success'
           && fee.purpose === 'withdrawal_fee'
           && String(fee.user_id) === String(userId)
-          && !fee.withdrawal_id;
+          && !fee.withdrawal_id
+          && (!isSupportedWithdrawalMethod(method) || (expectedMobileFee !== null && Number(fee.amount) === expectedMobileFee));
         if (!feeOk) {
           const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
             : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
