@@ -663,15 +663,17 @@ export default async function handler(req, res) {
 
       case 'upgradePremiumWithBalance': {
         const { userId } = p;
-        const { count: withdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', userId);
-        if (withdrawalCheckError || Number(withdrawalCount || 0) < 1) return res.json({ data: null, error: 'Premium upgrade becomes available after you submit a withdrawal request.' });
+        const { count: approvedWithdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests')
+          .select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'approved');
+        if (withdrawalCheckError || Number(approvedWithdrawalCount || 0) < 1) return res.json({ data: null, error: 'You can subscribe to Premium only after the admin approves your withdrawal.' });
         const { data: u } = await db.from('users')
           .select('*').eq('id', userId).maybeSingle();
         if (!u) return res.json({ data: null });
 
         const subs     = { ...(u.task_submissions || {}) };
         const pbal     = Number(subs._pbal || 0);
-        const consumed = Math.min(pbal, 480);
+        if (pbal < 599) return res.json({ data: null, error: 'You need at least KES 599 in your Premium balance to subscribe.' });
+        const consumed = 599;
         subs._pbal     = pbal - consumed;
         const { data: updated } = await db.from('users').update({
           premium:          true,
@@ -713,8 +715,9 @@ export default async function handler(req, res) {
       }
 
       case 'upgradeToPremium': {
-        const { count: withdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', p.userId);
-        if (withdrawalCheckError || Number(withdrawalCount || 0) < 1) return res.json({ data: null, error: 'Premium upgrade becomes available after you submit a withdrawal request.' });
+        const { count: approvedWithdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests')
+          .select('id', { count: 'exact', head: true }).eq('user_id', p.userId).eq('status', 'approved');
+        if (withdrawalCheckError || Number(approvedWithdrawalCount || 0) < 1) return res.json({ data: null, error: 'You can subscribe to Premium only after the admin approves your withdrawal.' });
         const { data } = await db.from('users').update({
           premium: true, premium_paid_at: Date.now(),
         }).eq('id', p.userId).select().single();
@@ -760,9 +763,10 @@ export default async function handler(req, res) {
       }
 
       case 'checkPremiumEligibility': {
-        const { count, error } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', p.userId);
-        if (error) return res.json({ success: false, eligible: false, error: 'Could not verify your withdrawal request yet.' });
-        return res.json({ success: true, eligible: Number(count || 0) > 0, withdrawalRequests: Number(count || 0) });
+        const { count, error } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true })
+          .eq('user_id', p.userId).eq('status', 'approved');
+        if (error) return res.json({ success: false, eligible: false, error: 'Could not verify withdrawal approval yet.' });
+        return res.json({ success: true, eligible: Number(count || 0) > 0, approvedWithdrawals: Number(count || 0) });
       }
 
       case 'checkWithdrawalEligibility': {

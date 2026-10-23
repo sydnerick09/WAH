@@ -114,7 +114,7 @@ export default async function handler(req, res) {
 
   const isRenewal = subscriptionType === 'premium' && Boolean(wasPremium);
   const title = subscriptionType === 'activation' ? 'Account Activation' : (isRenewal ? 'Renewed Premium' : 'Premium Subscription');
-  const amount = subscriptionType === 'activation' ? 100 : 480;
+  const amount = subscriptionType === 'activation' ? 100 : 599;
   const subject = subscriptionType === 'activation' ? 'Your Gweno Hub Account Has Been Activated' : (isRenewal ? 'Your Gweno Hub Premium Has Been Renewed' : 'Your Gweno Hub Premium Is Active');
   const dashboardUrl = `${SITE_URL}/dashboard`;
   const hasBalanceChange = subscriptionType === 'activation' && Number.isFinite(Number(beforeBalance)) && Number.isFinite(Number(afterBalance));

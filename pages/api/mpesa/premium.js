@@ -1,4 +1,4 @@
-// pages/premium.js — full-page premium upgrade (kes 480 / month via M-Pesa Buy Goods till)
+// pages/premium.js — full-page premium upgrade (KES 599 / month via M-Pesa Buy Goods till)
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../lib/useUser';
@@ -47,8 +47,8 @@ export default function PremiumPage() {
 
   if (!eligibility && !user.premium) {
     return (
-      <FlowShell title="Premium" subtitle="Available after your first withdrawal request" icon="star">
-        <div className="pay-message" style={{ marginBottom: 18 }}>Complete a task, submit your work, wait for approval and for the earnings to be credited, then submit a withdrawal request. You can upgrade to Premium after the withdrawal request has been submitted; you do not need to wait for it to be marked paid.</div>
+      <FlowShell title="Premium" subtitle="Available after your withdrawal is approved" icon="star">
+        <div className="pay-message" style={{ marginBottom: 18 }}>Complete a task, submit your work, and request a withdrawal. You can subscribe to Premium only after the admin approves your withdrawal. Pending or rejected withdrawals do not qualify.</div>
         <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/dashboard')}><Icon name="briefcase" size={16} /> Browse Tasks</button>
         <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/withdraw')}>Go to Withdrawals</button>
       </FlowShell>
@@ -75,7 +75,7 @@ export default function PremiumPage() {
   }
 
   return (
-    <FlowShell title="Premium" subtitle="KES 480 / month • upgrade after requesting a withdrawal" icon="star">
+    <FlowShell title="Premium" subtitle="KES 599 / month • available after withdrawal approval" icon="star">
       <div className="premium-features" style={{ marginBottom: 20 }}>
         {[
           ['upload', 'Unlimited task bidding'],
