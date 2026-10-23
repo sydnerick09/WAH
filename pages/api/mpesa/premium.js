@@ -1,112 +1,97 @@
-// pages/premium.js — full-page premium upgrade (KES 599 / month via M-Pesa Buy Goods till)
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
-import { useUser } from '../lib/useUser';
-import { getCurrentUser, setCurrentUser, getToken } from '../lib/auth';
-import FlowShell from '../components/FlowShell';
-import Icon from '../components/Icon';
-import MpesaPay from '../components/MpesaPay';
-import TillPay from '../components/TillPay';
-import { FlowSkeleton } from '../components/Skeleton';
-import { fetchTill } from '../lib/settings';
-import { useMpesaEnabled } from '../lib/useMpesaEnabled';
+// Dedicated Premium M-Pesa endpoint. Premium is available only after at least
+// one withdrawal request has been approved by an administrator.
+import { createClient } from '@supabase/supabase-js';
+import { verifyToken } from '../../../lib/token';
+import { isConfigured, stkPush, isValidMsisdn, normalizePhone } from '../../../lib/daraja';
+import { createTransaction } from '../../../lib/mpesaStore';
 
-const premium_fee= 599
+const PREMIUM_FEE = 599;
 
-export default function PremiumPage() {
-  const router = useRouter();
-  const { user, ready } = useUser();
+function adminDb() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && key
+    ? createClient(url, key, { auth: { persistSession: false } })
+    : null;
+}
 
-  const [done, setDone] = useState(false);
-  const [eligibility, setEligibility] = useState(null);
-  const [till, setTill] = useState('1545320');
-  const mpesa = useMpesaEnabled();
-
-  useEffect(() => { fetchTill().then(setTill); }, []);
-  useEffect(() => {
-    if (!user?.id) return;
-    let alive = true;
-    fetch('/api/db', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'checkPremiumEligibility', authToken: getToken() }) })
-      .then(r => r.json()).then(d => { if (alive) setEligibility(!!d.eligible); })
-      .catch(() => { if (alive) setEligibility(false); });
-    return () => { alive = false; };
-  }, [user?.id]);
-
-  // STK success: the callback already set premium server-side; refresh + confirm.
-  async function onMpesaPaid() {
-    const u = await getCurrentUser().catch(() => null);
-    if (u) setCurrentUser(u);
-    setDone(true);
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
+  }
+  if (!isConfigured()) {
+    return res.status(503).json({ success: false, configured: false, message: 'M-Pesa is not configured yet.' });
   }
 
-  if (!ready || !user) {
-    return <FlowSkeleton rows={2} />;
+  const uid = verifyToken(req.body?.authToken);
+  if (!uid) {
+    return res.status(401).json({ success: false, message: 'Please log in again.' });
   }
 
-  if (eligibility === null) return <FlowSkeleton rows={2} />;
-
-  if (!eligibility && !user.premium) {
-    return (
-      <FlowShell title="Premium" subtitle="Available after your withdrawal is approved" icon="star">
-        <div className="pay-message" style={{ marginBottom: 18 }}>Complete a task, submit your work, and request a withdrawal. You can subscribe to Premium only after the admin approves your withdrawal. Pending or rejected withdrawals do not qualify.</div>
-        <button className="pay-btn" style={{ background: '#000000' }} onClick={() => router.push('/dashboard')}><Icon name="briefcase" size={16} /> Browse Tasks</button>
-        <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={() => router.push('/withdraw')}>Go to Withdrawals</button>
-      </FlowShell>
-    );
+  const phone = String(req.body?.phone || '');
+  if (!isValidMsisdn(phone)) {
+    return res.status(400).json({ success: false, message: 'Enter a valid Safaricom number (07XX… or 2547XX…).' });
   }
 
-  if (done) {
-    return (
-      <FlowShell title="Premium" subtitle="Payment submitted" icon="star">
-        <div style={{ textAlign: 'center', padding: '10px 0' }}>
-          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: 'var(--mpesa-green)' }}><Icon name="check" size={52} /></div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: '#111827', marginBottom: 6 }}>Thank You!</div>
-          <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
-            {mpesa
-              ? <>Your <strong>KES {PREMIUM_FEE}</strong> payment was received and your <strong>Premium</strong> is now active. You can continue using Premium features.</>
-              : <>We&apos;ve received your notification. Once we confirm your <strong>KES {PREMIUM_FEE}</strong> payment to till <strong>{till}</strong>, your <strong>Premium</strong> will be activated, usually within a short while.</>}
-          </div>
-          <button className="pay-btn" style={{ background: '#000000', marginTop: 18 }} onClick={() => router.push('/dashboard')}>
-            <Icon name="arrowLeft" size={16} /> Back to Dashboard
-          </button>
-        </div>
-      </FlowShell>
-    );
+  const db = adminDb();
+  if (!db) {
+    return res.status(503).json({ success: false, message: 'Service unavailable.' });
   }
 
-  return (
-    <FlowShell title="Premium" subtitle="KES 599 / month • available after withdrawal approval" icon="star">
-      <div className="premium-features" style={{ marginBottom: 20 }}>
-        {[
-          ['upload', 'Unlimited task bidding'],
-          ['cash',   'Priority payouts & withdrawals'],
-          ['chart',  'Advanced earnings dashboard'],
-          ['star',   'Exclusive high-paying tasks'],
-          ['shield', 'Premium badge on your profile'],
-          ['phone',  'Dedicated support line'],
-        ].map(([icon, text]) => (
-          <div key={text} className="premium-feature-item"><span style={{ display: 'flex' }}><Icon name={icon} size={18} /></span><span>{text}</span></div>
-        ))}
-      </div>
+  try {
+    const { data: user, error: userError } = await db
+      .from('users')
+      .select('id')
+      .eq('id', uid)
+      .maybeSingle();
+    if (userError || !user) {
+      return res.status(401).json({ success: false, message: 'Please log in again.' });
+    }
 
-      {mpesa ? (
-        <MpesaPay
-          purpose="premium"
-          amount={PREMIUM_FEE}
-          defaultPhone={user.phone || ''}
-          payLabel={`Pay KES ${PREMIUM_FEE} via M-Pesa`}
-          onSuccess={onMpesaPaid}
-        />
-      ) : (
-        <TillPay
-          user={user}
-          amount={PREMIUM_FEE}
-          purpose="Premium Membership"
-          till={till}
-          onPaid={() => setDone(true)}
-          onCancel={() => router.push('/dashboard')}
-        />
-      )}
-    </FlowShell>
-  );
+    const { count, error: withdrawalError } = await db
+      .from('withdrawal_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', uid)
+      .eq('status', 'approved');
+
+    if (withdrawalError || Number(count || 0) < 1) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can subscribe to Premium only after the admin approves your withdrawal.',
+      });
+    }
+
+    const { ok, data } = await stkPush({
+      phone,
+      amount: PREMIUM_FEE,
+      accountRef: 'GwenoHub',
+      description: 'Premium Membership',
+    });
+
+    if (!ok) {
+      return res.status(400).json({
+        success: false,
+        message: data?.errorMessage || data?.ResponseDescription || 'Could not start the M-Pesa prompt. Please try again.',
+      });
+    }
+
+    await createTransaction({
+      checkoutRequestId: data.CheckoutRequestID,
+      merchantRequestId: data.MerchantRequestID,
+      userId: uid,
+      purpose: 'premium',
+      amount: PREMIUM_FEE,
+      phone: normalizePhone(phone),
+    });
+
+    return res.status(200).json({
+      success: true,
+      checkoutRequestId: data.CheckoutRequestID,
+      amount: PREMIUM_FEE,
+      customerMessage: data.CustomerMessage,
+    });
+  } catch (error) {
+    console.error('[premium-mpesa]', error?.message || error);
+    return res.status(500).json({ success: false, message: 'M-Pesa error. Please try again.' });
+  }
 }
