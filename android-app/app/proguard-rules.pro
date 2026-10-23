@@ -1,0 +1,1 @@
+# GWENO WebView wrapper currently uses no custom ProGuard rules.\n
