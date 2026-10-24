@@ -16,6 +16,7 @@ export default function AgentDashboard() {
   const [bank, setBank] = useState({ accountName: '', bankName: '', accountNumber: '', country: '', branch: '', swift: '' });
   const [withdrawMsg, setWithdrawMsg] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
+  const [showBankForm, setShowBankForm] = useState(false);
 
   async function refresh() {
     const r = await fetch('/api/db', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'getAgentDashboard', authToken: getToken() }) });
@@ -73,17 +74,28 @@ export default function AgentDashboard() {
 
     <section style={card}><h2 style={sectionTitle}>Referral link</h2><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input readOnly value={agentLink} style={{ ...field, flex: 1, minWidth: 220 }} /><button style={button} onClick={() => navigator.clipboard.writeText(agentLink).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); })}>{copied ? 'Copied' : 'Copy link'}</button></div><p style={smallText}>KSh 434 per distinct qualified client after their withdrawal is approved.</p></section>
 
-    <section style={card}><h2 style={sectionTitle}>Bank commission withdrawal</h2><p style={smallText}>{unlockNow ? 'Your 10 qualified clients unlock withdrawals.' : canRequest ? 'Your 7-day waiting period has ended.' : `Available after ${daysLeft} more day(s), or once you have 10 qualified clients.`}</p>
-      <div style={formGrid}>
-        <input style={field} placeholder="Account holder name" value={bank.accountName} onChange={e => setBank({ ...bank, accountName: e.target.value })} />
-        <input style={field} placeholder="Country" value={bank.country} onChange={e => setBank({ ...bank, country: e.target.value })} />
-        <input style={field} placeholder="Bank name" value={bank.bankName} onChange={e => setBank({ ...bank, bankName: e.target.value })} />
-        <input style={field} placeholder="Account number / IBAN" value={bank.accountNumber} onChange={e => setBank({ ...bank, accountNumber: e.target.value })} />
-        <input style={field} placeholder="Branch (if applicable)" value={bank.branch} onChange={e => setBank({ ...bank, branch: e.target.value })} />
-        <input style={field} placeholder="SWIFT/BIC (if applicable)" value={bank.swift} onChange={e => setBank({ ...bank, swift: e.target.value })} />
-      </div>
-      <button style={{ ...button, marginTop: 10, opacity: canRequest ? 1 : .55 }} disabled={!canRequest || withdrawing || Number(data.balances.available) < 100} onClick={requestWithdrawal}>{withdrawing ? 'Submitting…' : 'Request bank withdrawal'}</button>
-      {Number(data.balances.available) < 100 && <p style={smallText}>Minimum available commission: KES 100.</p>}{withdrawMsg && <p role="status">{withdrawMsg}</p>}
+    <section style={card}><h2 style={sectionTitle}>Commission withdrawal</h2>
+      <button
+        style={{ ...button, opacity: canRequest && Number(data.balances.available) >= 100 ? 1 : .45, cursor: canRequest && Number(data.balances.available) >= 100 ? 'pointer' : 'not-allowed' }}
+        disabled={!canRequest || Number(data.balances.available) < 100 || withdrawing}
+        onClick={() => { setShowBankForm(true); setWithdrawMsg(''); }}
+      >Request Withdrawal</button>
+      {showBankForm && canRequest && Number(data.balances.available) >= 100 && <div style={{ marginTop: 14 }}>
+        <p style={smallText}>Commission withdrawals are processed by bank transfer.</p>
+        <div style={formGrid}>
+          <input style={field} placeholder="Account holder name" value={bank.accountName} onChange={e => setBank({ ...bank, accountName: e.target.value })} />
+          <input style={field} placeholder="Country" value={bank.country} onChange={e => setBank({ ...bank, country: e.target.value })} />
+          <input style={field} placeholder="Bank name" value={bank.bankName} onChange={e => setBank({ ...bank, bankName: e.target.value })} />
+          <input style={field} placeholder="Account number / IBAN" value={bank.accountNumber} onChange={e => setBank({ ...bank, accountNumber: e.target.value })} />
+          <input style={field} placeholder="Branch (if applicable)" value={bank.branch} onChange={e => setBank({ ...bank, branch: e.target.value })} />
+          <input style={field} placeholder="SWIFT/BIC (if applicable)" value={bank.swift} onChange={e => setBank({ ...bank, swift: e.target.value })} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+          <button style={button} disabled={withdrawing} onClick={requestWithdrawal}>{withdrawing ? 'Submitting…' : 'Submit Withdrawal Request'}</button>
+          <button style={{ ...button, background: '#64748b' }} disabled={withdrawing} onClick={() => setShowBankForm(false)}>Cancel</button>
+        </div>
+        {withdrawMsg && <p role="status">{withdrawMsg}</p>}
+      </div>}
     </section>
 
     <section style={card}><h2 style={sectionTitle}>Your clients</h2><div style={{ overflowX: 'auto' }}><table style={table}><thead><tr>{['Client', 'Joined', 'Status'].map(x => <th key={x} style={cell}>{x}</th>)}</tr></thead><tbody>{(data.clients || []).map(c => <tr key={c.id}><td style={cell}>{c.fullName || c.email}<br /><small>{c.email}</small></td><td style={cell}>{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}</td><td style={cell}>{c.qualified ? 'Withdrawal approved' : 'Not yet qualified'}</td></tr>)}{!data.clients?.length && <tr><td style={cell} colSpan="3">No clients yet.</td></tr>}</tbody></table></div></section>
