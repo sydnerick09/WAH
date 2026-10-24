@@ -1,0 +1,50 @@
+name: Build GWENO Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/build-android-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build installable APK
+        working-directory: android-app
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Put APK in website downloads
+        run: |
+          mkdir -p public/downloads
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk public/downloads/GWENO.apk
+
+      - name: Commit APK for Vercel deployment
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Build and publish GWENO Android APK'
+          file_pattern: public/downloads/GWENO.apk

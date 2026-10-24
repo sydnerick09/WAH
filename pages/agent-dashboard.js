@@ -1,3 +1,108 @@
-import {useEffect,useState} from 'react';import {useRouter} from 'next/router';import {getCurrentUser,getToken,logout} from '../lib/auth';
-export default function AgentDashboard(){const router=useRouter();const [data,setData]=useState(null);const [err,setErr]=useState('');const [copied,setCopied]=useState(false);const [phone,setPhone]=useState('');const [fullName,setFullName]=useState('');const [withdrawMsg,setWithdrawMsg]=useState('');const [withdrawing,setWithdrawing]=useState(false);useEffect(()=>{(async()=>{const u=await getCurrentUser();if(!u){router.replace('/login');return;}if(u.agent?.status!=='active'){router.replace('/dashboard');return;}const r=await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'getAgentDashboard',authToken:getToken()})});const d=await r.json();if(!d.success){setErr(d.error||'Could not load agent dashboard');return;}setData(d);setPhone(d.phone||'');setFullName(d.fullName||'');})();},[router]);if(!data)return <main style={wrap}><h1>Gweno Hub Agent Dashboard</h1><p>{err||'Loading agent information…'}</p></main>;const link=`${typeof window!=='undefined'?window.location.origin:'https://gweno.business'}/register?agent=${data.agent.code}`;const days=Math.floor((Date.now()-Number(data.startDate||Date.now()))/86400000);return <main style={{...wrap,maxWidth:1000}}><header style={{display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}><div><h1 style={{marginBottom:4}}>Agent Dashboard</h1><p>Agent since {new Date(data.startDate).toLocaleDateString()}</p></div><button style={btn} onClick={()=>{logout();router.push('/login')}}>Sign out</button></header><section style={grid}>{[['Qualified clients',data.qualifiedCount],['This week',`${data.weekQualified} / 10`],['Pending commission',`KES ${data.balances.pending.toLocaleString()}`],['Available commission',`KES ${data.balances.available.toLocaleString()}`],['Total commission earned',`KES ${data.balances.total.toLocaleString()}`],['Paid commission',`KES ${data.balances.paid.toLocaleString()}`]].map(([l,v])=><div key={l} style={card}><div style={{color:'#64748b',fontSize:13}}>{l}</div><strong style={{fontSize:24}}>{v}</strong></div>)}</section><section style={card}><h2>Your agent referral link</h2><p>Share this link. Commission is KSh 434 once per distinct client in your referral network after their withdrawal is approved.</p><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input readOnly value={link} style={{...field,flex:1,minWidth:240}}/><button style={btn} onClick={()=>navigator.clipboard.writeText(link).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)})}>{copied?'Copied':'Copy link'}</button></div><p>30-day withdrawal waiting period: {Math.max(0,30-days)} day(s) remaining before commission withdrawals can be requested.</p><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:8,marginTop:12}}><input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Account holder name" style={field}/><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="M-Pesa phone number" style={field}/><button disabled={withdrawing||days<30||data.balances.available<100} style={btn} onClick={async()=>{setWithdrawing(true);setWithdrawMsg('');try{const r=await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'requestAgentCommissionWithdrawal',authToken:getToken(),fullName,phone})});const d=await r.json();setWithdrawMsg(d.success?`Withdrawal request submitted for KES ${Number(d.amount).toLocaleString()}.`:d.error||'Request failed.');if(d.success){const rr=await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'getAgentDashboard',authToken:getToken()})});const dd=await rr.json();if(dd.success)setData(dd);}}catch(e){setWithdrawMsg('Could not submit request.');}finally{setWithdrawing(false);}}}>{withdrawing?'Submitting…':'Request commission withdrawal'}</button></div>{withdrawMsg&&<p role="status">{withdrawMsg}</p>}<p>Weekly target: 10 distinct qualified clients, measured Monday–Sunday (East Africa time). Missing the target does not automatically suspend your account; performance is recorded for review.</p></section><section style={card}><h2>Weekly performance history</h2><p>Each week is measured Monday to Sunday in East Africa Time. Previous weeks remain in your history.</p><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr>{['Week starting','Qualified clients','Target','Shortfall'].map(x=><th key={x} style={th}>{x}</th>)}</tr></thead><tbody>{(data.weeklyHistory||[]).map(w=><tr key={w.weekStart}>{[w.weekStart,w.qualified,w.target,w.shortfall].map((v,i)=><td key={i} style={th}>{v}</td>)}</tr>)}{!(data.weeklyHistory||[]).length&&<tr><td style={th} colSpan="4">No completed qualification history yet.</td></tr>}</tbody></table></div></section><section style={card}><h2>Commission withdrawal history</h2><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr>{['Reference','Amount','Status','Requested'].map(x=><th key={x} style={th}>{x}</th>)}</tr></thead><tbody>{(data.agent.withdrawalHistory||[]).slice().reverse().map(w=><tr key={w.id}>{[w.id,`KES ${Number(w.amount||0).toLocaleString()}`,w.status,w.requestedAt?new Date(w.requestedAt).toLocaleDateString():'—'].map((v,i)=><td key={i} style={th}>{v}</td>)}</tr>)}{!(data.agent.withdrawalHistory||[]).length&&<tr><td style={th} colSpan="4">No commission withdrawals yet.</td></tr>}</tbody></table></div></section><section style={card}><h2>Clients in your referral network</h2><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr>{['Client','Email','Country','Joined','Qualification'].map(x=><th key={x} style={th}>{x}</th>)}</tr></thead><tbody>{data.clients.map(c=><tr key={c.id}>{[c.fullName||'Client',c.email,c.country||'—',c.createdAt?new Date(c.createdAt).toLocaleDateString():'—',c.qualified?'Withdrawal approved':'Not yet qualified'].map((v,i)=><td key={i} style={th}>{v}</td>)}</tr>)}{!data.clients.length&&<tr><td style={th} colSpan="5">No recruited clients yet.</td></tr>}</tbody></table></div></section></main>}
-const wrap={fontFamily:'Arial,sans-serif',maxWidth:800,margin:'30px auto',padding:22,color:'#111827',lineHeight:1.5};const grid={display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,margin:'20px 0'};const card={background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:18,marginBottom:16,boxShadow:'0 3px 12px #00000008'};const btn={background:'#111827',color:'#fff',border:0,borderRadius:7,padding:'10px 16px',cursor:'pointer'};const field={padding:10,border:'1px solid #cbd5e1',borderRadius:7};const th={textAlign:'left',padding:10,borderBottom:'1px solid #e2e8f0',fontSize:13};
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { getCurrentUser, getToken, logout } from '../lib/auth';
+
+const links = [
+  ['Profile', '/profile'], ['Terms & Conditions', '/terms'],
+  ['Privacy Policy', '/privacy'], ['Conduct', '/conduct'],
+];
+
+export default function AgentDashboard() {
+  const router = useRouter();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [bank, setBank] = useState({ accountName: '', bankName: '', accountNumber: '', country: '', branch: '', swift: '' });
+  const [withdrawMsg, setWithdrawMsg] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  async function refresh() {
+    const r = await fetch('/api/db', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'getAgentDashboard', authToken: getToken() }) });
+    const d = await r.json();
+    if (!d.success) { setError(d.error || 'Could not load agent dashboard.'); return; }
+    setData(d);
+    setBank(old => ({ ...old, accountName: old.accountName || d.fullName || '', country: old.country || d.country || '' }));
+  }
+
+  useEffect(() => {
+    (async () => {
+      const user = await getCurrentUser();
+      if (!user) { router.replace('/login'); return; }
+      if (user.agent?.status !== 'active') { router.replace('/dashboard'); return; }
+      await refresh();
+    })();
+  }, [router]);
+
+  if (!data) return <main style={wrap}><h1>Agent Dashboard</h1><p>{error || 'Loading…'}</p></main>;
+
+  const agentLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://gweno.business'}/register?agent=${data.agent.code}`;
+  const days = Math.max(0, Math.floor((Date.now() - Number(data.startDate || Date.now())) / 86400000));
+  const qualifiedCount = Number(data.qualifiedCount || 0);
+  const unlockNow = qualifiedCount >= 10;
+  const daysLeft = Math.max(0, 7 - days);
+  const canRequest = unlockNow || daysLeft === 0;
+
+  async function requestWithdrawal() {
+    setWithdrawing(true); setWithdrawMsg('');
+    try {
+      const r = await fetch('/api/db', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        op: 'requestAgentCommissionWithdrawal', authToken: getToken(), ...bank,
+      }) });
+      const d = await r.json();
+      setWithdrawMsg(d.success ? `Bank withdrawal request submitted: KES ${Number(d.amount).toLocaleString()}.` : (d.error || 'Request failed.'));
+      if (d.success) await refresh();
+    } catch (_) { setWithdrawMsg('Could not submit the request. Please try again.'); }
+    finally { setWithdrawing(false); }
+  }
+
+  return <main style={wrap}>
+    <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div><h1 style={{ margin: 0 }}>Agent Dashboard</h1><small>Agent since {new Date(data.startDate).toLocaleDateString()}</small></div>
+      <button style={button} onClick={() => { logout(); router.push('/login'); }}>Sign out</button>
+    </header>
+    <nav style={nav}>{links.map(([label, href]) => <Link key={href} href={href} style={navLink}>{label}</Link>)}</nav>
+
+    <section style={grid}>{[
+      ['Qualified clients', qualifiedCount], ['This week', `${data.weekQualified} / 10`],
+      ['Pending commission', `KES ${Number(data.balances.pending).toLocaleString()}`],
+      ['Available commission', `KES ${Number(data.balances.available).toLocaleString()}`],
+      ['Total earned', `KES ${Number(data.balances.total).toLocaleString()}`],
+      ['Paid commission', `KES ${Number(data.balances.paid).toLocaleString()}`],
+    ].map(([label, value]) => <div key={label} style={card}><small style={{ color: '#64748b' }}>{label}</small><strong style={{ display: 'block', fontSize: 22, marginTop: 5 }}>{value}</strong></div>)}</section>
+
+    <section style={card}><h2 style={sectionTitle}>Referral link</h2><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input readOnly value={agentLink} style={{ ...field, flex: 1, minWidth: 220 }} /><button style={button} onClick={() => navigator.clipboard.writeText(agentLink).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); })}>{copied ? 'Copied' : 'Copy link'}</button></div><p style={smallText}>KSh 434 per distinct qualified client after their withdrawal is approved.</p></section>
+
+    <section style={card}><h2 style={sectionTitle}>Bank commission withdrawal</h2><p style={smallText}>{unlockNow ? 'Your 10 qualified clients unlock withdrawals.' : canRequest ? 'Your 7-day waiting period has ended.' : `Available after ${daysLeft} more day(s), or once you have 10 qualified clients.`}</p>
+      <div style={formGrid}>
+        <input style={field} placeholder="Account holder name" value={bank.accountName} onChange={e => setBank({ ...bank, accountName: e.target.value })} />
+        <input style={field} placeholder="Country" value={bank.country} onChange={e => setBank({ ...bank, country: e.target.value })} />
+        <input style={field} placeholder="Bank name" value={bank.bankName} onChange={e => setBank({ ...bank, bankName: e.target.value })} />
+        <input style={field} placeholder="Account number / IBAN" value={bank.accountNumber} onChange={e => setBank({ ...bank, accountNumber: e.target.value })} />
+        <input style={field} placeholder="Branch (if applicable)" value={bank.branch} onChange={e => setBank({ ...bank, branch: e.target.value })} />
+        <input style={field} placeholder="SWIFT/BIC (if applicable)" value={bank.swift} onChange={e => setBank({ ...bank, swift: e.target.value })} />
+      </div>
+      <button style={{ ...button, marginTop: 10, opacity: canRequest ? 1 : .55 }} disabled={!canRequest || withdrawing || Number(data.balances.available) < 100} onClick={requestWithdrawal}>{withdrawing ? 'Submitting…' : 'Request bank withdrawal'}</button>
+      {Number(data.balances.available) < 100 && <p style={smallText}>Minimum available commission: KES 100.</p>}{withdrawMsg && <p role="status">{withdrawMsg}</p>}
+    </section>
+
+    <section style={card}><h2 style={sectionTitle}>Your clients</h2><div style={{ overflowX: 'auto' }}><table style={table}><thead><tr>{['Client', 'Joined', 'Status'].map(x => <th key={x} style={cell}>{x}</th>)}</tr></thead><tbody>{(data.clients || []).map(c => <tr key={c.id}><td style={cell}>{c.fullName || c.email}<br /><small>{c.email}</small></td><td style={cell}>{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}</td><td style={cell}>{c.qualified ? 'Withdrawal approved' : 'Not yet qualified'}</td></tr>)}{!data.clients?.length && <tr><td style={cell} colSpan="3">No clients yet.</td></tr>}</tbody></table></div></section>
+
+    <section style={card}><h2 style={sectionTitle}>Weekly performance</h2><div style={{ overflowX: 'auto' }}><table style={table}><thead><tr>{['Week starting', 'Qualified', 'Target', 'Shortfall'].map(x => <th key={x} style={cell}>{x}</th>)}</tr></thead><tbody>{(data.weeklyHistory || []).map(w => <tr key={w.weekStart}>{[w.weekStart, w.qualified, w.target, w.shortfall].map((v, i) => <td key={i} style={cell}>{v}</td>)}</tr>)}{!data.weeklyHistory?.length && <tr><td style={cell} colSpan="4">No weekly history yet.</td></tr>}</tbody></table></div></section>
+
+    <section style={card}><h2 style={sectionTitle}>Commission withdrawals</h2><div style={{ overflowX: 'auto' }}><table style={table}><thead><tr>{['Reference', 'Amount', 'Status', 'Date'].map(x => <th key={x} style={cell}>{x}</th>)}</tr></thead><tbody>{(data.agent.withdrawalHistory || []).slice().reverse().map(w => <tr key={w.id}>{[w.id, `KES ${Number(w.amount || 0).toLocaleString()}`, w.status, w.requestedAt ? new Date(w.requestedAt).toLocaleDateString() : '—'].map((v, i) => <td key={i} style={cell}>{v}</td>)}</tr>)}{!data.agent.withdrawalHistory?.length && <tr><td style={cell} colSpan="4">No withdrawals yet.</td></tr>}</tbody></table></div></section>
+  </main>;
+}
+
+const wrap = { fontFamily: 'Arial,sans-serif', maxWidth: 1000, margin: '24px auto', padding: 18, color: '#111827', lineHeight: 1.45 };
+const nav = { display: 'flex', flexWrap: 'wrap', gap: 8, margin: '16px 0 20px' };
+const navLink = { padding: '8px 11px', border: '1px solid #e2e8f0', borderRadius: 8, color: '#1f2937', textDecoration: 'none', fontSize: 13 };
+const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, margin: '18px 0' };
+const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginBottom: 14 };
+const button = { background: '#111827', color: '#fff', border: 0, borderRadius: 7, padding: '10px 14px', cursor: 'pointer' };
+const field = { width: '100%', boxSizing: 'border-box', padding: 10, border: '1px solid #cbd5e1', borderRadius: 7 };
+const formGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 9 };
+const sectionTitle = { margin: '0 0 12px', fontSize: 18 };
+const smallText = { fontSize: 13, color: '#64748b' };
+const table = { width: '100%', borderCollapse: 'collapse' };
+const cell = { textAlign: 'left', padding: 9, borderBottom: '1px solid #e2e8f0', fontSize: 13, verticalAlign: 'top' };

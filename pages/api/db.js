@@ -20,6 +20,7 @@ function getAdmin() {
 }
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const AGENT_WITHDRAWAL_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ── Bulk withdrawal (balances ≥ KES 25,000 → bank only) ───────────────────────
 const BULK_THRESHOLD_KES  = 1500;   // at/above this, standard M-Pesa is unavailable
@@ -164,9 +165,16 @@ function parseBankWithdrawal(row) {
   return null;
 }
 
+function parseAgentCommission(row) {
+  const raw = String(row?.id_number || '');
+  if (!raw.startsWith('__AGENT_COMMISSION__')) return null;
+  try { const payload = JSON.parse(raw.slice('__AGENT_COMMISSION__'.length)); return payload && payload.kind === 'agent_commission' ? payload : null; } catch (_) { return null; }
+}
+
 function normWd(row) {
   if (!row) return null;
-  const bank = parseBankWithdrawal(row);
+  const agentCommission = parseAgentCommission(row);
+  const bank = parseBankWithdrawal(row) || (agentCommission && agentCommission.bankName ? agentCommission : null);
   const country = bank?.country || row.country || '';
   return {
     id:          row.id,
@@ -176,6 +184,7 @@ function normWd(row) {
     rawPhone:    row.phone || '',
     idNumber:    bank || String(row.id_number || '').startsWith('__AGENT_COMMISSION__') ? '' : row.id_number,
     isAgentCommission: String(row.id_number || '').startsWith('__AGENT_COMMISSION__'),
+    agentCountry: agentCommission?.country || '',
     amount:      Number(row.amount || 0),
     status:      row.status      ?? 'pending',
     rejectReason: row.reject_reason ?? '',
@@ -185,7 +194,7 @@ function normWd(row) {
     withdrawalMethod: bank ? 'bank' : (row.withdrawal_method || 'mpesa'),
     bankName: bank?.bankName || '',
     accountName: bank?.accountName || '',
-    accountNumber: bank ? maskBankAccount(bank.accountNumber) : '',
+    accountNumber: bank ? String(bank.accountNumber || '') : '',
     country,
   };
 }
@@ -471,6 +480,20 @@ export default async function handler(req, res) {
           if (ref && ref.task_submissions?._agent?.status !== 'active') {
             await db.from('users').update({ balance: (ref.balance || 0) + 70 }).eq('id', referredBy);
           }
+          // Notify every active agent in the new client's referral ancestry.
+          try {
+            const { data: ancestryRows } = await db.from('users').select('id,full_name,email,referred_by,task_submissions');
+            const byId = new Map((ancestryRows || []).map(x => [String(x.id), x]));
+            let parentId = String(referredBy || ''); const seen = new Set();
+            while (parentId && !seen.has(parentId)) {
+              seen.add(parentId); const parent = byId.get(parentId); if (!parent) break;
+              const agent = parent.task_submissions?._agent;
+              if (agent?.status === 'active' && parent.email) {
+                await createEmailTransport('support').sendMail({ to: parent.email, subject: 'A new client joined your Gweno referral network', text: `Hello ${parent.full_name || 'Agent'},\n\nA new client, ${fullName}, has joined your referral network through your agent link or a client in your network. Their commission qualification will be confirmed after their withdrawal is approved.\n\nGweno Hub Team` });
+              }
+              parentId = String(parent.referred_by || '');
+            }
+          } catch (referralMailError) { console.error('[agent-referral-join-email]', referralMailError?.message || referralMailError); }
         }
 
         return res.json({ success: true, user: norm(data), authToken: issueToken(data.id) });
@@ -1110,10 +1133,32 @@ export default async function handler(req, res) {
           while (changed) { changed = false; for (const client of allRows) if (!descendants.has(String(client.id)) && (String(client.referred_by || '') === String(u.id) || descendants.has(String(client.referred_by || '')))) { descendants.add(String(client.id)); changed = true; } }
           const qualified = new Set((u.task_submissions._agent.qualifiedClientIds || []).map(String));
           const eatNow = new Date(Date.now()+3*60*60*1000); eatNow.setUTCHours(0,0,0,0); eatNow.setUTCDate(eatNow.getUTCDate()-((eatNow.getUTCDay()+6)%7)); const weekStartMs=eatNow.getTime()-3*60*60*1000;
-          const currentWeekQualified=[...qualified].filter(id=>{const c=byId.get(String(id));return Number(c?.task_submissions?._agentQualifiedAt||0)>=weekStartMs;}).length;
+          const calculatedWeekQualified=[...qualified].filter(id=>{const c=byId.get(String(id));return Number(c?.task_submissions?._agentQualifiedAt||0)>=weekStartMs;}).length;
+          const currentWeekQualified=Number.isFinite(Number(u.task_submissions._agent.currentWeekQualifiedOverride))?Number(u.task_submissions._agent.currentWeekQualifiedOverride):calculatedWeekQualified;
           return { ...norm(u), currentWeekQualified, agent: u.task_submissions._agent, recruitedClients: [...descendants].map(id => { const c = byId.get(id); return c ? { id:c.id, fullName:c.full_name, email:c.email, createdAt:c.created_at, qualified:qualified.has(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null } : null; }).filter(Boolean) };
         });
         return res.json({ data: agents });
+      }
+
+      case 'adminEditAgentMetrics': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ success:false, error:'Unauthorized' });
+        const { data: u } = await db.from('users').select('id,task_submissions').eq('id', String(p.userId)).maybeSingle();
+        if (!u) return res.json({ success:false, error:'Agent not found.' });
+        const subs = { ...(u.task_submissions || {}) }; const a = { ...(subs._agent || {}) };
+        if (!a.status) return res.json({ success:false, error:'This account has no agent record.' });
+        const fields = ['qualifiedCountOverride','currentWeekQualifiedOverride','pendingCommission','availableCommission','totalCommissionEarned','paidCommission'];
+        for (const field of fields) {
+          if (p[field] === undefined || p[field] === null || p[field] === '') continue;
+          const value = Number(p[field]);
+          if (!Number.isFinite(value) || value < 0 || (field.includes('Override') && !Number.isInteger(value))) return res.json({ success:false, error:`Invalid value for ${field}.` });
+          a[field] = value;
+        }
+        a.manualMetricUpdatedAt = Date.now(); a.manualMetricUpdatedBy = 'admin'; a.manualMetricNote = clean(p.note || '', 300);
+        subs._agent = a;
+        const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
+        if (error) return res.json({ success:false, error:error.message });
+        await logAction(db, { action:'agent_metrics_manually_updated', entity:'user', entityId:u.id, detail:JSON.stringify({ fields, note:a.manualMetricNote }) });
+        return res.json({ success:true, agent:a });
       }
 
       case 'adminReviewAgentApplication': {
@@ -1134,7 +1179,7 @@ export default async function handler(req, res) {
         subs._agent = a;
         const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
         if (error) return res.json({ success: false, error: error.message });
-        try { const transport = createEmailTransport('support'); await transport.sendMail({ to: u.email, subject: p.decision === 'approve' ? 'Your Gweno Hub agent application is approved' : 'Update on your Gweno Hub agent application', text: `Hello ${u.full_name || 'Applicant'},\n\n${p.decision === 'approve' ? `Your agent application has been approved. Your agent referral link is ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/register?agent=${a.code}. Your agent dashboard is now available after signing in. You can request commission withdrawal after your first 30 days as an agent.` : `Your agent application has not been approved at this time. You remain a normal Gweno Hub client and may be invited to apply again in the future.`}\n\n${p.note ? `Admin note: ${p.note}\n\n` : ''}Gweno Hub Team` }); } catch (_) {}
+        try { const transport = createEmailTransport('support'); await transport.sendMail({ to: u.email, subject: p.decision === 'approve' ? 'Your Gweno Hub agent application is approved' : 'Update on your Gweno Hub agent application', text: `Hello ${u.full_name || 'Applicant'},\n\n${p.decision === 'approve' ? `Your agent application has been approved. Your agent referral link is ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/register?agent=${a.code}. Your agent dashboard is now available after signing in. You can request a bank commission withdrawal after 7 days, or earlier once you have 10 qualified clients whose withdrawals have been approved.` : `Your agent application has not been approved at this time. You remain a normal Gweno Hub client and may be invited to apply again in the future.`}\n\n${p.note ? `Admin note: ${p.note}\n\n` : ''}Gweno Hub Team` }); } catch (_) {}
         await logAction(db, { action: `agent_application_${p.decision === 'approve' ? 'approved' : 'declined'}`, entity: 'user', entityId: u.id, detail: String(p.note || '') });
         return res.json({ success: true, data: norm({ ...u, task_submissions: subs }) });
       }
@@ -1143,8 +1188,9 @@ export default async function handler(req, res) {
         const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
         const userSubs = { ...(u?.task_submissions || {}) }; const a = { ...(userSubs._agent || {}) };
         if (!u || a.status !== 'active') return res.json({ success: false, error: 'Agent access is not active.' });
-        const commissionReadyAt = Number(a.startedAt || Date.now()) + ONE_MONTH_MS;
-        if (Date.now() >= commissionReadyAt && Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; userSubs._agent = a; await db.from('users').update({ task_submissions: userSubs }).eq('id', u.id); }
+        const commissionReadyAt = Number(a.startedAt || Date.now()) + AGENT_WITHDRAWAL_WAIT_MS;
+        const unlockByClients = (Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length) >= 10;
+        if ((Date.now() >= commissionReadyAt || unlockByClients) && Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; userSubs._agent = a; await db.from('users').update({ task_submissions: userSubs }).eq('id', u.id); }
         const { data: all } = await db.from('users').select('id,full_name,email,phone,country,referred_by,created_at,task_submissions');
         const rows = all || []; const byId = new Map(rows.map(x => [String(x.id), x]));
         const descendants = new Set(); let changed = true;
@@ -1162,28 +1208,33 @@ export default async function handler(req, res) {
         if (eatDay >= 5 && weekQualified < 10 && a.lastTargetReminderWeek !== weekKey) {
           try { await createEmailTransport('support').sendMail({ to:u.email, subject:'Gweno Hub agent weekly performance reminder', text:`Hello ${u.full_name || 'Agent'},\n\nYou currently have ${weekQualified} qualified client(s) for this week. Your weekly target is 10 clients whose withdrawals have been approved. Your account remains active, but your current shortfall is recorded for administrative review. Please continue recruiting and guiding clients through the process.\n\nGweno Hub Team` }); a.lastTargetReminderWeek = weekKey; userSubs._agent = a; await db.from('users').update({task_submissions:userSubs}).eq('id',u.id); } catch (e) { console.error('[agent-target-reminder]',e?.message||e); }
         }
-        return res.json({ success: true, agent: a, clients: clients.map(c => ({ id:c.id, fullName:c.full_name, email:c.email, country:c.country, createdAt:c.created_at, qualified:qualified.includes(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null })), qualifiedCount: qualified.length, weekQualified, weeklyHistory, target: 10, startDate: start, balances: { pending: Number(a.pendingCommission||0), available: Number(a.availableCommission||0), total: Number(a.totalCommissionEarned||0), paid: Number(a.paidCommission||0) }, commissionReadyAt, phone: u.phone || '', fullName: u.full_name || '' });
+        return res.json({ success: true, agent: a, clients: clients.map(c => ({ id:c.id, fullName:c.full_name, email:c.email, country:c.country, createdAt:c.created_at, qualified:qualified.includes(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null })), qualifiedCount: Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : qualified.length, weekQualified: Number.isFinite(Number(a.currentWeekQualifiedOverride)) ? Number(a.currentWeekQualifiedOverride) : weekQualified, weeklyHistory, target: 10, startDate: start, balances: { pending: Number(a.pendingCommission||0), available: Number(a.availableCommission||0), total: Number(a.totalCommissionEarned||0), paid: Number(a.paidCommission||0) }, commissionReadyAt, phone: u.phone || '', fullName: u.full_name || '', country: u.country || '' });
       }
 
       case 'requestAgentCommissionWithdrawal': {
         const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
         const subs = { ...(u?.task_submissions || {}) }, a = { ...(subs._agent || {}) };
         if (!u || a.status !== 'active') return res.json({ success: false, error: 'Active agent account required.' });
-        if (Date.now() < Number(a.startedAt || Date.now()) + ONE_MONTH_MS) return res.json({ success: false, error: 'Agent commission withdrawals are available only after the first 30 days.' });
+        const qualifiedCountForGate = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length;
+        const unlockByClients = qualifiedCountForGate >= 10;
+        if (!unlockByClients && Date.now() < Number(a.startedAt || Date.now()) + AGENT_WITHDRAWAL_WAIT_MS) return res.json({ success: false, error: 'Bank commission withdrawals are available after 7 days, or earlier once you have 10 qualified clients.' });
         const lastAgentRequest = (a.withdrawalHistory || []).reduce((latest, x) => Math.max(latest, Number(x.requestedAt || 0)), 0);
-        if (lastAgentRequest && Date.now() < lastAgentRequest + ONE_MONTH_MS) return res.json({ success: false, error: 'Agent commission withdrawals are limited to once every 30 days.' });
+        if (!unlockByClients && lastAgentRequest && Date.now() < lastAgentRequest + AGENT_WITHDRAWAL_WAIT_MS) return res.json({ success: false, error: 'You can request another commission withdrawal 7 days after your previous request.' });
         if (Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; }
         const amount = Math.floor(Number(a.availableCommission || 0));
         if (amount < 100) return res.json({ success: false, error: 'You need at least KES 100 in available agent commission to request a withdrawal.' });
-        const phone = clean(p.phone || u.phone, 20); const fullName = clean(p.fullName || u.full_name, 80);
-        if (!isPhone(phone) || !fullName) return res.json({ success: false, error: 'Enter a valid phone number and account holder name.' });
+        const accountName = clean(p.accountName || u.full_name, 80);
+        const bankName = clean(p.bankName, 100); const accountNumber = clean(p.accountNumber, 60);
+        const country = clean(p.country || u.country, 60); const branch = clean(p.branch, 100); const swift = clean(p.swift, 40);
+        if (!accountName || !bankName || !accountNumber || !country) return res.json({ success:false,error:'Enter the account holder name, country, bank name, and account number/IBAN.' });
         const { data: pending } = await db.from('withdrawal_requests').select('id,status,id_number').eq('user_id', u.id).in('status', ['pending','processing','approved']);
-        if ((pending || []).some(x => String(x.id_number || '').startsWith('__AGENT_COMMISSION__'))) return res.json({ success: false, error: 'You already have an agent commission withdrawal being processed.' });
-        const marker = '__AGENT_COMMISSION__' + JSON.stringify({ kind:'agent_commission', code:a.code || '', amount });
-        const { data: wd, error } = await db.from('withdrawal_requests').insert({ user_id:u.id, full_name:fullName, phone, id_number:marker, amount, status:'pending', withdrawal_method:'mpesa', deadline:Date.now()+2*60*60*1000, requested_at:new Date().toISOString() }).select().single();
+        if ((pending || []).some(x => String(x.id_number || '').startsWith('__AGENT_COMMISSION__'))) return res.json({ success:false,error:'You already have an agent commission withdrawal being processed.' });
+        const bankPayload = { kind:'agent_commission', code:a.code || '', amount, country, bankName, accountName, accountNumber, branch, swift };
+        const marker = '__AGENT_COMMISSION__' + JSON.stringify(bankPayload);
+        const { data: wd, error } = await db.from('withdrawal_requests').insert({ user_id:u.id, full_name:accountName, phone:'', country, id_number:marker, amount, status:'pending', withdrawal_method:'bank', deadline:Date.now()+2*60*60*1000, requested_at:new Date().toISOString() }).select().single();
         if (error) return res.json({ success:false,error:error.message });
         a.availableCommission = Math.max(0, Number(a.availableCommission || 0) - amount); a.withdrawalHistory = [...(a.withdrawalHistory || []), { id:wd.id, amount, status:'pending', requestedAt:wd.requested_at }]; subs._agent = a; await db.from('users').update({ task_submissions:subs }).eq('id',u.id);
-        try { const to=process.env.ADMIN_EMAIL||process.env.NOTIFY_EMAIL||'businesshub.comke@gmail.com'; await createEmailTransport('withdrawal').sendMail({to,subject:`Agent commission withdrawal request — ${fullName}`,text:`Agent: ${fullName}\nEmail: ${u.email}\nAmount: KES ${amount}\nPhone: ${phone}\nWithdrawal ID: ${wd.id}\nType: Agent commission`}); } catch(_){}
+        try { const to=process.env.ADMIN_EMAIL||process.env.NOTIFY_EMAIL||'businesshub.comke@gmail.com'; await createEmailTransport('withdrawal').sendMail({to,subject:`Agent commission withdrawal request — ${accountName}`,text:`Agent: ${accountName}\nEmail: ${u.email}\nAmount: KES ${amount}\nCountry: ${country}\nBank: ${bankName}\nAccount name: ${accountName}\nAccount number / IBAN: ${accountNumber}\nBranch: ${branch || 'N/A'}\nSWIFT/BIC: ${swift || 'N/A'}\nWithdrawal ID: ${wd.id}\nType: Agent commission bank transfer` }); } catch(_){}
         return res.json({success:true,withdrawalId:wd.id,amount});
       }
 
@@ -1446,9 +1497,12 @@ export default async function handler(req, res) {
                 const aSubs = { ...(ancestor.task_submissions || {}) }; const a = { ...(aSubs._agent || {}) };
                 if (a.status === 'active' && !a.qualifiedClientIds?.map(String).includes(String(target.id))) {
                   a.qualifiedClientIds = [...(a.qualifiedClientIds || []), String(target.id)];
+                  if (Number.isFinite(Number(a.qualifiedCountOverride))) a.qualifiedCountOverride = Number(a.qualifiedCountOverride) + 1;
+                  if (Number.isFinite(Number(a.currentWeekQualifiedOverride))) a.currentWeekQualifiedOverride = Number(a.currentWeekQualifiedOverride) + 1;
                   a.pendingCommission = Number(a.pendingCommission || 0) + 434;
                   a.totalCommissionEarned = Number(a.totalCommissionEarned || 0) + 434;
                   aSubs._agent = a; await db.from('users').update({ task_submissions: aSubs }).eq('id', ancestor.id);
+                  try { if (ancestor.email) await createEmailTransport('support').sendMail({ to: ancestor.email, subject: 'Gweno agent commission earned', text: `Hello ${ancestor.full_name || 'Agent'},\n\nA client in your referral network has had a withdrawal approved. KSh 434 has been added to your pending agent commission. The same client earns commission only once, regardless of future withdrawals.\n\nGweno Hub Team` }); } catch (commissionMailError) { console.error('[agent-commission-email]', commissionMailError?.message || commissionMailError); }
                 }
                 parent = String(ancestor.referred_by || '');
               }
