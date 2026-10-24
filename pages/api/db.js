@@ -1467,6 +1467,13 @@ export default async function handler(req, res) {
         if (p.adminSecret !== process.env.ADMIN_SECRET) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
+        // Capture the previous status so approval-triggered actions only run on the
+        // first transition to approved, not when an admin saves an already-approved row.
+        const { data: previousWithdrawal } = await db.from('withdrawal_requests')
+          .select('id,status,id_number,user_id').eq('id', p.requestId).maybeSingle();
+        const newlyApprovedNormalWithdrawal = p.status === 'approved'
+          && previousWithdrawal?.status !== 'approved'
+          && !String(previousWithdrawal?.id_number || '').startsWith('__AGENT_COMMISSION__');
         const wUpdates = { updated_at: new Date().toISOString() };
         if (p.status   !== undefined) wUpdates.status    = p.status;
         if (p.amount   !== undefined) wUpdates.amount    = Number(p.amount);
@@ -1484,7 +1491,7 @@ export default async function handler(req, res) {
             .update(wUpdates).eq('id', p.requestId).select().single());
         }
         if (wUpErr) return res.json({ success: false, error: wUpErr.message });
-        if (p.status === 'approved' && wUp.user_id && !String(wUp.id_number || '').startsWith('__AGENT_COMMISSION__')) {
+        if (newlyApprovedNormalWithdrawal && wUp.user_id && !String(wUp.id_number || '').startsWith('__AGENT_COMMISSION__')) {
           try {
             const { data: target } = await db.from('users').select('id,referred_by,task_submissions').eq('id', wUp.user_id).maybeSingle();
             if (target) {
@@ -1518,11 +1525,19 @@ export default async function handler(req, res) {
             if (owner?.email) {
               const transport = createEmailTransport('withdrawal');
               const statusText = String(wUp.status || p.status);
+              const isNewApproval = newlyApprovedNormalWithdrawal;
+              const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
+              const premiumText = isNewApproval
+                ? `\n\nYour withdrawal request has been approved by our administration team. To proceed with receiving your funds, please upgrade to Gweno Hub Premium if you have not already done so. Sign in to your account and open the Premium Upgrade section: ${baseUrl}/premium\n\nPlease note that approval of the withdrawal request is not itself confirmation that payment has been sent. You will receive a further update when your payment status changes.`
+                : '';
+              const premiumHtml = isNewApproval
+                ? `<p>Your withdrawal request has been approved by our administration team. To proceed with receiving your funds, please upgrade to <strong>Gweno Hub Premium</strong> if you have not already done so. Sign in and open the <a href=\"${baseUrl}/premium\">Premium Upgrade section</a>.</p><p>Approval of the withdrawal request is not itself confirmation that payment has been sent. You will receive a further update when your payment status changes.</p>`
+                : '';
               await transport.sendMail({
                 to: owner.email,
-                subject: `Withdrawal status update: ${statusText}`,
-                text: `Hello ${owner.full_name || wUp.full_name || 'Client'},\n\nYour withdrawal request for KES ${Number(wUp.amount || 0).toLocaleString('en-KE')} has been updated to: ${statusText}.\n\nReference: ${wUp.id}\n\nGweno Hub Team`,
-                html: `<p>Hello ${String(owner.full_name || wUp.full_name || 'Client').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>Your withdrawal request for <strong>KES ${Number(wUp.amount || 0).toLocaleString('en-KE')}</strong> has been updated to: <strong>${statusText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</strong>.</p><p>Reference: ${String(wUp.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Gweno Hub Team</p>`,
+                subject: isNewApproval ? 'Withdrawal approved — Premium upgrade required to receive funds' : `Withdrawal status update: ${statusText}`,
+                text: `Hello ${owner.full_name || wUp.full_name || 'Client'},\n\nYour withdrawal request for KES ${Number(wUp.amount || 0).toLocaleString('en-KE')} has been updated to: ${statusText}.\n\nReference: ${wUp.id}${premiumText}\n\nGweno Hub Team`,
+                html: `<p>Hello ${String(owner.full_name || wUp.full_name || 'Client').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>Your withdrawal request for <strong>KES ${Number(wUp.amount || 0).toLocaleString('en-KE')}</strong> has been updated to: <strong>${statusText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</strong>.</p><p>Reference: ${String(wUp.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>${premiumHtml}<p>Gweno Hub Team</p>`,
               });
             }
           } catch (mailErr) { console.error('[withdrawal-email] status notice failed:', mailErr?.message || mailErr); }
