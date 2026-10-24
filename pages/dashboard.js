@@ -741,6 +741,12 @@ export default function Dashboard() {
     init();
   }, [router]);
 
+  useEffect(() => {
+    if (!user || !mounted) return;
+    if (user.agent?.status === 'active') router.replace('/agent-dashboard');
+    else if (user.agent?.invitedAt && user.agent?.status !== 'pending' && user.agent?.status !== 'declined' && !user.agent?.application) router.replace('/agent-application');
+  }, [user, mounted, router]);
+
   // Re-fetch user whenever the tab becomes visible (picks up Supabase admin edits)
   useEffect(() => {
     if (!user) return;

@@ -63,6 +63,7 @@ export default async function handler(req, res) {
     try {
       const holdDb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
       const { data: holdUser } = await holdDb.from("users").select("task_submissions").eq("id", effectiveUserId).maybeSingle();
+      if (holdUser?.task_submissions?._agent?.status === "active") return res.status(403).json({ success: false, message: "Agent accounts cannot submit ordinary tasks." });
       if (holdUser?.task_submissions?._suspended) {
         return res.status(403).json({ success: false, message: "Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released." });
       }

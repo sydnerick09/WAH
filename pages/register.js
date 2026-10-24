@@ -34,6 +34,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [referrerId, setReferrerId] = useState(null);
+  const [agentCode, setAgentCode] = useState(null);
   const [fromReferralLink, setFromReferralLink] = useState(false);  // true only when opened via ?ref=
   const [cv, setCv] = useState(null);
 
@@ -52,6 +53,8 @@ export default function Register() {
 
     // from URL
     const urlReferrer = router.query.ref;
+    const urlAgent = router.query.agent;
+    if (urlAgent) { setAgentCode(String(urlAgent)); localStorage.setItem('agentCode', String(urlAgent)); }
 
     if (urlReferrer) {
       localStorage.setItem('referrerId', urlReferrer);
@@ -104,6 +107,7 @@ export default function Register() {
       balance:      0,
       referralCount: 0,
       referredBy:   referrerId || null,
+      agentCode:    agentCode || (typeof window !== 'undefined' ? localStorage.getItem('agentCode') : null),
     });
 
     if (!result.success) {
@@ -126,6 +130,7 @@ export default function Register() {
     }
 
     localStorage.removeItem('referrerId');
+    localStorage.removeItem('agentCode');
     setCurrentUser(result.user);
     router.push('/dashboard');
   }

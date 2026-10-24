@@ -802,6 +802,24 @@ export default function Home() {
           >
             Login to Dashboard
           </Link>
+
+          <Link
+            href="/download-app"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#ffffff',
+              color: '#111827',
+              padding: '14px 32px',
+              borderRadius: 4,
+              fontWeight: 700,
+              fontSize: 15,
+              textDecoration: 'none',
+            }}
+          >
+            Get the GWENO App
+          </Link>
         </div>
       </section>
 
@@ -832,6 +850,9 @@ export default function Home() {
 
               <li>
                 <Link href="/dashboard">Dashboard</Link>
+              </li>
+              <li>
+                <Link href="/download-app">Download the GWENO App</Link>
               </li>
             </ul>
           </div>

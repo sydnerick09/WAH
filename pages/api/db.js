@@ -130,6 +130,8 @@ function norm(row) {
     streak:          Math.max(0, Number(subs._streak?.count ?? 0)),
     lastLoginDay:    subs._streak?.lastDay ?? null,
     notifications:   Array.isArray(subs._notifs) ? subs._notifs : [],
+    agent:            subs._agent ?? null,
+    agentReferralCode: subs._agent?.code ?? null,
   };
 }
 
@@ -172,7 +174,8 @@ function normWd(row) {
     fullName:    row.full_name,
     phone:       maskWithdrawalPhone(row.phone, country),
     rawPhone:    row.phone || '',
-    idNumber:    bank ? '' : row.id_number,
+    idNumber:    bank || String(row.id_number || '').startsWith('__AGENT_COMMISSION__') ? '' : row.id_number,
+    isAgentCommission: String(row.id_number || '').startsWith('__AGENT_COMMISSION__'),
     amount:      Number(row.amount || 0),
     status:      row.status      ?? 'pending',
     rejectReason: row.reject_reason ?? '',
@@ -394,8 +397,10 @@ const USER_SCOPED = new Set([
   'createApplication',
   'updateProfile', 'updateAvatar', 'changeContact', 'deleteAccount',
   'recordMpesaFee', 'bulkWithdrawalQuote', 'submitBulkWithdrawal', 'checkWithdrawalEligibility',
-  'submitReview', 'checkPremiumEligibility',
+  'submitReview', 'checkPremiumEligibility', 'submitAgentApplication', 'getAgentDashboard', 'requestAgentCommissionWithdrawal',
 ]);
+
+export const config = { api: { bodyParser: { sizeLimit: '8mb' } } };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -425,7 +430,14 @@ export default async function handler(req, res) {
         }
 
         const { activated, premium, premiumPaidAt, balance,
-                referralCount, referredBy } = p;
+                referralCount } = p;
+        let referredBy = p.referredBy || null;
+        const requestedAgentCode = clean(p.agentCode, 40).toUpperCase();
+        if (requestedAgentCode) {
+          const { data: possibleAgents } = await db.from('users').select('id,task_submissions');
+          const foundAgent = (possibleAgents || []).find(x => String(x.task_submissions?._agent?.code || '').toUpperCase() === requestedAgentCode && x.task_submissions?._agent?.status === 'active');
+          if (foundAgent) referredBy = foundAgent.id;
+        }
 
         // Server-side validation + sanitization (authoritative — never trust
         // the client). Reject malformed input before touching the database.
@@ -455,11 +467,9 @@ export default async function handler(req, res) {
         if (error) return res.json({ success: false, message: error.message });
 
         if (referredBy && referredBy !== id) {
-          const { data: ref } = await db.from('users')
-            .select('balance').eq('id', referredBy).maybeSingle();
-          if (ref) {
-            await db.from('users')
-              .update({ balance: (ref.balance || 0) + 70 }).eq('id', referredBy);
+          const { data: ref } = await db.from('users').select('balance,task_submissions').eq('id', referredBy).maybeSingle();
+          if (ref && ref.task_submissions?._agent?.status !== 'active') {
+            await db.from('users').update({ balance: (ref.balance || 0) + 70 }).eq('id', referredBy);
           }
         }
 
@@ -610,13 +620,9 @@ export default async function handler(req, res) {
         }).eq('id', userId).select().single();
 
         if (u.referred_by && u.referred_by !== userId) {
-          const { data: ref } = await db.from('users')
-            .select('balance,referral_count').eq('id', u.referred_by).maybeSingle();
-          if (ref) {
-            await db.from('users').update({
-              balance:        (ref.balance || 0) + 132,
-              referral_count: (ref.referral_count || 0) + 1,
-            }).eq('id', u.referred_by);
+          const { data: ref } = await db.from('users').select('balance,referral_count,task_submissions').eq('id', u.referred_by).maybeSingle();
+          if (ref && ref.task_submissions?._agent?.status !== 'active') {
+            await db.from('users').update({ balance: (ref.balance || 0) + 132, referral_count: (ref.referral_count || 0) + 1 }).eq('id', u.referred_by);
           }
         }
 
@@ -732,6 +738,7 @@ export default async function handler(req, res) {
         if (!u) return res.json({ success: false, message: 'User not found.' });
 
         const subs = u.task_submissions || {};
+        if (subs._agent?.status === 'active') return res.json({ success: false, error: 'Agent accounts cannot participate in ordinary tasks.' });
         if (subs._suspended) return res.json({ success: false, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
         if (subs[key]) {
           return res.json({
@@ -755,6 +762,7 @@ export default async function handler(req, res) {
         const { data: u } = await db.from('users')
           .select('active_bids,task_submissions').eq('id', p.userId).maybeSingle();
         if (!u) return res.json({ data: null });
+        if (u.task_submissions?._agent?.status === 'active') return res.json({ data: null, error: 'Agent accounts cannot participate in ordinary tasks.' });
         if (u.task_submissions?._suspended) return res.json({ data: null, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
         const { data } = await db.from('users').update({
           active_bids: (u.active_bids || 0) + 1,
@@ -1041,6 +1049,144 @@ export default async function handler(req, res) {
         return res.json({ success: true, withdrawalId: bankWd.id, ...q, bank: { bankName, accountName, accountNumber, branch, swift } });
       }
 
+      case 'inviteAgent': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: u } = await db.from('users').select('*').eq('id', String(p.userId)).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'Client not found.' });
+        const subs = { ...(u.task_submissions || {}) };
+        const agent = { ...(subs._agent || {}) };
+        if (agent.status === 'active') return res.json({ success: false, error: 'This account is already an active agent.' });
+        if (agent.status === 'pending') return res.json({ success: false, error: 'This client already has an application awaiting review.' });
+        agent.invitedAt = Date.now(); agent.status = 'invited'; agent.application = agent.application?.status === 'pending' ? agent.application : null;
+        subs._agent = agent;
+        const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
+        if (error) return res.json({ success: false, error: error.message });
+        try {
+          const transport = createEmailTransport('support');
+          const base = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
+          await transport.sendMail({ to: u.email, subject: 'You are invited to apply as a Gweno Hub agent', text: `Hello ${u.full_name || 'Client'},\n\nYou have been selected and invited to apply to become a Gweno Hub agent. Sign in to your account and complete the agent application form on your dashboard. You will remain a normal client while your application is pending.\n\nApply here: ${base}/agent-application\n\nGweno Hub Team` });
+        } catch (e) { return res.json({ success: true, warning: 'Invitation saved, but the email could not be sent. Check the configured email provider.', emailError: e?.message || '' }); }
+        await logAction(db, { action: 'agent_invited', entity: 'user', entityId: u.id, detail: `invited:${u.email}` });
+        return res.json({ success: true });
+      }
+
+      case 'submitAgentApplication': {
+        const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'Account not found.' });
+        const subs = { ...(u.task_submissions || {}) }, a = { ...(subs._agent || {}) };
+        if (!a.invitedAt) return res.json({ success: false, error: 'You must be invited by an administrator before applying.' });
+        if (a.status === 'active') return res.json({ success: false, error: 'You are already an active agent.' });
+        const f = p.application || {};
+        const required = ['fullName','email','phone','citizenship','representCountry','nationalId','dateOfBirth','address','education','experience','availability','cvName','cvData'];
+        for (const key of required) if (!String(f[key] || '').trim()) return res.json({ success: false, error: `Please complete ${key}.` });
+        if (!/\.(pdf|doc|docx|rtf|txt)$/i.test(String(f.cvName || ''))) return res.json({ success: false, error: 'Upload a PDF, DOC, DOCX, RTF, or TXT CV.' });
+        if (Buffer.byteLength(String(f.cvData || ''), 'utf8') > 7 * 1024 * 1024 || !/^data:[^;]+;base64,/.test(String(f.cvData || ''))) return res.json({ success: false, error: 'The CV file is invalid or exceeds the 5 MB limit.' });
+        if (f.citizenship === 'Kenya' && !String(f.kraPin || '').trim()) return res.json({ success: false, error: 'KRA PIN is required for applicants in Kenya.' });
+        const birth = new Date(String(f.dateOfBirth || '')); const ageLimit = new Date(); ageLimit.setFullYear(ageLimit.getFullYear() - 18);
+        if (!Number.isFinite(birth.getTime()) || birth > ageLimit) return res.json({ success: false, error: 'Applicants must be at least 18 years old.' });
+        if (!f.confirmEligibility || !f.agreeResponsibilities) return res.json({ success: false, error: 'Please confirm the eligibility requirements and agent responsibilities.' });
+        const storedApplication = { ...f }; delete storedApplication.cvData;
+        a.status = 'pending'; a.application = { ...storedApplication, status: 'pending', submittedAt: Date.now() };
+        subs._agent = a;
+        const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
+        if (error) return res.json({ success: false, error: error.message });
+        const adminTo = process.env.ADMIN_EMAIL || process.env.NOTIFY_EMAIL || 'businesshub.comke@gmail.com';
+        try {
+          const transport = createEmailTransport('support');
+          const summary = `New agent application\nName: ${f.fullName}\nEmail: ${f.email}\nPhone: ${f.phone}\nCitizenship: ${f.citizenship}\nCountry represented: ${f.representCountry}\nCounty: ${f.county || 'N/A'}\nNational ID: ${f.nationalId}\nKRA PIN: ${f.kraPin || 'N/A'}\nDate of birth: ${f.dateOfBirth}\nAddress: ${f.address}\nEducation: ${f.education}\nExperience: ${f.experience}\nAvailability: ${f.availability}\nCV: ${f.cvName}\n\nReview the application in the Gweno admin panel.`;
+          await transport.sendMail({ to: adminTo, subject: `Agent application: ${f.fullName}`, text: summary, attachments: [{ filename: String(f.cvName).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0,100), content: String(f.cvData).replace(/^data:[^;]+;base64,/, ''), encoding: 'base64' }] });
+        } catch (e) { console.error('[agent-application-email]', e?.message || e); }
+        await logAction(db, { action: 'agent_application_submitted', entity: 'user', entityId: u.id, detail: `application:${f.email}` });
+        return res.json({ success: true, data: norm({ ...u, task_submissions: subs }) });
+      }
+
+      case 'adminListAgents': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: rows, error } = await db.from('users').select('*').order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        const allRows = rows || []; const byId = new Map(allRows.map(x => [String(x.id), x]));
+        const agents = allRows.filter(u => u.task_submissions?._agent).map(u => {
+          const descendants = new Set(); let changed = true;
+          while (changed) { changed = false; for (const client of allRows) if (!descendants.has(String(client.id)) && (String(client.referred_by || '') === String(u.id) || descendants.has(String(client.referred_by || '')))) { descendants.add(String(client.id)); changed = true; } }
+          const qualified = new Set((u.task_submissions._agent.qualifiedClientIds || []).map(String));
+          const eatNow = new Date(Date.now()+3*60*60*1000); eatNow.setUTCHours(0,0,0,0); eatNow.setUTCDate(eatNow.getUTCDate()-((eatNow.getUTCDay()+6)%7)); const weekStartMs=eatNow.getTime()-3*60*60*1000;
+          const currentWeekQualified=[...qualified].filter(id=>{const c=byId.get(String(id));return Number(c?.task_submissions?._agentQualifiedAt||0)>=weekStartMs;}).length;
+          return { ...norm(u), currentWeekQualified, agent: u.task_submissions._agent, recruitedClients: [...descendants].map(id => { const c = byId.get(id); return c ? { id:c.id, fullName:c.full_name, email:c.email, createdAt:c.created_at, qualified:qualified.has(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null } : null; }).filter(Boolean) };
+        });
+        return res.json({ data: agents });
+      }
+
+      case 'adminReviewAgentApplication': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: u } = await db.from('users').select('*').eq('id', String(p.userId)).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'Client not found.' });
+        const subs = { ...(u.task_submissions || {}) }, a = { ...(subs._agent || {}) };
+        if (!a.application || !['pending','invited'].includes(a.status)) return res.json({ success: false, error: 'No pending agent application was found.' });
+        if (p.decision === 'approve') {
+          a.status = 'active'; a.approvedAt = Date.now(); a.startedAt = Date.now();
+          a.code = a.code || `GW${String(u.id).replace(/\D/g, '').slice(-6).padStart(6,'0')}${Math.random().toString(36).slice(2,5).toUpperCase()}`;
+          a.application.status = 'approved'; a.application.reviewedAt = Date.now(); a.application.reviewNote = String(p.note || '').slice(0,500);
+          a.qualifiedClientIds = Array.isArray(a.qualifiedClientIds) ? a.qualifiedClientIds : [];
+          a.pendingCommission = Number(a.pendingCommission || 0); a.availableCommission = Number(a.availableCommission || 0); a.totalCommissionEarned = Number(a.totalCommissionEarned || 0); a.paidCommission = Number(a.paidCommission || 0);
+        } else {
+          a.status = 'declined'; a.declinedAt = Date.now(); a.application.status = 'declined'; a.application.reviewedAt = Date.now(); a.application.reviewNote = String(p.note || '').slice(0,500);
+        }
+        subs._agent = a;
+        const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
+        if (error) return res.json({ success: false, error: error.message });
+        try { const transport = createEmailTransport('support'); await transport.sendMail({ to: u.email, subject: p.decision === 'approve' ? 'Your Gweno Hub agent application is approved' : 'Update on your Gweno Hub agent application', text: `Hello ${u.full_name || 'Applicant'},\n\n${p.decision === 'approve' ? `Your agent application has been approved. Your agent referral link is ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/register?agent=${a.code}. Your agent dashboard is now available after signing in. You can request commission withdrawal after your first 30 days as an agent.` : `Your agent application has not been approved at this time. You remain a normal Gweno Hub client and may be invited to apply again in the future.`}\n\n${p.note ? `Admin note: ${p.note}\n\n` : ''}Gweno Hub Team` }); } catch (_) {}
+        await logAction(db, { action: `agent_application_${p.decision === 'approve' ? 'approved' : 'declined'}`, entity: 'user', entityId: u.id, detail: String(p.note || '') });
+        return res.json({ success: true, data: norm({ ...u, task_submissions: subs }) });
+      }
+
+      case 'getAgentDashboard': {
+        const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
+        const userSubs = { ...(u?.task_submissions || {}) }; const a = { ...(userSubs._agent || {}) };
+        if (!u || a.status !== 'active') return res.json({ success: false, error: 'Agent access is not active.' });
+        const commissionReadyAt = Number(a.startedAt || Date.now()) + ONE_MONTH_MS;
+        if (Date.now() >= commissionReadyAt && Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; userSubs._agent = a; await db.from('users').update({ task_submissions: userSubs }).eq('id', u.id); }
+        const { data: all } = await db.from('users').select('id,full_name,email,phone,country,referred_by,created_at,task_submissions');
+        const rows = all || []; const byId = new Map(rows.map(x => [String(x.id), x]));
+        const descendants = new Set(); let changed = true;
+        while (changed) { changed = false; for (const x of rows) if (!descendants.has(String(x.id)) && (String(x.referred_by || '') === String(u.id) || descendants.has(String(x.referred_by || '')))) { descendants.add(String(x.id)); changed = true; } }
+        const clients = [...descendants].map(id => byId.get(id)).filter(Boolean);
+        const qualified = Array.isArray(a.qualifiedClientIds) ? a.qualifiedClientIds : [];
+        const start = Number(a.startedAt || Date.now()); const eatNow = new Date(Date.now() + 3*60*60*1000); eatNow.setUTCHours(0,0,0,0); const day = (eatNow.getUTCDay()+6)%7; eatNow.setUTCDate(eatNow.getUTCDate()-day); const weekStartMs = eatNow.getTime() - 3*60*60*1000;
+        const weekQualified = qualified.filter(id => { const c = byId.get(String(id)); const qAt = c?.task_submissions?._agentQualifiedAt; return qAt && Number(qAt) >= weekStartMs; }).length;
+        const weeklyMap = {};
+        for (const id of qualified) { const c = byId.get(String(id)); const qAt = Number(c?.task_submissions?._agentQualifiedAt || 0); if (!qAt) continue; const local = new Date(qAt + 3*60*60*1000); local.setUTCHours(0,0,0,0); local.setUTCDate(local.getUTCDate() - ((local.getUTCDay()+6)%7)); const key = local.toISOString().slice(0,10); weeklyMap[key] = (weeklyMap[key] || 0) + 1; }
+        const firstWeekDate = new Date(start + 3*60*60*1000); firstWeekDate.setUTCHours(0,0,0,0); firstWeekDate.setUTCDate(firstWeekDate.getUTCDate()-((firstWeekDate.getUTCDay()+6)%7));
+        const currentWeekDate = new Date(weekStartMs + 3*60*60*1000); currentWeekDate.setUTCHours(0,0,0,0);
+        const weeklyHistory = []; for (let cursor = new Date(firstWeekDate); cursor <= currentWeekDate; cursor.setUTCDate(cursor.getUTCDate()+7)) { const key=cursor.toISOString().slice(0,10); const count=Number(weeklyMap[key]||0); weeklyHistory.push({weekStart:key,qualified:count,target:10,shortfall:Math.max(0,10-count)}); } weeklyHistory.reverse();
+        const weekKey = new Date(weekStartMs).toISOString().slice(0,10); const eatDay = new Date(Date.now()+3*60*60*1000).getUTCDay();
+        if (eatDay >= 5 && weekQualified < 10 && a.lastTargetReminderWeek !== weekKey) {
+          try { await createEmailTransport('support').sendMail({ to:u.email, subject:'Gweno Hub agent weekly performance reminder', text:`Hello ${u.full_name || 'Agent'},\n\nYou currently have ${weekQualified} qualified client(s) for this week. Your weekly target is 10 clients whose withdrawals have been approved. Your account remains active, but your current shortfall is recorded for administrative review. Please continue recruiting and guiding clients through the process.\n\nGweno Hub Team` }); a.lastTargetReminderWeek = weekKey; userSubs._agent = a; await db.from('users').update({task_submissions:userSubs}).eq('id',u.id); } catch (e) { console.error('[agent-target-reminder]',e?.message||e); }
+        }
+        return res.json({ success: true, agent: a, clients: clients.map(c => ({ id:c.id, fullName:c.full_name, email:c.email, country:c.country, createdAt:c.created_at, qualified:qualified.includes(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null })), qualifiedCount: qualified.length, weekQualified, weeklyHistory, target: 10, startDate: start, balances: { pending: Number(a.pendingCommission||0), available: Number(a.availableCommission||0), total: Number(a.totalCommissionEarned||0), paid: Number(a.paidCommission||0) }, commissionReadyAt, phone: u.phone || '', fullName: u.full_name || '' });
+      }
+
+      case 'requestAgentCommissionWithdrawal': {
+        const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
+        const subs = { ...(u?.task_submissions || {}) }, a = { ...(subs._agent || {}) };
+        if (!u || a.status !== 'active') return res.json({ success: false, error: 'Active agent account required.' });
+        if (Date.now() < Number(a.startedAt || Date.now()) + ONE_MONTH_MS) return res.json({ success: false, error: 'Agent commission withdrawals are available only after the first 30 days.' });
+        const lastAgentRequest = (a.withdrawalHistory || []).reduce((latest, x) => Math.max(latest, Number(x.requestedAt || 0)), 0);
+        if (lastAgentRequest && Date.now() < lastAgentRequest + ONE_MONTH_MS) return res.json({ success: false, error: 'Agent commission withdrawals are limited to once every 30 days.' });
+        if (Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; }
+        const amount = Math.floor(Number(a.availableCommission || 0));
+        if (amount < 100) return res.json({ success: false, error: 'You need at least KES 100 in available agent commission to request a withdrawal.' });
+        const phone = clean(p.phone || u.phone, 20); const fullName = clean(p.fullName || u.full_name, 80);
+        if (!isPhone(phone) || !fullName) return res.json({ success: false, error: 'Enter a valid phone number and account holder name.' });
+        const { data: pending } = await db.from('withdrawal_requests').select('id,status,id_number').eq('user_id', u.id).in('status', ['pending','processing','approved']);
+        if ((pending || []).some(x => String(x.id_number || '').startsWith('__AGENT_COMMISSION__'))) return res.json({ success: false, error: 'You already have an agent commission withdrawal being processed.' });
+        const marker = '__AGENT_COMMISSION__' + JSON.stringify({ kind:'agent_commission', code:a.code || '', amount });
+        const { data: wd, error } = await db.from('withdrawal_requests').insert({ user_id:u.id, full_name:fullName, phone, id_number:marker, amount, status:'pending', withdrawal_method:'mpesa', deadline:Date.now()+2*60*60*1000, requested_at:new Date().toISOString() }).select().single();
+        if (error) return res.json({ success:false,error:error.message });
+        a.availableCommission = Math.max(0, Number(a.availableCommission || 0) - amount); a.withdrawalHistory = [...(a.withdrawalHistory || []), { id:wd.id, amount, status:'pending', requestedAt:wd.requested_at }]; subs._agent = a; await db.from('users').update({ task_submissions:subs }).eq('id',u.id);
+        try { const to=process.env.ADMIN_EMAIL||process.env.NOTIFY_EMAIL||'businesshub.comke@gmail.com'; await createEmailTransport('withdrawal').sendMail({to,subject:`Agent commission withdrawal request — ${fullName}`,text:`Agent: ${fullName}\nEmail: ${u.email}\nAmount: KES ${amount}\nPhone: ${phone}\nWithdrawal ID: ${wd.id}\nType: Agent commission`}); } catch(_){}
+        return res.json({success:true,withdrawalId:wd.id,amount});
+      }
+
       case 'listUsers': {
         if (p.adminSecret !== process.env.ADMIN_SECRET) {
           return res.status(403).json({ error: 'Unauthorized' });
@@ -1287,6 +1433,31 @@ export default async function handler(req, res) {
             .update(wUpdates).eq('id', p.requestId).select().single());
         }
         if (wUpErr) return res.json({ success: false, error: wUpErr.message });
+        if (p.status === 'approved' && wUp.user_id && !String(wUp.id_number || '').startsWith('__AGENT_COMMISSION__')) {
+          try {
+            const { data: target } = await db.from('users').select('id,referred_by,task_submissions').eq('id', wUp.user_id).maybeSingle();
+            if (target) {
+              const ts = { ...(target.task_submissions || {}) };
+              if (!ts._agentQualifiedAt) { ts._agentQualifiedAt = Date.now(); await db.from('users').update({ task_submissions: ts }).eq('id', target.id); }
+              const { data: all } = await db.from('users').select('id,referred_by,task_submissions');
+              const byId = new Map((all || []).map(x => [String(x.id), x])); let parent = String(target.referred_by || ''); const seen = new Set();
+              while (parent && !seen.has(parent)) {
+                seen.add(parent); const ancestor = byId.get(parent); if (!ancestor) break;
+                const aSubs = { ...(ancestor.task_submissions || {}) }; const a = { ...(aSubs._agent || {}) };
+                if (a.status === 'active' && !a.qualifiedClientIds?.map(String).includes(String(target.id))) {
+                  a.qualifiedClientIds = [...(a.qualifiedClientIds || []), String(target.id)];
+                  a.pendingCommission = Number(a.pendingCommission || 0) + 434;
+                  a.totalCommissionEarned = Number(a.totalCommissionEarned || 0) + 434;
+                  aSubs._agent = a; await db.from('users').update({ task_submissions: aSubs }).eq('id', ancestor.id);
+                }
+                parent = String(ancestor.referred_by || '');
+              }
+            }
+          } catch (commissionError) { console.error('[agent-commission]', commissionError?.message || commissionError); }
+        }
+        if (p.status === 'declined' && String(wUp.id_number || '').startsWith('__AGENT_COMMISSION__')) {
+          try { const { data: owner } = await db.from('users').select('task_submissions').eq('id',wUp.user_id).maybeSingle(); if(owner){ const subs={...(owner.task_submissions||{})}; const a={...(subs._agent||{})}; if(!(a.withdrawalHistory||[]).some(x=>String(x.id)===String(wUp.id)&&x.status==='refunded')) { a.availableCommission=Number(a.availableCommission||0)+Number(wUp.amount||0); a.withdrawalHistory=(a.withdrawalHistory||[]).map(x=>String(x.id)===String(wUp.id)?{...x,status:'declined',refundedAt:Date.now()}:x); subs._agent=a; await db.from('users').update({task_submissions:subs}).eq('id',wUp.user_id); } } } catch(_){}
+        }
         if (p.status !== undefined) {
           try {
             const { data: owner } = await db.from('users').select('email,full_name').eq('id', wUp.user_id).maybeSingle();
@@ -1318,11 +1489,16 @@ export default async function handler(req, res) {
         if (wd.user_id && amount > 0) {
           const { data: u } = await db.from('users').select('balance,task_submissions').eq('id', wd.user_id).maybeSingle();
           if (u) {
-            const oldBalance = Number(u.balance || 0);
-            const newBalance = Math.max(0, oldBalance - amount);
             const userSubs = { ...(u.task_submissions || {}) };
-            if (newBalance <= 0) userSubs._unwithdrawnCredits = [];
-            await db.from('users').update({ balance: newBalance, task_submissions: userSubs }).eq('id', wd.user_id);
+            if (String(wd.id_number || '').startsWith('__AGENT_COMMISSION__')) {
+              const a = { ...(userSubs._agent || {}) }; a.paidCommission = Number(a.paidCommission || 0) + amount;
+              a.withdrawalHistory = (a.withdrawalHistory || []).map(x => String(x.id) === String(wd.id) ? { ...x, status:'paid', paidAt:Date.now() } : x); userSubs._agent = a;
+              await db.from('users').update({ task_submissions: userSubs }).eq('id', wd.user_id);
+            } else {
+              const oldBalance = Number(u.balance || 0); const newBalance = Math.max(0, oldBalance - amount);
+              if (newBalance <= 0) userSubs._unwithdrawnCredits = [];
+              await db.from('users').update({ balance: newBalance, task_submissions: userSubs }).eq('id', wd.user_id);
+            }
           }
         }
         const { data: updated, error } = await db.from('withdrawal_requests')
@@ -1774,6 +1950,7 @@ export default async function handler(req, res) {
         if (!nonEmpty(userId) || !nonEmpty(taskId)) return res.json({ success: false, error: 'Missing user or task.' });
         if (!nonEmpty(message)) return res.json({ success: false, error: 'A proposal message is required.' });
         const { data: applicant } = await db.from('users').select('task_submissions').eq('id', userId).maybeSingle();
+        if (applicant?.task_submissions?._agent?.status === 'active') return res.json({ success: false, error: 'Agent accounts cannot apply for ordinary tasks.' });
         if (applicant?.task_submissions?._suspended) return res.json({ success: false, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
 
         const { data: prior } = await db.from('applications')
