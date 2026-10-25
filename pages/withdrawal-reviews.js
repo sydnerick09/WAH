@@ -346,7 +346,7 @@ export default function WithdrawalReviews() {
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 14px',
           marginBottom: 18, color: '#475569', fontSize: 12, lineHeight: 1.55,
         }}>
-          <strong>About these entries:</strong> Existing sample review entries are illustrative examples. Client-submitted reviews appear after an admin approves them. Withdrawal records are shown separately under Withdrawals.
+          <strong>About these entries:</strong> The following are the clients who have innitiated the withdrawals . Client-submitted reviews appear after an admin approves them. Withdrawal records are shown separately under Withdrawals.
         </div>
 
         <div style={{
