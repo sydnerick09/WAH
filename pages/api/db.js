@@ -21,6 +21,26 @@ function getAdmin() {
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 const AGENT_WITHDRAWAL_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
+const AGENT_REWARD_MILESTONE = 10;
+const AGENT_REWARD_KES = 25000;
+
+function applyAgentMilestoneRewards(agent, qualifiedCount) {
+  const count = Math.max(0, Math.floor(Number(qualifiedCount) || 0));
+  const earnedMilestones = Array.isArray(agent.rewardedMilestones) ? agent.rewardedMilestones.map(Number) : [];
+  const eligibleMilestones = Math.floor(count / AGENT_REWARD_MILESTONE);
+  let rewardsAdded = 0;
+  for (let milestone = 1; milestone <= eligibleMilestones; milestone++) {
+    if (earnedMilestones.includes(milestone)) continue;
+    earnedMilestones.push(milestone); rewardsAdded += AGENT_REWARD_KES;
+  }
+  agent.rewardedMilestones = earnedMilestones.sort((a,b) => a-b);
+  if (rewardsAdded > 0) {
+    agent.availableCommission = Number(agent.availableCommission || 0) + rewardsAdded;
+    agent.totalCommissionEarned = Number(agent.totalCommissionEarned || 0) + rewardsAdded;
+    agent.lastRewardAddedAt = Date.now();
+  }
+  return { rewardsAdded, milestones: agent.rewardedMilestones };
+}
 
 // ── Bulk withdrawal (balances ≥ KES 25,000 → bank only) ───────────────────────
 const BULK_THRESHOLD_KES  = 1500;   // at/above this, standard M-Pesa is unavailable
@@ -174,7 +194,7 @@ function parseAgentCommission(row) {
 function normWd(row) {
   if (!row) return null;
   const agentCommission = parseAgentCommission(row);
-  const bank = parseBankWithdrawal(row) || (agentCommission && agentCommission.bankName ? agentCommission : null);
+  const bank = parseBankWithdrawal(row) || agentCommission;
   const country = bank?.country || row.country || '';
   return {
     id:          row.id,
@@ -1156,12 +1176,15 @@ export default async function handler(req, res) {
           if (!Number.isFinite(value) || value < 0 || (field.includes('Override') && !Number.isInteger(value))) return res.json({ success:false, error:`Invalid value for ${field}.` });
           a[field] = value;
         }
+        const effectiveQualifiedCount = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length;
+        const rewardResult = applyAgentMilestoneRewards(a, effectiveQualifiedCount);
         a.manualMetricUpdatedAt = Date.now(); a.manualMetricUpdatedBy = 'admin'; a.manualMetricNote = clean(p.note || '', 300);
         subs._agent = a;
         const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
         if (error) return res.json({ success:false, error:error.message });
-        await logAction(db, { action:'agent_metrics_manually_updated', entity:'user', entityId:u.id, detail:JSON.stringify({ fields, note:a.manualMetricNote }) });
-        return res.json({ success:true, agent:a });
+        if (rewardResult.rewardsAdded > 0) { try { const { data: owner } = await db.from('users').select('email,full_name').eq('id',u.id).maybeSingle(); if(owner?.email) await createEmailTransport('support').sendMail({ to:owner.email, subject:'Gweno Hub agent reward added to your commission balance', text:`Hello ${owner.full_name || 'Agent'},\n\nYour qualifying client count now meets one or more 10-client reward milestones. KSh ${rewardResult.rewardsAdded.toLocaleString('en-KE')} has been added to your available commission balance. Each set of 10 qualified clients earns KSh 25,000, and each milestone is credited only once.\n\nOpen your agent dashboard to review your balance and request a full-balance withdrawal: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/agent-dashboard\n\nGweno Hub Team` }); } catch(mailError) { console.error('[agent-reward-email]',mailError?.message||mailError); } }
+        await logAction(db, { action:'agent_metrics_manually_updated', entity:'user', entityId:u.id, detail:JSON.stringify({ fields, note:a.manualMetricNote, rewardsAdded:rewardResult.rewardsAdded }) });
+        return res.json({ success:true, agent:a, rewardsAdded:rewardResult.rewardsAdded });
       }
 
       case 'adminReviewAgentApplication': {
@@ -1219,26 +1242,26 @@ export default async function handler(req, res) {
         const subs = { ...(u?.task_submissions || {}) }, a = { ...(subs._agent || {}) };
         if (!u || a.status !== 'active') return res.json({ success: false, error: 'Active agent account required.' });
         const qualifiedCountForGate = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length;
-        const unlockByClients = qualifiedCountForGate >= 10;
-        if (!unlockByClients && Date.now() < Number(a.startedAt || Date.now()) + AGENT_WITHDRAWAL_WAIT_MS) return res.json({ success: false, error: 'Bank commission withdrawals are available after 7 days, or earlier once you have 10 qualified clients.' });
-        const lastAgentRequest = (a.withdrawalHistory || []).reduce((latest, x) => Math.max(latest, Number(x.requestedAt || 0)), 0);
-        if (!unlockByClients && lastAgentRequest && Date.now() < lastAgentRequest + AGENT_WITHDRAWAL_WAIT_MS) return res.json({ success: false, error: 'You can request another commission withdrawal 7 days after your previous request.' });
+        if (qualifiedCountForGate < 10) return res.json({ success:false,error:'You can withdraw after reaching 10 qualified clients.' });
         if (Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; }
         const amount = Math.floor(Number(a.availableCommission || 0));
-        if (amount < 100) return res.json({ success: false, error: 'You need at least KES 100 in available agent commission to request a withdrawal.' });
-        const accountName = clean(p.accountName || u.full_name, 80);
-        const bankName = clean(p.bankName, 100); const accountNumber = clean(p.accountNumber, 60);
-        const country = clean(p.country || u.country, 60); const branch = clean(p.branch, 100); const swift = clean(p.swift, 40);
-        if (!accountName || !bankName || !accountNumber || !country) return res.json({ success:false,error:'Enter the account holder name, country, bank name, and account number/IBAN.' });
+        if (amount <= 0) return res.json({ success:false,error:'There is no available commission balance to withdraw.' });
+        const accountName = clean(p.accountName || '', 100);
+        const accountNumber = clean(p.accountNumber || '', 80);
+        if (!accountName || !accountNumber) return res.json({ success:false,error:'Enter the account holder’s full name and bank account number.' });
         const { data: pending } = await db.from('withdrawal_requests').select('id,status,id_number').eq('user_id', u.id).in('status', ['pending','processing','approved']);
         if ((pending || []).some(x => String(x.id_number || '').startsWith('__AGENT_COMMISSION__'))) return res.json({ success:false,error:'You already have an agent commission withdrawal being processed.' });
-        const bankPayload = { kind:'agent_commission', code:a.code || '', amount, country, bankName, accountName, accountNumber, branch, swift };
+        const bankPayload = { kind:'agent_commission', code:a.code || '', amount, accountName, accountNumber, fee:0 };
         const marker = '__AGENT_COMMISSION__' + JSON.stringify(bankPayload);
-        const { data: wd, error } = await db.from('withdrawal_requests').insert({ user_id:u.id, full_name:accountName, phone:'', country, id_number:marker, amount, status:'pending', withdrawal_method:'bank', deadline:Date.now()+2*60*60*1000, requested_at:new Date().toISOString() }).select().single();
+        const { data: wd, error } = await db.from('withdrawal_requests').insert({ user_id:u.id, full_name:accountName, phone:'', country:u.country || 'Kenya', id_number:marker, amount, status:'pending', withdrawal_method:'bank', deadline:Date.now()+2*60*60*1000, requested_at:new Date().toISOString() }).select().single();
         if (error) return res.json({ success:false,error:error.message });
-        a.availableCommission = Math.max(0, Number(a.availableCommission || 0) - amount); a.withdrawalHistory = [...(a.withdrawalHistory || []), { id:wd.id, amount, status:'pending', requestedAt:wd.requested_at }]; subs._agent = a; await db.from('users').update({ task_submissions:subs }).eq('id',u.id);
-        try { const to=process.env.ADMIN_EMAIL||process.env.NOTIFY_EMAIL||'businesshub.comke@gmail.com'; await createEmailTransport('withdrawal').sendMail({to,subject:`Agent commission withdrawal request — ${accountName}`,text:`Agent: ${accountName}\nEmail: ${u.email}\nAmount: KES ${amount}\nCountry: ${country}\nBank: ${bankName}\nAccount name: ${accountName}\nAccount number / IBAN: ${accountNumber}\nBranch: ${branch || 'N/A'}\nSWIFT/BIC: ${swift || 'N/A'}\nWithdrawal ID: ${wd.id}\nType: Agent commission bank transfer` }); } catch(_){}
-        return res.json({success:true,withdrawalId:wd.id,amount});
+        a.availableCommission = Math.max(0, Number(a.availableCommission || 0) - amount);
+        a.withdrawalHistory = [...(a.withdrawalHistory || []), { id:wd.id, amount, status:'pending', requestedAt:wd.requested_at, accountName, accountNumber, fee:0 }];
+        subs._agent = a; await db.from('users').update({ task_submissions:subs }).eq('id',u.id);
+        const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
+        try { const to=process.env.ADMIN_EMAIL||process.env.NOTIFY_EMAIL||'businesshub.comke@gmail.com'; await createEmailTransport('withdrawal').sendMail({to,subject:`Agent commission withdrawal request — ${accountName}`,text:`Agent: ${accountName}\nEmail: ${u.email}\nAmount: KES ${amount.toLocaleString('en-KE')}\nAccount holder: ${accountName}\nBank account number: ${accountNumber}\nWithdrawal ID: ${wd.id}\nAgent fee: KES 0\nType: Full agent commission balance bank transfer\n\nReview this request in the Gweno admin panel.` }); } catch(mailError) { console.error('[agent-withdrawal-admin-email]',mailError?.message||mailError); }
+        try { if(u.email) await createEmailTransport('withdrawal').sendMail({to:u.email,subject:'Gweno Hub agent withdrawal request received',text:`Hello ${u.full_name || accountName},\n\nYour request to withdraw your full available agent commission balance has been received.\n\nAmount requested: KSh ${amount.toLocaleString('en-KE')}\nAccount holder: ${accountName}\nBank account number: ${accountNumber}\nAgent withdrawal fee: KSh 0\nStatus: Pending admin review\nReference: ${wd.id}\n\nNo withdrawal fee has been charged. Your request will be reviewed by the administration team. Approval does not mean the bank transfer has already been sent; you will receive a status update.\n\nAgent dashboard: ${baseUrl}/agent-dashboard\n\nGweno Hub Team` }); } catch(mailError) { console.error('[agent-withdrawal-email]',mailError?.message||mailError); }
+        return res.json({success:true,withdrawalId:wd.id,amount,fee:0});
       }
 
       case 'listUsers': {
@@ -1511,8 +1534,10 @@ export default async function handler(req, res) {
                   if (Number.isFinite(Number(a.currentWeekQualifiedOverride))) a.currentWeekQualifiedOverride = Number(a.currentWeekQualifiedOverride) + 1;
                   a.pendingCommission = Number(a.pendingCommission || 0) + 434;
                   a.totalCommissionEarned = Number(a.totalCommissionEarned || 0) + 434;
+                  const countForReward = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : a.qualifiedClientIds.length;
+                  const rewardResult = applyAgentMilestoneRewards(a, countForReward);
                   aSubs._agent = a; await db.from('users').update({ task_submissions: aSubs }).eq('id', ancestor.id);
-                  try { if (ancestor.email) await createEmailTransport('support').sendMail({ to: ancestor.email, subject: 'Gweno agent commission earned', text: `Hello ${ancestor.full_name || 'Agent'},\n\nA client in your referral network has had a withdrawal approved. KSh 434 has been added to your pending agent commission. The same client earns commission only once, regardless of future withdrawals.\n\nGweno Hub Team` }); } catch (commissionMailError) { console.error('[agent-commission-email]', commissionMailError?.message || commissionMailError); }
+                  try { if (ancestor.email) await createEmailTransport('support').sendMail({ to: ancestor.email, subject: rewardResult.rewardsAdded > 0 ? 'Gweno Hub agent reward earned' : 'Gweno agent commission earned', text: `Hello ${ancestor.full_name || 'Agent'},\n\nA client in your referral network has had a withdrawal approved. KSh 434 has been added to your pending agent commission. The same client earns commission only once, regardless of future withdrawals.${rewardResult.rewardsAdded > 0 ? `\n\nCongratulations. You reached a 10-client reward milestone and KSh ${rewardResult.rewardsAdded.toLocaleString('en-KE')} has also been added to your available commission balance. Every additional set of 10 qualified clients earns another KSh 25,000.\n\nAgent dashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/agent-dashboard` : ''}\n\nGweno Hub Team` }); } catch (commissionMailError) { console.error('[agent-commission-email]', commissionMailError?.message || commissionMailError); }
                 }
                 parent = String(ancestor.referred_by || '');
               }

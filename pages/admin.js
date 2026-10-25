@@ -825,7 +825,7 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Demo Client Generator</div>
-          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Creates up to 400 country-matched real records. Demo records are labelled on the public board and are separate from genuine manual records.</div>
+          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Creates up to 400 country-matched demonstration records. Demo records are labelled on the public board and are separate from genuine manual records.</div>
         </div>
         <div>
           <label style={styles.fieldLabel}>Clients</label>
@@ -982,7 +982,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
   // Manual payout confirmation: admin has already sent the money via their
   // M-Pesa Business account; this marks it paid and deducts the user's balance.
   async function markPaid(wd) {
-    if (!confirm(`Confirm you have SENT KES ${Number(wd.amount).toLocaleString()} to ${wd.phone} via your M-Pesa Business account.\n\nThis marks the request paid and deducts KES ${Number(wd.amount).toLocaleString()} from the user's balance. Cannot be undone.`)) return;
+    if (!confirm(`Confirm you have SENT KES ${Number(wd.amount).toLocaleString()} to ${wd.isAgentCommission ? `${wd.accountName} (bank account ${wd.accountNumber})` : `${wd.phone} via your M-Pesa Business account`}.\n\nThis marks the request paid. This action cannot be undone.`)) return;
     setSaving(prev => ({ ...prev, [wd.id]: true }));
     const res = await dbProxy('adminMarkWithdrawalPaid', { adminSecret: secret, requestId: wd.id });
     setSaving(prev => ({ ...prev, [wd.id]: false }));
