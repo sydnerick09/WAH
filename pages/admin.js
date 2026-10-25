@@ -698,7 +698,7 @@ function UsersTab({ users, secret, onRefresh }) {
 // ─── Manual Withdrawal Records ────────────────────────────────────────────────
 function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
   const [form, setForm] = useState({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
-  const [demoForm, setDemoForm] = useState({ count: 10, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000 });
+  const [demoForm, setDemoForm] = useState({ count: 400, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000 });
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState({});
   const [deleting, setDeleting] = useState({});
@@ -825,11 +825,11 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Demo Client Generator</div>
-          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Publishes generated withdrawal records publicly using the same format as manually posted withdrawals.</div>
+          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Creates up to 400 country-matched real records. Demo records are labelled on the public board and are separate from genuine manual records.</div>
         </div>
         <div>
           <label style={styles.fieldLabel}>Clients</label>
-          <input type="number" min="1" max="50" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.count} onChange={e => setDemoForm({ ...demoForm, count: e.target.value })} />
+          <input type="number" min="1" max="400" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.count} onChange={e => setDemoForm({ ...demoForm, count: e.target.value })} />
         </div>
         <div>
           <label style={styles.fieldLabel}>Interval (minutes)</label>

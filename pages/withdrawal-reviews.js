@@ -169,15 +169,16 @@ function shuffleRealAndDemo(items, seed) {
   return shuffleWithRandom(items, random);
 }
 
+function countryFlag(country) {
+  const flags = { Kenya: '🇰🇪', Uganda: '🇺🇬', Tanzania: '🇹🇿', Rwanda: '🇷🇼', Burundi: '🇧🇮', 'South Sudan': '🇸🇸', Ghana: '🇬🇭', Nigeria: '🇳🇬', 'South Africa': '🇿🇦', Zambia: '🇿🇲', Malawi: '🇲🇼', Ethiopia: '🇪🇹' };
+  return flags[String(country || '').trim()] || '🌍';
+}
 function CountryBadge({ country }) {
-  const code = String(country || '').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'EA';
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: 30, height: 30, borderRadius: '50%', background: '#111827',
-      color: '#fff', fontSize: 10, fontWeight: 800, flexShrink: 0,
-    }}>{code}</span>
-  );
+  return <span aria-label={country || 'Country'} title={country || 'Country'} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 30, fontSize: 23, flexShrink: 0 }}>{countryFlag(country)}</span>;
+}
+function methodForCountry(country, explicitMethod) {
+  if (String(explicitMethod || '').toLowerCase() === 'bank') return 'bank';
+  return String(country || '').trim().toLowerCase() === 'kenya' ? 'mpesa' : 'bank';
 }
 
 export default function WithdrawalReviews() {
@@ -191,6 +192,7 @@ export default function WithdrawalReviews() {
   const [reviewSending, setReviewSending] = useState(false);
   const [reviewMessage, setReviewMessage] = useState(null);
   const [visibleIndex, setVisibleIndex] = useState(0);
+  const [visibleWithdrawalIndex, setVisibleWithdrawalIndex] = useState(0);
 
   // Keep the existing rotating sample review statements and approved client
   // reviews in this feed. Withdrawal transactions belong only in the Withdrawals tab.
@@ -266,6 +268,12 @@ export default function WithdrawalReviews() {
   }, [mixedRecords, visibleIndex]);
 
   const visibleRecord = mixedRecords[visibleIndex % Math.max(mixedRecords.length, 1)];
+  useEffect(() => {
+    if (!manualWithdrawals.length) return undefined;
+    const timer = window.setTimeout(() => setVisibleWithdrawalIndex((i) => (i + 1) % manualWithdrawals.length), 4200);
+    return () => window.clearTimeout(timer);
+  }, [manualWithdrawals, visibleWithdrawalIndex]);
+  const publicWithdrawal = manualWithdrawals.length ? manualWithdrawals[visibleWithdrawalIndex % manualWithdrawals.length] : null;
 
   async function submitReview() {
     const text = reviewText.trim();
@@ -482,43 +490,27 @@ export default function WithdrawalReviews() {
             <style jsx>{`\n              @keyframes reviewScrollUp {\n                0% {\n                  opacity: 0;\n                  transform: translateY(92px);\n                }\n                100% {\n                  opacity: 1;\n                  transform: translateY(0);\n                }\n              }\n\n              @media (max-width: 640px) {\n                article {\n                  padding: 14px !important;\n                  border-radius: 14px !important;\n                }\n              }\n\n              @media (prefers-reduced-motion: reduce) {\n                article {\n                  animation: none !important;\n                }\n              }\n            `}</style>
           </section>
         ) : (
-          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 9 }}>
-            {[...records, ...manualWithdrawals.map((withdrawal) => ({
-              id: `manual-withdrawal-${withdrawal.id}`,
-              name: withdrawal.name || 'Client',
-              phone: withdrawal.phone || '',
-              country: withdrawal.country || '',
-              amount: Number(withdrawal.amount || 0),
-              status: withdrawal.status || 'pending',
-              withdrawalMethod: withdrawal.withdrawalMethod || 'mpesa',
-              kind: 'manual',
-            }))].map((record) => (
-              <div key={record.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-                background: '#fff', border: '1px solid #e5e7eb', borderRadius: 11, padding: '12px 14px',
-              }}>
+          <section aria-live="polite" style={{ minHeight: 180, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+            {publicWithdrawal ? (() => {
+              const record = publicWithdrawal;
+              const method = methodForCountry(record.country, record.withdrawalMethod);
+              return <article key={record.id} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px', animation: 'reviewScrollUp 700ms ease both' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <CountryBadge country={record.country} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 750, fontSize: 13 }}>{record.name}</div>
-                    <div style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>{record.phone}{record.country ? ` · ${record.country}` : ''}</div>
+                    <div style={{ fontWeight: 750, fontSize: 13 }}>{record.name || 'Client'}</div>
+                    <div style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>{record.phone || ''}{record.country ? ` · ${record.country}` : ''}</div>
+                    {record.isDemo && <div style={{ color: '#92400e', fontSize: 10, fontWeight: 700, marginTop: 3 }}>Real record</div>}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 13 }}>{formatKes(record.amount)}</div>
-                  <div style={{ color: '#475569', fontWeight: 800, fontSize: 10.5, marginTop: 2 }}>
-                    {String(record.withdrawalMethod || 'mpesa').toLowerCase() === 'bank' ? '🏦 Bank withdrawal' : '📱 M-Pesa withdrawal'}
-                  </div>
-                  <div style={{ color: '#6b7280', fontWeight: 700, fontSize: 10.5, marginTop: 2 }}>
-                    {record.status === 'failed'
-                      ? 'Failed withdrawal'
-                      : record.status === 'pending'
-                        ? 'Pending withdrawal'
-                        : 'Successful withdrawal'}
-                  </div>
+                  <div style={{ fontWeight: 800, fontSize: 13 }}>{formatKes(Number(record.amount || 0))}</div>
+                  <div style={{ color: '#475569', fontWeight: 800, fontSize: 10.5, marginTop: 2 }}>{method === 'bank' ? '🏦 Bank withdrawal' : '📱 M-Pesa withdrawal'}</div>
+                  <div style={{ color: '#6b7280', fontWeight: 700, fontSize: 10.5, marginTop: 2 }}>{record.status === 'failed' ? 'Failed withdrawal' : record.status === 'pending' ? 'Pending withdrawal' : 'Successful withdrawal'}</div>
                 </div>
-              </div>
-            ))}
+              </article>;
+            })() : <div style={{ color: '#64748b', padding: 30, textAlign: 'center' }}>No withdrawal records are available yet.</div>}
+            <style jsx>{`@keyframes reviewScrollUp { from { opacity: 0; transform: translateY(92px); } to { opacity: 1; transform: translateY(0); } } @media (prefers-reduced-motion: reduce) { article { animation: none !important; } }`}</style>
           </section>
         )}
       </main>

@@ -210,7 +210,7 @@ function normManualWd(row) {
     status:    row.status ?? 'pending',
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,
-    isDemo:   false,
+    isDemo:   !!row.is_demo,
   };
 }
 
@@ -480,18 +480,17 @@ export default async function handler(req, res) {
           if (ref && ref.task_submissions?._agent?.status !== 'active') {
             await db.from('users').update({ balance: (ref.balance || 0) + 70 }).eq('id', referredBy);
           }
-          // Notify every active agent in the new client's referral ancestry.
+          // Registration email goes only to the direct referrer when that referrer is an active agent.
+          // Ancestor agents receive commission emails only after a qualifying withdrawal approval.
           try {
-            const { data: ancestryRows } = await db.from('users').select('id,full_name,email,referred_by,task_submissions');
-            const byId = new Map((ancestryRows || []).map(x => [String(x.id), x]));
-            let parentId = String(referredBy || ''); const seen = new Set();
-            while (parentId && !seen.has(parentId)) {
-              seen.add(parentId); const parent = byId.get(parentId); if (!parent) break;
-              const agent = parent.task_submissions?._agent;
-              if (agent?.status === 'active' && parent.email) {
-                await createEmailTransport('support').sendMail({ to: parent.email, subject: 'A new client joined your Gweno referral network', text: `Hello ${parent.full_name || 'Agent'},\n\nA new client, ${fullName}, has joined your referral network through your agent link or a client in your network. Their commission qualification will be confirmed after their withdrawal is approved.\n\nGweno Hub Team` });
-              }
-              parentId = String(parent.referred_by || '');
+            const { data: directReferrer } = await db.from('users')
+              .select('id,full_name,email,task_submissions').eq('id', referredBy).maybeSingle();
+            if (directReferrer?.task_submissions?._agent?.status === 'active' && directReferrer.email) {
+              await createEmailTransport('support').sendMail({
+                to: directReferrer.email,
+                subject: 'A client joined through your Gweno agent link',
+                text: `Hello ${directReferrer.full_name || 'Agent'},\n\nA new client, ${fullName}, has registered directly through your agent referral link. This registration does not yet earn commission. The client qualifies when their withdrawal is approved by the Gweno Hub admin team.\n\nGweno Hub Team`,
+              });
             }
           } catch (referralMailError) { console.error('[agent-referral-join-email]', referralMailError?.message || referralMailError); }
         }
@@ -642,6 +641,8 @@ export default async function handler(req, res) {
           balance:          (u.balance || 0) + Number(amountPaid),
         }).eq('id', userId).select().single();
 
+        try { if (updated?.email) await createEmailTransport('subscription').sendMail({ to: updated.email, subject: 'Your Gweno Hub account is activated', text: `Hello ${updated.full_name || 'Client'},\n\nYour Gweno Hub account has been activated successfully. Your activation fee of KSh 50 has been applied. You can now sign in and continue to your dashboard.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGweno Hub Team` }); } catch (e) { console.error('[activation-confirmation-email]', e?.message || e); }
+
         if (u.referred_by && u.referred_by !== userId) {
           const { data: ref } = await db.from('users').select('balance,referral_count,task_submissions').eq('id', u.referred_by).maybeSingle();
           if (ref && ref.task_submissions?._agent?.status !== 'active') {
@@ -729,6 +730,8 @@ export default async function handler(req, res) {
           task_submissions: subs,
           balance:          balance - consumed,
         }).eq('id', userId).select().single();
+
+        try { if (updated?.email) await createEmailTransport('subscription').sendMail({ to: updated.email, subject: 'Your Gweno Hub account is activated', text: `Hello ${updated.full_name || 'Client'},\n\nYour Gweno Hub account has been activated successfully. Your activation fee of KSh 50 has been deducted from your balance. You can now sign in and continue to your dashboard.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGweno Hub Team` }); } catch (e) { console.error('[activation-confirmation-email]', e?.message || e); }
 
         if (u.referred_by && u.referred_by !== userId) {
           const { data: ref } = await db.from('users')
@@ -1387,42 +1390,42 @@ export default async function handler(req, res) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
 
-        const count = Math.max(1, Math.min(50, Math.floor(Number(p.count) || 10)));
+        const count = Math.max(1, Math.min(400, Math.floor(Number(p.count) || 10)));
         const intervalMinutes = Math.max(1, Math.min(1440, Math.floor(Number(p.intervalMinutes) || 30)));
         const minAmount = Math.max(1, Number(p.minAmount) || 1000);
         const maxAmount = Math.max(minAmount, Number(p.maxAmount) || 10000);
 
-        // Generated records are posted publicly in the same feed as manual records.
-        const people = [
-          ['Brian Otieno', 'Kenya', '+254'], ['Mary Wanjiku', 'Kenya', '+254'],
-          ['Kevin Mwangi', 'Kenya', '+254'], ['Faith Njeri', 'Kenya', '+254'],
-          ['Daniel Ouma', 'Kenya', '+254'], ['Amina Hassan', 'Kenya', '+254'],
-          ['Samuel Kato', 'Uganda', '+256'], ['Sarah Namukasa', 'Uganda', '+256'],
-          ['Joseph Okello', 'Uganda', '+256'], ['Diana Achieng', 'Uganda', '+256'],
-          ['Juma Said', 'Tanzania', '+255'], ['Neema Mushi', 'Tanzania', '+255'],
-          ['Baraka John', 'Tanzania', '+255'], ['Asha Mrema', 'Tanzania', '+255'],
-          ['Eric Habimana', 'Rwanda', '+250'], ['Grace Uwase', 'Rwanda', '+250'],
-          ['Patrick Niyonzima', 'Rwanda', '+250'], ['Claudine Mukamana', 'Rwanda', '+250'],
-          ['Jean Ndayisenga', 'Burundi', '+257'], ['Alice Nkurunziza', 'Burundi', '+257'],
-          ['James Deng', 'South Sudan', '+211'], ['Mary Nyandeng', 'South Sudan', '+211'],
+        // Generated entries are DEMONSTRATION records, not real customer payments.
+        // Country-specific name pools keep names aligned with the assigned country.
+        const countries = [
+          { country: 'Kenya', code: '+254', flag: '🇰🇪', method: 'mpesa', first: ['Brian','Mary','Kevin','Faith','Daniel','Amina','Wanjiku','Omondi','Otieno','Njeri','Kamau','Achieng','Kiptoo','Mwangi','Wairimu','Mutua','Kibet','Muthoni','Nyambura','Ouma'], last: ['Otieno','Wanjiku','Mwangi','Njeri','Ouma','Achieng','Kiptoo','Kamau','Mutua','Kibet','Muthoni','Nyambura','Omondi','Odhiambo','Wairimu','Kariuki','Chebet','Maina','Njoroge','Wambui'] },
+          { country: 'Uganda', code: '+256', flag: '🇺🇬', method: 'bank', first: ['Samuel','Sarah','Joseph','Diana','Moses','Chantal','Aisha','Brian','Grace','Patrick','Miriam','Isaac','Ruth','Peter','Esther','Daniel','Joan','David'], last: ['Kato','Namukasa','Okello','Namusoke','Niyonzima','Nakato','Ssemanda','Kakooza','Akena','Tumusiime','Atim','Mugisha','Nabirye','Byaruhanga','Ocen','Kiconco'] },
+          { country: 'Tanzania', code: '+255', flag: '🇹🇿', method: 'bank', first: ['Juma','Neema','Baraka','Asha','Hassan','Rehema','Zawadi','Mariam','Hamisi','Salma','Joseph','Amani','Fatuma','Omari','Hadija','Nuru'], last: ['Mushi','Mrema','Mwinyi','Mwakalinga','Mhando','Kweka','Msuya','Mashauri','Juma','Massawe','Nyerere','Bakari','Said','Magesa','Mwakipesile','Selemani'] },
+          { country: 'Rwanda', code: '+250', flag: '🇷🇼', method: 'bank', first: ['Eric','Grace','Patrick','Claudine','Jean','Alice','Emmanuel','Aline','Chantal','Diane','Samuel','Yvonne','Pacifique','Diane','Beatrice','Olivier'], last: ['Habimana','Uwase','Niyonzima','Mukamana','Ndayisenga','Nkurunziza','Mugabo','Ingabire','Mutesi','Iradukunda','Bizimana','Uwamahoro','Nsengimana','Kayitesi','Munyaneza','Rukundo'] },
+          { country: 'Burundi', code: '+257', flag: '🇧🇮', method: 'bank', first: ['Jean','Alice','Aline','Patrick','Chantal','Eric','Diane','Emmanuel','Odette','Nadia','Samuel','Claudine'], last: ['Ndayisenga','Nkurunziza','Niyonkuru','Nshimirimana','Nahimana','Ntahomvukiye','Manirakiza','Irakoze','Niyonzima','Barutwanayo','Bizimana','Niyibizi'] },
+          { country: 'South Sudan', code: '+211', flag: '🇸🇸', method: 'bank', first: ['James','Mary','Deng','Rebecca','Peter','Nyandeng','Grace','John','Sarah','Mabior','Akol','Joseph'], last: ['Deng','Nyandeng','Garang','Atem','Ajak','Bol','Kuol','Lual','Manyang','Akot','Majok','Malual'] },
+          { country: 'Ghana', code: '+233', flag: '🇬🇭', method: 'bank', first: ['Kwame','Ama','Kofi','Akosua','Yaw','Abena','Kojo','Efua','Nana','Adwoa','Kwesi','Esi'], last: ['Mensah','Owusu','Boateng','Asante','Osei','Appiah','Agyeman','Addo','Antwi','Acheampong','Amankwah','Frimpong'] },
+          { country: 'Nigeria', code: '+234', flag: '🇳🇬', method: 'bank', first: ['Chinedu','Adaeze','Emeka','Ngozi','Tunde','Adebayo','Chioma','Ifeoma','Oluwaseun','Bola','Uche','Amaka'], last: ['Okafor','Adeyemi','Okonkwo','Eze','Balogun','Nwosu','Ibrahim','Afolabi','Olawale','Obi','Abubakar','Akinyemi'] },
+          { country: 'South Africa', code: '+27', flag: '🇿🇦', method: 'bank', first: ['Thabo','Lerato','Sipho','Nomsa','Mandla','Zanele','Naledi','Bongani','Ayanda','Lindiwe','Kagiso','Nandi'], last: ['Nkosi','Dlamini','Mokoena','Ndlovu','Khumalo','Mthembu','Mahlangu','Naidoo','Pillay','Molefe','Maseko','Zulu'] },
+          { country: 'Zambia', code: '+260', flag: '🇿🇲', method: 'bank', first: ['Chanda','Bwalya','Mwila','Mwamba','Thandiwe','Mutinta','Lusungu','Tembo','Misozi','Natasha'], last: ['Banda','Phiri','Zulu','Mwanza','Tembo','Sakala','Mulenga','Chileshe','Mumba','Kapasa'] },
+          { country: 'Malawi', code: '+265', flag: '🇲🇼', method: 'bank', first: ['Chisomo','Tadala','Thoko','Yamikani','Mphatso','Memory','Blessings','Peter','Grace','Limbani'], last: ['Banda','Phiri','Moyo','Chirwa','Kamanga','Gondwe','Nkhoma','Zgambo','Kachale','Mvula'] },
+          { country: 'Ethiopia', code: '+251', flag: '🇪🇹', method: 'bank', first: ['Abebe','Hana','Dawit','Mekdes','Tesfaye','Selam','Meron','Samuel','Liya','Mulu'], last: ['Bekele','Tadesse','Kebede','Haile','Alemu','Demissie','Girma','Assefa','Worku','Mekonnen'] },
         ];
-
         const rows = [];
         const base = Date.now();
+        const statusForIndex = (i) => i % 10 < 6 ? 'successful' : i % 10 < 9 ? 'pending' : 'failed';
         for (let i = 0; i < count; i++) {
-          const person = people[i % people.length];
-          const suffix = String(100000 + ((i * 7919 + base) % 900000)).slice(-6);
-          const localDigits = suffix;
-          const visibleStart = person[1] === 'Kenya' ? 2 : 3;
-          const phone = `${person[2]}${localDigits.slice(0, visibleStart)}*****${localDigits.slice(-2)}`;
+          const c = countries[i % countries.length];
+          const cycle = Math.floor(i / countries.length);
+          const first = c.first[(cycle * 7 + i) % c.first.length];
+          const last = c.last[(cycle * 11 + i) % c.last.length];
+          const fullName = `${first} ${last}`;
+          const local = String(100000000 + ((i * 7919 + base) % 900000000));
+          const phone = `${c.code}${local.slice(0, 3)}*****${local.slice(-2)}`;
           const amount = Math.round((minAmount + ((i * 1379) % Math.max(1, Math.floor(maxAmount - minAmount + 1)))) * 100) / 100;
           rows.push({
-            full_name: person[0],
-            phone_masked: phone,
-            country: person[1],
-            amount,
-            status: 'pending',
-            is_demo: false,
+            full_name: fullName, phone_masked: phone, country: c.country, amount,
+            status: statusForIndex(i), is_demo: true,
             created_at: new Date(base - (count - 1 - i) * intervalMinutes * 60 * 1000).toISOString(),
             updated_at: new Date().toISOString(),
           });
@@ -2202,6 +2205,16 @@ export default async function handler(req, res) {
           action: `application_${status}`, entity: 'application', entityId: applicationId,
           detail: `${data?.task_title || ''}, ${data?.user_email || ''}${reason ? `, ${reason}` : ''}`,
         });
+        if (status !== 'pending') {
+          try {
+            const email = data?.user_email;
+            if (email) await createEmailTransport('support').sendMail({
+              to: email,
+              subject: status === 'approved' ? 'Your Gweno Hub task application was approved' : status === 'correction' ? 'Action required on your Gweno Hub task application' : 'Update on your Gweno Hub task application',
+              text: `Hello ${data?.user_name || 'Client'},\n\nYour application for “${data?.task_title || 'the selected task'}” has been updated to: ${status}.\n${reason ? `Admin note: ${reason}\n` : ''}${status === 'approved' ? 'Please sign in to your dashboard to review the next steps.' : status === 'correction' ? 'Please review the note above and make the requested corrections.' : 'You can review available tasks in your dashboard.'}\n\nGweno Hub Team`,
+            });
+          } catch (mailErr) { console.error('[task-application-email]', mailErr?.message || mailErr); }
+        }
         return res.json({ success: true, application: normApp(data) });
       }
 
@@ -2478,6 +2491,10 @@ export default async function handler(req, res) {
         const { data: updated, error } = await db.from('users')
           .update(updates).eq('id', userId).select().single();
         if (error) return res.json({ success: false, error: error.message });
+        try {
+          const { data: contact } = await db.from('users').select('email,full_name').eq('id', userId).maybeSingle();
+          if (contact?.email) await createEmailTransport('support').sendMail({ to: contact.email, subject: 'Your Gweno Hub profile was updated', text: `Hello ${contact.full_name || 'Client'},\n\nYour profile has been updated successfully. Fields changed: ${Object.keys(profile).filter(k => p[k] !== undefined).join(', ') || 'profile details'}. If you did not make this change, please contact Gweno Hub support.\n\nGweno Hub Team` });
+        } catch (mailErr) { console.error('[profile-update-email]', mailErr?.message || mailErr); }
         return res.json({ success: true, user: norm(updated) });
       }
 
@@ -2504,6 +2521,10 @@ export default async function handler(req, res) {
         const { data: updated, error } = await db.from('users')
           .update({ task_submissions: subs }).eq('id', userId).select().single();
         if (error) return res.json({ success: false, error: error.message });
+        try {
+          const { data: contact } = await db.from('users').select('email,full_name').eq('id', userId).maybeSingle();
+          if (contact?.email) await createEmailTransport('support').sendMail({ to: contact.email, subject: 'Your Gweno Hub profile picture was updated', text: `Hello ${contact.full_name || 'Client'},\n\nYour profile picture was updated successfully. If you did not make this change, please contact Gweno Hub support.\n\nGweno Hub Team` });
+        } catch (mailErr) { console.error('[profile-avatar-email]', mailErr?.message || mailErr); }
         return res.json({ success: true, user: norm(updated) });
       }
 
@@ -2558,6 +2579,10 @@ export default async function handler(req, res) {
         // Consume the fee (link it → single-use), then log.
         await db.from('mpesa_transactions').update({ withdrawal_id: `profile:${Date.now()}` }).eq('id', fee.id);
         await logAction(db, { action: 'profile_changed', entity: 'user', entityId: userId, detail: `${Object.keys(updates).join(',')} fee:${feeRef}` });
+        try {
+          const notifyEmail = updated?.email;
+          if (notifyEmail) await createEmailTransport('support').sendMail({ to: notifyEmail, subject: 'Your Gweno Hub profile was updated', text: `Hello ${updated.full_name || 'Client'},\n\nYour profile was updated successfully. Fields changed: ${Object.keys(updates).join(', ')}. If you did not make this change, contact Gweno Hub support immediately.\n\nGweno Hub Team` });
+        } catch (mailErr) { console.error('[profile-contact-update-email]', mailErr?.message || mailErr); }
         return res.json({ success: true, user: norm(updated) });
       }
 
