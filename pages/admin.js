@@ -982,7 +982,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
   // Manual payout confirmation: admin has already sent the money via their
   // M-Pesa Business account; this marks it paid and deducts the user's balance.
   async function markPaid(wd) {
-    if (!confirm(`Confirm you have SENT KES ${Number(wd.amount).toLocaleString()} to ${wd.isAgentCommission ? `${wd.accountName} (bank account ${wd.accountNumber})` : `${wd.phone} via your M-Pesa Business account`}.\n\nThis marks the request paid. This action cannot be undone.`)) return;
+    if (!confirm(`Confirm you have SENT KES ${Number(wd.amount).toLocaleString()} to ${wd.isAgentCommission ? `${wd.accountName} at ${wd.bankName || 'the selected bank'} (account ${wd.accountNumber})` : `${wd.phone} via your M-Pesa Business account`}.\n\nThis marks the request paid. This action cannot be undone.`)) return;
     setSaving(prev => ({ ...prev, [wd.id]: true }));
     const res = await dbProxy('adminMarkWithdrawalPaid', { adminSecret: secret, requestId: wd.id });
     setSaving(prev => ({ ...prev, [wd.id]: false }));
