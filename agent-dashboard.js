@@ -26,7 +26,9 @@ export default function AgentDashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [withdrawalMethod, setWithdrawalMethod] = useState('bank');
   const [bank, setBank] = useState({ bankName: '', accountName: '', accountNumber: '' });
+  const [mpesa, setMpesa] = useState({ nationalId: '', phone: '' });
   const [bankSearch, setBankSearch] = useState('');
   const [withdrawMsg, setWithdrawMsg] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
@@ -58,17 +60,30 @@ export default function AgentDashboard() {
   const filteredKenyanBanks = KENYAN_BANKS.filter(name => name.toLowerCase().includes(bankSearch.trim().toLowerCase()));
 
   async function requestWithdrawal() {
-    if (!bank.bankName || !bank.accountName.trim() || !/^\d{5,30}$/.test(bank.accountNumber)) {
-      setWithdrawMsg('Select a bank, enter the account holder’s full name, and enter a valid account number (5–30 digits).');
-      return;
+    let details;
+    if (withdrawalMethod === 'bank') {
+      if (!bank.bankName || !bank.accountName.trim() || !/^\d{5,30}$/.test(bank.accountNumber)) {
+        setWithdrawMsg('Select a bank, enter the account holder’s full name, and enter a valid account number (5–30 digits).');
+        return;
+      }
+      details = bank;
+    } else {
+      const nationalId = mpesa.nationalId.replace(/\D/g, '');
+      const phoneDigits = mpesa.phone.replace(/\D/g, '');
+      const validSafaricom = /^(?:254|0)(?:7|1)\d{8}$/.test(phoneDigits) && (phoneDigits.startsWith('07') || phoneDigits.startsWith('01') || phoneDigits.startsWith('2547') || phoneDigits.startsWith('2541'));
+      if (!/^\d{8,9}$/.test(nationalId) || !validSafaricom) {
+        setWithdrawMsg('Enter a valid Kenyan ID (8–9 digits) and a Safaricom number in 07…, 01…, or 254… format.');
+        return;
+      }
+      details = { nationalId, phone: phoneDigits };
     }
     setWithdrawing(true); setWithdrawMsg('');
     try {
       const r = await fetch('/api/db', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-        op: 'requestAgentCommissionWithdrawal', authToken: getToken(), ...bank,
+        op: 'requestAgentCommissionWithdrawal', authToken: getToken(), method: withdrawalMethod, ...details,
       }) });
       const d = await r.json();
-      setWithdrawMsg(d.success ? `Bank withdrawal request submitted: KES ${Number(d.amount).toLocaleString()}.` : (d.error || 'Request failed.'));
+      setWithdrawMsg(d.success ? `${withdrawalMethod === 'bank' ? 'Bank' : 'M-Pesa'} withdrawal request submitted: KSh ${Number(d.amount).toLocaleString()}. No withdrawal fee.` : (d.error || 'Request failed.'));
       if (d.success) await refresh();
     } catch (_) { setWithdrawMsg('Could not submit the request. Please try again.'); }
     finally { setWithdrawing(false); }
@@ -98,20 +113,31 @@ export default function AgentDashboard() {
         onClick={() => { setShowBankForm(true); setWithdrawMsg(''); }}
       >Withdraw Full Balance</button>
       {showBankForm && canRequest && Number(data.balances.available) > 0 && <div style={{ marginTop: 14 }}>
-        <p style={smallText}>Your full available commission balance will be withdrawn. Agent withdrawals have no fee. Search and select your Kenyan bank, then enter the account details exactly as provided by your bank.</p>
-        <div style={formGrid}>
-          <div style={{ display: 'grid', gap: 7 }}>
-            <input style={field} placeholder="Search Kenyan banks…" aria-label="Search Kenyan banks" value={bankSearch} onChange={e => setBankSearch(e.target.value)} />
-            <select style={field} aria-label="Select bank" value={bank.bankName} onChange={e => setBank({ ...bank, bankName: e.target.value })} required>
-              <option value="">Select your bank</option>
-              {filteredKenyanBanks.map(name => <option key={name} value={name}>{name}</option>)}
+        <p style={smallText}>Your entire available commission balance will be withdrawn. Agent withdrawals have no fee. Choose M-Pesa or bank transfer.</p>
+        <div style={{ ...formGrid, marginBottom: 12 }}>
+          <label style={{ display: 'grid', gap: 6, fontWeight: 600 }}>Withdrawal method
+            <select style={field} value={withdrawalMethod} onChange={e => { setWithdrawalMethod(e.target.value); setWithdrawMsg(''); }}>
+              <option value="mpesa">M-Pesa (Safaricom)</option><option value="bank">Bank transfer</option>
             </select>
-            {bankSearch && filteredKenyanBanks.length === 0 && <small style={{ color: '#b91c1c' }}>No matching bank. Try another search.</small>}
-          </div>
-          <input style={field} placeholder="Account holder’s full name" value={bank.accountName} onChange={e => setBank({ ...bank, accountName: e.target.value })} required />
-          <input style={field} placeholder="Bank account number" inputMode="numeric" autoComplete="off" value={bank.accountNumber} onChange={e => setBank({ ...bank, accountNumber: e.target.value.replace(/[^0-9]/g, '').slice(0, 30) })} required />
+          </label>
+          {withdrawalMethod === 'bank' ? <>
+            <div style={{ display: 'grid', gap: 7 }}>
+              <input style={field} placeholder="Search Kenyan banks…" aria-label="Search Kenyan banks" value={bankSearch} onChange={e => setBankSearch(e.target.value)} />
+              <select style={field} aria-label="Select bank" value={bank.bankName} onChange={e => setBank({ ...bank, bankName: e.target.value })} required>
+                <option value="">Select your bank</option>
+                {filteredKenyanBanks.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+              {bankSearch && filteredKenyanBanks.length === 0 && <small style={{ color: '#b91c1c' }}>No matching bank. Try another search.</small>}
+            </div>
+            <input style={field} placeholder="Account holder’s full name" value={bank.accountName} onChange={e => setBank({ ...bank, accountName: e.target.value })} required />
+            <input style={field} placeholder="Bank account number" inputMode="numeric" autoComplete="off" value={bank.accountNumber} onChange={e => setBank({ ...bank, accountNumber: e.target.value.replace(/[^0-9]/g, '').slice(0, 30) })} required />
+          </> : <>
+            <input style={field} placeholder="National ID number (8–9 digits)" aria-label="National ID number" inputMode="numeric" autoComplete="off" maxLength={9} value={mpesa.nationalId} onChange={e => setMpesa({ ...mpesa, nationalId: e.target.value.replace(/\D/g, '').slice(0, 9) })} required />
+            <input style={field} placeholder="Safaricom number (07…, 01…, or 254…)" aria-label="Safaricom phone number" inputMode="tel" autoComplete="tel" value={mpesa.phone} onChange={e => setMpesa({ ...mpesa, phone: e.target.value.replace(/[^0-9+\s-]/g, '').slice(0, 18) })} required />
+          </>}
           <input style={{ ...field, background: '#f8fafc' }} aria-label="Full withdrawal amount" value={`KSh ${Number(data.balances.available).toLocaleString()}`} readOnly />
         </div>
+        <p style={smallText}>Withdrawal fee: KSh 0. The amount shown above is the full available balance; partial withdrawals are not allowed.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
           <button style={button} disabled={withdrawing} onClick={requestWithdrawal}>{withdrawing ? 'Submitting…' : 'Submit Full-Balance Withdrawal'}</button>
           <button style={{ ...button, background: '#64748b' }} disabled={withdrawing} onClick={() => setShowBankForm(false)}>Cancel</button>
