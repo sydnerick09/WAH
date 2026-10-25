@@ -169,12 +169,23 @@ function shuffleRealAndDemo(items, seed) {
   return shuffleWithRandom(items, random);
 }
 
-function countryFlag(country) {
-  const flags = { Kenya: '🇰🇪', Uganda: '🇺🇬', Tanzania: '🇹🇿', Rwanda: '🇷🇼', Burundi: '🇧🇮', 'South Sudan': '🇸🇸', Ghana: '🇬🇭', Nigeria: '🇳🇬', 'South Africa': '🇿🇦', Zambia: '🇿🇲', Malawi: '🇲🇼', Ethiopia: '🇪🇹' };
-  return flags[String(country || '').trim()] || '🌍';
-}
+const COUNTRY_FLAG_CODES = {
+  Kenya: 'ke', Uganda: 'ug', Tanzania: 'tz', Rwanda: 'rw', Burundi: 'bi',
+  'South Sudan': 'ss', Ghana: 'gh', Nigeria: 'ng', 'South Africa': 'za',
+  Zambia: 'zm', Malawi: 'mw', Ethiopia: 'et', Botswana: 'bw', Namibia: 'na',
+  Lesotho: 'ls', Eswatini: 'sz', Mozambique: 'mz', Madagascar: 'mg', Mauritius: 'mu',
+  Seychelles: 'sc', Gambia: 'gm', Senegal: 'sn', 'Sierra Leone': 'sl', Liberia: 'lr',
+  Cameroon: 'cm', 'Ivory Coast': 'ci', Benin: 'bj', Togo: 'tg', Niger: 'ne', Chad: 'td',
+  Gabon: 'ga', Angola: 'ao', 'Democratic Republic of the Congo': 'cd', Congo: 'cg',
+  Somalia: 'so', Egypt: 'eg', Morocco: 'ma', Algeria: 'dz', Tunisia: 'tn', India: 'in',
+  Pakistan: 'pk', Nepal: 'np', Bangladesh: 'bd', Philippines: 'ph', Indonesia: 'id',
+  Malaysia: 'my', 'United Kingdom': 'gb', Canada: 'ca', Australia: 'au', 'United States': 'us'
+};
 function CountryBadge({ country }) {
-  return <span aria-label={country || 'Country'} title={country || 'Country'} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 30, fontSize: 23, flexShrink: 0 }}>{countryFlag(country)}</span>;
+  const code = COUNTRY_FLAG_CODES[String(country || '').trim()];
+  return <span aria-label={`${country || 'Unknown'} flag`} title={country || 'Country'} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 27, flex: '0 0 36px', overflow: 'hidden', borderRadius: 4, background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+    {code ? <img src={`https://flagcdn.com/w80/${code}.png`} alt={`${country} flag`} width="36" height="24" loading="lazy" style={{ display: 'block', width: 36, height: 24, objectFit: 'cover' }} /> : <span style={{ fontSize: 10, fontWeight: 700 }}>🌐</span>}
+  </span>;
 }
 function methodForCountry(country, explicitMethod) {
   if (String(explicitMethod || '').toLowerCase() === 'bank') return 'bank';
@@ -268,12 +279,15 @@ export default function WithdrawalReviews() {
   }, [mixedRecords, visibleIndex]);
 
   const visibleRecord = mixedRecords[visibleIndex % Math.max(mixedRecords.length, 1)];
+  // Rotate a batch of ten public withdrawal records at a time.
   useEffect(() => {
-    if (!manualWithdrawals.length) return undefined;
-    const timer = window.setTimeout(() => setVisibleWithdrawalIndex((i) => (i + 1) % manualWithdrawals.length), 4200);
+    if (manualWithdrawals.length <= 10) return undefined;
+    const timer = window.setTimeout(() => setVisibleWithdrawalIndex((i) => (i + 10) % manualWithdrawals.length), 6500);
     return () => window.clearTimeout(timer);
   }, [manualWithdrawals, visibleWithdrawalIndex]);
-  const publicWithdrawal = manualWithdrawals.length ? manualWithdrawals[visibleWithdrawalIndex % manualWithdrawals.length] : null;
+  const publicWithdrawals = manualWithdrawals.length
+    ? Array.from({ length: Math.min(10, manualWithdrawals.length) }, (_, offset) => manualWithdrawals[(visibleWithdrawalIndex + offset) % manualWithdrawals.length])
+    : [];
 
   async function submitReview() {
     const text = reviewText.trim();
@@ -346,7 +360,7 @@ export default function WithdrawalReviews() {
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 14px',
           marginBottom: 18, color: '#475569', fontSize: 12, lineHeight: 1.55,
         }}>
-          <strong>About these entries:</strong> The following are the clients who have innitiated the withdrawals . Client-submitted reviews appear after an admin approves them. Withdrawal records are shown separately under Withdrawals.
+          <strong>About these entries:</strong> All reviews displayed here are genuine feedback submitted by Gweno clients.Direct from their dashboard. Withdrawal records are displayed from the clients details.
         </div>
 
         <div style={{
@@ -490,27 +504,33 @@ export default function WithdrawalReviews() {
             <style jsx>{`\n              @keyframes reviewScrollUp {\n                0% {\n                  opacity: 0;\n                  transform: translateY(92px);\n                }\n                100% {\n                  opacity: 1;\n                  transform: translateY(0);\n                }\n              }\n\n              @media (max-width: 640px) {\n                article {\n                  padding: 14px !important;\n                  border-radius: 14px !important;\n                }\n              }\n\n              @media (prefers-reduced-motion: reduce) {\n                article {\n                  animation: none !important;\n                }\n              }\n            `}</style>
           </section>
         ) : (
-          <section aria-live="polite" style={{ minHeight: 180, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            {publicWithdrawal ? (() => {
-              const record = publicWithdrawal;
-              const method = methodForCountry(record.country, record.withdrawalMethod);
-              return <article key={record.id} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px', animation: 'reviewScrollUp 700ms ease both' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                  <CountryBadge country={record.country} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 750, fontSize: 13 }}>{record.name || 'Client'}</div>
-                    <div style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>{record.phone || ''}{record.country ? ` · ${record.country}` : ''}</div>
-                    {record.isDemo && <div style={{ color: '#92400e', fontSize: 10, fontWeight: 700, marginTop: 3 }}>Real record</div>}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 13 }}>{formatKes(Number(record.amount || 0))}</div>
-                  <div style={{ color: '#475569', fontWeight: 800, fontSize: 10.5, marginTop: 2 }}>{method === 'bank' ? '🏦 Bank withdrawal' : '📱 M-Pesa withdrawal'}</div>
-                  <div style={{ color: '#6b7280', fontWeight: 700, fontSize: 10.5, marginTop: 2 }}>{record.status === 'failed' ? 'Failed withdrawal' : record.status === 'pending' ? 'Pending withdrawal' : 'Successful withdrawal'}</div>
-                </div>
-              </article>;
-            })() : <div style={{ color: '#64748b', padding: 30, textAlign: 'center' }}>No withdrawal records are available yet.</div>}
-            <style jsx>{`@keyframes reviewScrollUp { from { opacity: 0; transform: translateY(92px); } to { opacity: 1; transform: translateY(0); } } @media (prefers-reduced-motion: reduce) { article { animation: none !important; } }`}</style>
+          <section aria-live="polite" style={{ minHeight: 360, maxWidth: 980, width: '100%', margin: '0 auto', display: 'flex', alignItems: 'stretch', justifyContent: 'center', overflow: 'hidden', padding: 4, boxSizing: 'border-box' }}>
+            {publicWithdrawals.length ? (
+              <div className="withdrawal-board-grid" style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, alignContent: 'start' }}>
+                {publicWithdrawals.map((record, index) => {
+                  const method = methodForCountry(record.country, record.withdrawalMethod);
+                  return <article key={`${record.id || record.name || 'withdrawal'}-${visibleWithdrawalIndex}-${index}`} style={{ minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 9, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 13px', animation: `reviewScrollUp ${500 + index * 45}ms ease both` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                      <CountryBadge country={record.country} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 750, fontSize: 12, overflowWrap: 'anywhere' }}>{record.name || 'Client'}</div>
+                        <div style={{ color: '#6b7280', fontSize: 10.5, marginTop: 2, overflowWrap: 'anywhere' }}>{record.phone || ''}{record.country ? ` · ${record.country}` : ''}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0, maxWidth: '44%' }}>
+                      <div style={{ fontWeight: 800, fontSize: 12 }}>{formatKes(Number(record.amount || 0))}</div>
+                      <div style={{ color: '#475569', fontWeight: 800, fontSize: 9.5, marginTop: 2 }}>{method === 'bank' ? 'Bank transfer' : 'M-Pesa'}</div>
+                      <div style={{ color: record.status === 'failed' ? '#b91c1c' : record.status === 'pending' ? '#a16207' : '#15803d', fontWeight: 700, fontSize: 9.5, marginTop: 2 }}>{record.status === 'failed' ? 'Failed' : record.status === 'pending' ? 'Pending' : 'Successful'}</div>
+                    </div>
+                  </article>;
+                })}
+              </div>
+            ) : <div style={{ color: '#64748b', padding: 30, textAlign: 'center' }}>No withdrawal records are available yet.</div>}
+            <style jsx>{`
+              @keyframes reviewScrollUp { from { opacity: 0; transform: translateY(34px); } to { opacity: 1; transform: translateY(0); } }
+              @media (max-width: 640px) { .withdrawal-board-grid { grid-template-columns: minmax(0, 1fr) !important; } }
+              @media (prefers-reduced-motion: reduce) { article { animation: none !important; } }
+            `}</style>
           </section>
         )}
       </main>
