@@ -1,0 +1,2634 @@
+import { createClient } from '@supabase/supabase-js';
+import { TASKS } from '../../lib/tasks';
+import { verifyUnsubToken } from '../../lib/unsubToken';
+import { sendApprovalEmail } from '../../lib/approvalEmail';
+import { isEmail, isPhone, nonEmpty, isPositiveNumber, clean } from '../../lib/validate';
+import { hashPassword, verifyPassword } from '../../lib/password';
+import { issueToken, verifyToken, issueResetToken, verifyResetToken, peekUid } from '../../lib/token';
+import { computeXp, levelInfo } from '../../lib/gamification';
+import { sendResetEmail } from '../../lib/resetEmail';
+import { createEmailTransport } from '../../lib/emailTransport';
+import { b2cPayment, isB2CConfigured, normalizePhone, isValidMsisdn } from '../../lib/daraja';
+import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../lib/withdrawalFees';
+
+function getAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false } }
+  );
+}
+
+const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const AGENT_WITHDRAWAL_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
+const AGENT_REWARD_MILESTONE = 10;
+const AGENT_REWARD_KES = 25000;
+
+function applyAgentMilestoneRewards(agent, qualifiedCount) {
+  const count = Math.max(0, Math.floor(Number(qualifiedCount) || 0));
+  const earnedMilestones = Array.isArray(agent.rewardedMilestones) ? agent.rewardedMilestones.map(Number) : [];
+  const eligibleMilestones = Math.floor(count / AGENT_REWARD_MILESTONE);
+  let rewardsAdded = 0;
+  for (let milestone = 1; milestone <= eligibleMilestones; milestone++) {
+    if (earnedMilestones.includes(milestone)) continue;
+    earnedMilestones.push(milestone); rewardsAdded += AGENT_REWARD_KES;
+  }
+  agent.rewardedMilestones = earnedMilestones.sort((a,b) => a-b);
+  if (rewardsAdded > 0) {
+    agent.availableCommission = Number(agent.availableCommission || 0) + rewardsAdded;
+    agent.totalCommissionEarned = Number(agent.totalCommissionEarned || 0) + rewardsAdded;
+    agent.lastRewardAddedAt = Date.now();
+  }
+  return { rewardsAdded, milestones: agent.rewardedMilestones };
+}
+
+// ── Bulk withdrawal (balances ≥ KES 25,000 → bank only) ───────────────────────
+const BULK_THRESHOLD_KES  = 1500;   // at/above this, standard M-Pesa is unavailable
+const BANK_FEE_USD        = 25;      // "other countries" withdrawal fee (converted live to KES)
+const MPESA_FEE_KES       = 650;     // one previously-paid M-Pesa withdrawal fee
+const MAX_FEE_DEDUCTIONS  = 3;       // admin may credit up to three KES 650 fees (KES 1,950)
+const DEFAULT_TILL        = process.env.MPESA_TILL || '1545320';  // M-Pesa Buy Goods till (admin-editable)
+
+// Live USD→KES rate (never hardcoded). Fetched per request; falls back to a
+// clearly-flagged approximate value only if the rate service is unreachable so
+// the flow never hard-fails.
+async function fetchUsdToKes() {
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(6000) });
+    const j = await r.json();
+    const kes = Number(j?.rates?.KES);
+    if (kes && kes > 0) return { rate: kes, live: true };
+  } catch (_) { /* fall through to fallback */ }
+  return { rate: 129, live: false };
+}
+
+// Server-authoritative bulk fee breakdown. The user declares how many M-Pesa
+// withdrawal fees they've paid; the credited count is always clamped to
+// [0, MAX_FEE_DEDUCTIONS] server-side so no one can claim more than two. The
+// recorded history is returned alongside for auditing/transparency.
+async function computeBulkQuote(u, declaredFees) {
+  const balance      = Number(u.balance || 0);
+  const subs         = u.task_submissions || {};
+  const recordedFees = Math.max(0, Number(subs._mpesaFeesPaid || 0));
+  // The admin-verified count drives the credit (up to MAX_FEE_DEDUCTIONS = 3).
+  // The client's own declaration is kept for reference but can't raise the
+  // credit, so clients can't over-claim — the admin decides how many apply.
+  const declared     = Math.max(0, Math.floor(Number(declaredFees) || 0));
+  const eligible     = Math.max(0, Math.min(recordedFees, MAX_FEE_DEDUCTIONS));
+  const { rate, live } = await fetchUsdToKes();
+  const convertedKes = Math.round(BANK_FEE_USD * rate);
+  const deductionKes = eligible * MPESA_FEE_KES;
+  const amountDueKes = Math.max(0, convertedKes - deductionKes);
+  return {
+    balance, feeUsd: BANK_FEE_USD, rate: Math.round(rate * 100) / 100, rateLive: live,
+    convertedKes, recordedFees, declaredFees: declared, eligibleDeductions: eligible,
+    perFeeKes: MPESA_FEE_KES, maxDeductions: MAX_FEE_DEDUCTIONS,
+    deductionKes, amountDueKes,
+  };
+}
+
+// The password hash is never returned in any response (not even to the admin
+// panel) so it can't leak or be accidentally re-submitted. Admins reset
+// passwords via a write-only "new password" field.
+function norm(row) {
+  if (!row) return null;
+  const subs = row.task_submissions ?? {};
+
+  const actAt      = subs._act ?? null;
+  const actExpires = actAt ? actAt + ONE_MONTH_MS : null;
+  const activated  = actAt !== null && (!actExpires || Date.now() <= actExpires);
+
+  const paidAt      = row.premium_paid_at ?? null;
+  const premExpires = paidAt ? paidAt + ONE_MONTH_MS : null;
+  const premium     = (row.premium ?? false) && paidAt !== null && (!premExpires || Date.now() <= premExpires);
+
+  const suspended     = subs._suspended ?? false;
+  const suspendedAt   = subs._suspendedAt ?? null;
+  const suspendReason = subs._suspendReason ?? '';
+
+  const quiz  = subs._quiz  ?? null;
+  const ptest = subs._ptest ?? null;
+
+  // Extended profile fields live in task_submissions._profile (no schema change,
+  // mirrors the existing _act/_quiz/_suspended pattern).
+  const profile = subs._profile ?? {};
+
+  return {
+    id:               row.id,
+    fullName:         row.full_name        ?? '',
+    email:            row.email            ?? '',
+    phone:            row.phone            ?? '',
+    country:          row.country          ?? '',
+    password:         '',
+    username:         profile.username     ?? '',
+    avatar:           profile.avatar       ?? '',
+    address:          profile.address      ?? '',
+    postalCode:       profile.postalCode   ?? '',
+    state:            profile.state        ?? '',
+    activated,
+    activatedAt:      actAt,
+    activatedExpiresAt: actExpires,
+    premium,
+    premiumPaidAt:    paidAt,
+    premiumExpiresAt: premExpires,
+    balance:          Number(row.balance   ?? 0),
+    referralCount:   Number(row.referral_count  ?? 0),
+    referredBy:      row.referred_by      ?? null,
+    completedTasks:  Number(row.completed_tasks ?? 0),
+    activeBids:      Number(row.active_bids     ?? 0),
+    taskSubmissions: row.task_submissions  ?? {},
+    createdAt:       row.created_at,
+    suspended,
+    suspendedAt,
+    suspendReason,
+    quizDone:        quiz !== null,
+    quizScore:       Number(quiz?.score  ?? 0),
+    quizEarned:      Number(quiz?.earned ?? 0),
+    premiumBalance:  Number(subs._pbal   ?? 0),
+    premiumTestDone: ptest !== null,
+    premiumTestScore: Number(ptest?.score ?? 0),
+    mpesaFeesPaid:   Math.max(0, Number(subs._mpesaFeesPaid ?? 0)),
+    streak:          Math.max(0, Number(subs._streak?.count ?? 0)),
+    lastLoginDay:    subs._streak?.lastDay ?? null,
+    notifications:   Array.isArray(subs._notifs) ? subs._notifs : [],
+    agent:            subs._agent ?? null,
+    agentReferralCode: subs._agent?.code ?? null,
+  };
+}
+
+function maskWithdrawalPhone(phone, country = '') {
+  const raw = String(phone || '').trim();
+  if (!raw) return '';
+  const prefix = raw.startsWith('+') ? '+' : '';
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  const visibleStart = String(country || '').trim().toLowerCase() === 'kenya' ? 2 : 3;
+  if (digits.length <= visibleStart + 2) return `${prefix}${'*'.repeat(Math.max(1, digits.length - 2))}`;
+  return `${prefix}${digits.slice(0, visibleStart)}*****${digits.slice(-2)}`;
+}
+
+function maskBankAccount(accountNumber) {
+  const raw = String(accountNumber || '').trim();
+  if (!raw) return '';
+  const chars = raw.replace(/\s+/g, '');
+  if (chars.length <= 4) return '*'.repeat(chars.length);
+  return `${chars.slice(0, 2)}****${chars.slice(-2)}`;
+}
+
+function parseBankWithdrawal(row) {
+  const raw = String(row?.id_number || '');
+  if (!raw.startsWith('__BANK_WITHDRAWAL__')) return null;
+  try {
+    const bank = JSON.parse(raw.slice('__BANK_WITHDRAWAL__'.length));
+    if (bank && bank.kind === 'bank') return bank;
+  } catch (_) { /* legacy/non-bank value */ }
+  return null;
+}
+
+function parseAgentCommission(row) {
+  const raw = String(row?.id_number || '');
+  if (!raw.startsWith('__AGENT_COMMISSION__')) return null;
+  try { const payload = JSON.parse(raw.slice('__AGENT_COMMISSION__'.length)); return payload && payload.kind === 'agent_commission' ? payload : null; } catch (_) { return null; }
+}
+
+function normWd(row) {
+  if (!row) return null;
+  const agentCommission = parseAgentCommission(row);
+  const bank = parseBankWithdrawal(row) || agentCommission;
+  const country = bank?.country || row.country || '';
+  return {
+    id:          row.id,
+    userId:      row.user_id,
+    fullName:    row.full_name,
+    phone:       maskWithdrawalPhone(row.phone, country),
+    rawPhone:    row.phone || '',
+    idNumber:    bank || String(row.id_number || '').startsWith('__AGENT_COMMISSION__') ? '' : row.id_number,
+    isAgentCommission: String(row.id_number || '').startsWith('__AGENT_COMMISSION__'),
+    agentCountry: agentCommission?.country || '',
+    amount:      Number(row.amount || 0),
+    status:      row.status      ?? 'pending',
+    rejectReason: row.reject_reason ?? '',
+    deadline:    row.deadline,
+    requestedAt: row.requested_at,
+    updatedAt:   row.updated_at  ?? null,
+    withdrawalMethod: bank ? 'bank' : (row.withdrawal_method || 'mpesa'),
+    bankName: bank?.bankName || '',
+    accountName: bank?.accountName || '',
+    accountNumber: bank ? String(bank.accountNumber || '') : '',
+    country,
+  };
+}
+
+function normManualWd(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    name:      row.full_name ?? '',
+    phone:     row.phone_masked ?? '',
+    country:   row.country ?? '',
+    amount:    Number(row.amount || 0),
+    status:    row.status ?? 'pending',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
+    isDemo:   !!row.is_demo,
+  };
+}
+
+function validManualWithdrawalStatus(status) {
+  return ['pending', 'successful', 'failed'].includes(String(status || '').toLowerCase());
+}
+
+function cleanManualWithdrawalName(value) {
+  return clean(value, 80).trim();
+}
+
+function cleanMaskedPhone(value) {
+  return clean(value, 30).trim();
+}
+
+// Always show a recent-looking posted date (within the last 6 days), stable
+// per task and relative to today, so the marketplace never looks stale. Runs
+// server-side on every request, so the dates refresh automatically each day —
+// the real `created_at` is kept separately for expiry/ordering logic.
+function freshDatePosted(row) {
+  const key = String(row.id ?? row.title ?? '');
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  const d = new Date();
+  d.setDate(d.getDate() - (h % 6)); // 0 to 5 days ago
+  return d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// A rolling future deadline (7 to 14 days out), stable per task and relative to
+// today, so admin-created tasks always show a due date that stays in the future.
+function freshDueDate(row) {
+  const key = String(row.id ?? row.title ?? '');
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  const d = new Date();
+  d.setDate(d.getDate() + 7 + (h % 8)); // 7 to 14 days ahead
+  return d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// Proposals are capped at a small word count to avoid bulk text (mirrors the
+// client-side limit on the application form).
+function clampWords(s, max = 40) {
+  const t = String(s || '').trim();
+  const words = t.split(/\s+/).filter(Boolean);
+  return words.length <= max ? t : words.slice(0, max).join(' ');
+}
+
+// Admin-managed task (stored in the `tasks` table). Shape matches lib/tasks.js
+// so it can be shown on the dashboard alongside the built-in tasks.
+function normTask(row) {
+  if (!row) return null;
+  return {
+    id:          row.id,
+    title:       row.title       ?? '',
+    description: row.description ?? '',
+    category:    row.category    ?? 'General',
+    poster:      row.poster      ?? 'Gweno Hub',
+    location:    row.location    ?? 'Remote',
+    questions:   Array.isArray(row.questions) ? row.questions : [],
+    payment:     Number(row.payment ?? 0),   // reward
+    slots:       Number(row.slots   ?? 0),    // limit (0 = unlimited)
+    claimed:     Number(row.claimed ?? 0),
+    active:      row.active ?? true,
+    datePosted:  freshDatePosted(row),
+    dueDate:     freshDueDate(row),
+    createdAt:   row.created_at,
+    // User-posted marketplace tasks encode the creator in the id: "<uid>~<rand>".
+    userPosted:  String(row.id || '').includes('~'),
+    creatorId:   String(row.id || '').includes('~') ? String(row.id).split('~')[0] : null,
+  };
+}
+
+function normSub(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    userId:    row.user_id,
+    email:     row.user_email,
+    name:      row.user_name,
+    taskId:    row.task_id,
+    taskTitle: row.task_title,
+    reward:    Number(row.reward || 0),
+    note:      row.note   ?? '',
+    status:    row.status ?? 'pending',
+    reason:    row.reason ?? '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
+// Task application / proposal (stored in the `applications` table).
+function normApp(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    userId:    row.user_id,
+    email:     row.user_email,
+    name:      row.user_name,
+    taskId:    row.task_id,
+    taskTitle: row.task_title,
+    message:   row.message ?? '',
+    extra:     row.extra   ?? '',
+    status:    row.status  ?? 'pending',
+    reason:    row.reason  ?? '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
+function normAction(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    action:    row.action ?? '',
+    entity:    row.entity ?? '',
+    entityId:  row.entity_id ?? '',
+    detail:    row.detail ?? '',
+    actor:     row.actor  ?? 'admin',
+    createdAt: row.created_at,
+  };
+}
+
+// Best-effort audit-trail write. Never throws (a missing table must not break
+// the action it is logging).
+async function logAction(db, { action, entity, entityId, detail }) {
+  try {
+    await db.from('admin_actions').insert({
+      action, entity, entity_id: entityId != null ? String(entityId) : null, detail: detail || '',
+    });
+  } catch (_) { /* audit is best-effort */ }
+}
+
+// In-app notification for a user. Stored in task_submissions._notifs (capped)
+// so no schema change is needed. Best-effort; never throws.
+async function pushNotif(db, userId, { type, title, body }) {
+  if (!userId) return;
+  try {
+    const { data: u } = await db.from('users').select('task_submissions').eq('id', userId).maybeSingle();
+    if (!u) return;
+    const subs = { ...(u.task_submissions || {}) };
+    const list = Array.isArray(subs._notifs) ? subs._notifs : [];
+    list.unshift({ id: `${Date.now()}${Math.random().toString(36).slice(2, 6)}`, type, title, body: body || '', read: false, at: Date.now() });
+    subs._notifs = list.slice(0, 40);
+    await db.from('users').update({ task_submissions: subs }).eq('id', userId);
+  } catch (_) { /* best-effort */ }
+}
+
+// ── Rate limiting (Supabase-backed fixed window; no external service) ─────────
+// Fails OPEN: if the `rate_limits` table is missing or any query errors, we
+// never block, so this can't lock legitimate users out.
+function clientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  return req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
+}
+function tooManyMsg(retryAfter) {
+  const mins = Math.max(1, Math.ceil((retryAfter || 60) / 60));
+  return `Too many attempts. Please try again in about ${mins} minute${mins === 1 ? '' : 's'}.`;
+}
+async function rlCheck(db, bucket, limit, windowMs) {
+  try {
+    const { data: row } = await db.from('rate_limits').select('count,window_start').eq('bucket', bucket).maybeSingle();
+    if (!row) return { blocked: false };
+    const elapsed = Date.now() - new Date(row.window_start).getTime();
+    if (elapsed > windowMs) return { blocked: false };
+    if (row.count >= limit) return { blocked: true, retryAfter: Math.ceil((windowMs - elapsed) / 1000) };
+    return { blocked: false };
+  } catch (_) { return { blocked: false }; }
+}
+async function rlHit(db, bucket, windowMs) {
+  try {
+    const now = Date.now();
+    const { data: row } = await db.from('rate_limits').select('count,window_start').eq('bucket', bucket).maybeSingle();
+    if (!row || now - new Date(row.window_start).getTime() > windowMs) {
+      await db.from('rate_limits').upsert({ bucket, count: 1, window_start: new Date(now).toISOString() });
+    } else {
+      await db.from('rate_limits').update({ count: row.count + 1 }).eq('bucket', bucket);
+    }
+  } catch (_) { /* best-effort */ }
+}
+async function rlClear(db, bucket) {
+  try { await db.from('rate_limits').delete().eq('bucket', bucket); } catch (_) {}
+}
+
+// Ops that act on a single user's own data. For these we IGNORE any user id in
+// the request body and derive the authenticated user id from the signed session
+// token, so a caller can never read or modify another user's data.
+const USER_SCOPED = new Set([
+  'getUser', 'activateUser', 'awardQuiz', 'awardPremiumTest',
+  'upgradePremiumWithBalance', 'activateWithBalance', 'upgradeToPremium',
+  'submitTask', 'createBid', 'createWithdrawal', 'getWithdrawal',
+  'updateWithdrawal', 'listUserSubmissions', 'listUserApplications',
+  'createApplication',
+  'updateProfile', 'updateAvatar', 'changeContact', 'deleteAccount',
+  'recordMpesaFee', 'bulkWithdrawalQuote', 'submitBulkWithdrawal', 'checkWithdrawalEligibility',
+  'submitReview', 'checkPremiumEligibility', 'submitAgentApplication', 'getAgentDashboard', 'requestAgentCommissionWithdrawal',
+]);
+
+export const config = { api: { bodyParser: { sizeLimit: '8mb' } } };
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  const db = getAdmin();
+  const { op, ...p } = req.body;
+
+  // Authenticate + authorize user-scoped ops from the token (not the body).
+  if (USER_SCOPED.has(op)) {
+    const uid = verifyToken(p.authToken);
+    if (!uid) return res.status(401).json({ error: 'Unauthorized', authRequired: true });
+    p.userId = uid;   // ops read userId
+    p.id     = uid;   // getUser reads id
+    delete p.email;   // force uid-based lookups (no email-based bypass)
+  }
+
+  try {
+    switch (op) {
+
+      case 'registerUser': {
+        // Rate-limit mass sign-ups per IP (lenient — abuse only). Fails open.
+        {
+          const bucket = `register:${clientIp(req)}`;
+          const chk = await rlCheck(db, bucket, 30, 60 * 60 * 1000); // 30 / hour
+          if (chk.blocked) return res.json({ success: false, message: tooManyMsg(chk.retryAfter) });
+          await rlHit(db, bucket, 60 * 60 * 1000);
+        }
+
+        const { activated, premium, premiumPaidAt, balance,
+                referralCount } = p;
+        let referredBy = p.referredBy || null;
+        const requestedAgentCode = clean(p.agentCode, 40).toUpperCase();
+        if (requestedAgentCode) {
+          const { data: possibleAgents } = await db.from('users').select('id,task_submissions');
+          const foundAgent = (possibleAgents || []).find(x => String(x.task_submissions?._agent?.code || '').toUpperCase() === requestedAgentCode && x.task_submissions?._agent?.status === 'active');
+          if (foundAgent) referredBy = foundAgent.id;
+        }
+
+        // Server-side validation + sanitization (authoritative — never trust
+        // the client). Reject malformed input before touching the database.
+        const fullName = clean(p.fullName, 80);
+        const email    = clean(p.email, 120).toLowerCase();
+        const phone    = clean(p.phone, 20);
+        const country  = clean(p.country, 60);
+        const password = String(p.password ?? '');
+        if (!nonEmpty(fullName)) return res.json({ success: false, message: 'Full name is required.' });
+        if (!isEmail(email))     return res.json({ success: false, message: 'A valid email address is required.' });
+        if (!isPhone(phone))     return res.json({ success: false, message: 'A valid phone number is required.' });
+        if (password.length < 8) return res.json({ success: false, message: 'Password must be at least 8 characters.' });
+
+        // One account per email (case-insensitive)
+        const { data: existing } = await db.from('users')
+          .select('id').ilike('email', email).limit(1);
+        if (existing && existing.length) return res.json({ success: false, message: 'Email already registered.' });
+
+        const id = Date.now().toString();
+        const { data, error } = await db.from('users').insert({
+          id, full_name: fullName, email, phone, country, password: hashPassword(password),
+          activated, premium, premium_paid_at: premiumPaidAt,
+          balance, referral_count: referralCount, referred_by: referredBy,
+          completed_tasks: 0, active_bids: 0, task_submissions: {},
+        }).select().single();
+
+        if (error) return res.json({ success: false, message: error.message });
+
+        if (referredBy && referredBy !== id) {
+          const { data: ref } = await db.from('users').select('balance,task_submissions').eq('id', referredBy).maybeSingle();
+          if (ref && ref.task_submissions?._agent?.status !== 'active') {
+            await db.from('users').update({ balance: (ref.balance || 0) + 70 }).eq('id', referredBy);
+          }
+          // Registration email goes only to the direct referrer when that referrer is an active agent.
+          // Ancestor agents receive commission emails only after a qualifying withdrawal approval.
+          try {
+            const { data: directReferrer } = await db.from('users')
+              .select('id,full_name,email,task_submissions').eq('id', referredBy).maybeSingle();
+            if (directReferrer?.task_submissions?._agent?.status === 'active' && directReferrer.email) {
+              await createEmailTransport('support').sendMail({
+                to: directReferrer.email,
+                subject: 'A client joined through your Gweno agent link',
+                text: `Hello ${directReferrer.full_name || 'Agent'},\n\nA new client, ${fullName}, has registered directly through your agent referral link. This registration does not yet earn commission. The client qualifies when their withdrawal is approved by the Gweno Hub admin team.\n\nGweno Hub Team`,
+              });
+            }
+          } catch (referralMailError) { console.error('[agent-referral-join-email]', referralMailError?.message || referralMailError); }
+        }
+
+        return res.json({ success: true, user: norm(data), authToken: issueToken(data.id) });
+      }
+
+      case 'migrateUser': {
+        const u = p.user;
+        if (!u?.id) return res.json({ data: null });
+
+        // Return existing record if already in Supabase (by id or email)
+        const { data: byId } = await db.from('users')
+          .select('*').eq('id', u.id).maybeSingle();
+        if (byId) return res.json({ data: norm(byId), authToken: issueToken(byId.id) });
+
+        const { data: byEmail } = await db.from('users')
+          .select('*').eq('email', u.email).maybeSingle();
+        if (byEmail) return res.json({ data: norm(byEmail), authToken: issueToken(byEmail.id) });
+
+        const { data: inserted, error: insertErr } = await db.from('users').insert({
+          id:               u.id,
+          full_name:        u.fullName        ?? u.full_name        ?? '',
+          email:            u.email           ?? '',
+          phone:            u.phone           ?? '',
+          country:          u.country         ?? '',
+          password:         u.password        ?? '',
+          activated:        Boolean(u.activated),
+          premium:          Boolean(u.premium),
+          premium_paid_at:  u.premiumPaidAt   ?? u.premium_paid_at  ?? null,
+          balance:          Number(u.balance  ?? 0),
+          referral_count:   Number(u.referralCount ?? u.referral_count ?? 0),
+          referred_by:      u.referredBy      ?? u.referred_by      ?? null,
+          completed_tasks:  Number(u.completedTasks ?? u.completed_tasks ?? 0),
+          active_bids:      Number(u.activeBids     ?? u.active_bids     ?? 0),
+          task_submissions: u.taskSubmissions ?? u.task_submissions  ?? {},
+        }).select().single();
+
+        if (insertErr) return res.json({ data: null, error: insertErr.message });
+        return res.json({ data: norm(inserted), authToken: issueToken(inserted.id) });
+      }
+
+      case 'loginUser': {
+        const email    = clean(p.email, 120).toLowerCase();
+        const password = String(p.password ?? '');
+        if (!isEmail(email) || !password) return res.json({ success: false, message: 'Invalid email or password.' });
+
+        // Brute-force protection per account: block after too many FAILED
+        // attempts in the window (keyed by email, not IP, to avoid punishing
+        // users behind shared/carrier IPs). Successful logins reset the counter.
+        const WINDOW = 15 * 60 * 1000;
+        const rlBucket = `login:${email}`;
+        const chk = await rlCheck(db, rlBucket, 10, WINDOW); // 10 failures / 15 min
+        if (chk.blocked) return res.json({ success: false, message: tooManyMsg(chk.retryAfter) });
+
+        // Look up by email (case-insensitive), then verify the password against
+        // its hash. Never query by password directly.
+        const { data: rows } = await db.from('users').select('*').ilike('email', email).limit(5);
+        const data = (rows || []).find(r => String(r.email).toLowerCase() === email);
+        if (!data) { await rlHit(db, rlBucket, WINDOW); return res.json({ success: false, message: 'Invalid email or password.' }); }
+
+        const { ok, legacy } = verifyPassword(password, data.password);
+        if (!ok) { await rlHit(db, rlBucket, WINDOW); return res.json({ success: false, message: 'Invalid email or password.' }); }
+
+        // Success — clear the failure counter, then upgrade any legacy plaintext
+        // password to a hash.
+        await rlClear(db, rlBucket);
+        if (legacy) {
+          try { await db.from('users').update({ password: hashPassword(password) }).eq('id', data.id); } catch (_) {}
+        }
+        return res.json({ success: true, user: norm(data), authToken: issueToken(data.id) });
+      }
+
+      case 'requestPasswordReset': {
+        // Public. Always responds the same way so it never reveals whether an
+        // account exists (no user enumeration). Rate-limited per email + per IP
+        // to prevent email bombing / abuse.
+        const email = clean(p.email, 120).toLowerCase();
+        const genericOk = { success: true };
+        if (!isEmail(email)) return res.json(genericOk);
+
+        const WINDOW = 60 * 60 * 1000;
+        const ipBucket    = `pwreset-ip:${clientIp(req)}`;
+        const emailBucket = `pwreset-email:${email}`;
+        const ipChk = await rlCheck(db, ipBucket, 12, WINDOW);   // 12 / hr / IP
+        const emChk = await rlCheck(db, emailBucket, 5, WINDOW);  //  5 / hr / email
+        if (ipChk.blocked || emChk.blocked) return res.json(genericOk);
+        await rlHit(db, ipBucket, WINDOW);
+        await rlHit(db, emailBucket, WINDOW);
+
+        const { data: rows } = await db.from('users')
+          .select('id,email,full_name,password').ilike('email', email).limit(5);
+        const u = (rows || []).find(r => String(r.email).toLowerCase() === email);
+        if (u) {
+          const token = issueResetToken(u.id, u.password);
+          const configuredBase = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL;
+          const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+          const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+          const base = String(configuredBase || (requestHost ? `${requestProto}://${requestHost}` : 'https://onlinejob-pi.vercel.app')).replace(/\/$/, '');
+          const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
+          const delivery = await sendResetEmail({ userEmail: u.email, userName: u.full_name, resetUrl });
+          if (!delivery?.success) {
+            console.error('[password-reset] email delivery failed:', delivery?.message || 'Unknown mail error');
+            // The message is generic and does not reveal whether the account exists.
+            return res.status(503).json({ success: false, message: 'We could not send the reset email right now. Please try again shortly.' });
+          }
+        }
+        return res.json(genericOk);
+      }
+
+      case 'resetPassword': {
+        // Public. Verifies the reset token against the user's CURRENT password
+        // hash (so the link is single-use + 30-min), then sets the new password.
+        const token       = String(p.token || '');
+        const newPassword = String(p.newPassword ?? '');
+        const badLink = { success: false, error: 'This reset link is invalid or has expired. Please request a new one.' };
+        if (newPassword.length < 8) return res.json({ success: false, error: 'Password must be at least 8 characters.' });
+
+        const uid = peekUid(token);
+        if (!uid) return res.json(badLink);
+        const { data: u } = await db.from('users').select('id,password').eq('id', uid).maybeSingle();
+        if (!u) return res.json(badLink);
+
+        const verified = verifyResetToken(token, u.password);
+        if (!verified || verified !== String(u.id)) return res.json(badLink);
+
+        const { error } = await db.from('users').update({ password: hashPassword(newPassword) }).eq('id', u.id);
+        if (error) return res.json({ success: false, error: 'Could not reset your password. Please try again.' });
+        return res.json({ success: true });
+      }
+
+      case 'getUser': {
+        const { data } = await db.from('users')
+          .select('*').eq('id', p.id).maybeSingle();
+        return res.json({ data: norm(data) });
+      }
+
+      case 'activateUser': {
+        const { userId, amountPaid } = p;
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+
+        const updatedSubs = { ...(u.task_submissions || {}), _act: Date.now() };
+        const { data: updated } = await db.from('users').update({
+          activated:        true,
+          task_submissions: updatedSubs,
+          balance:          (u.balance || 0) + Number(amountPaid),
+        }).eq('id', userId).select().single();
+
+        try { if (updated?.email) await createEmailTransport('subscription').sendMail({ to: updated.email, subject: 'Your Gweno Hub account is activated', text: `Hello ${updated.full_name || 'Client'},\n\nYour Gweno Hub account has been activated successfully. Your activation fee of KSh 50 has been applied. You can now sign in and continue to your dashboard.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGweno Hub Team` }); } catch (e) { console.error('[activation-confirmation-email]', e?.message || e); }
+
+        if (u.referred_by && u.referred_by !== userId) {
+          const { data: ref } = await db.from('users').select('balance,referral_count,task_submissions').eq('id', u.referred_by).maybeSingle();
+          if (ref && ref.task_submissions?._agent?.status !== 'active') {
+            await db.from('users').update({ balance: (ref.balance || 0) + 132, referral_count: (ref.referral_count || 0) + 1 }).eq('id', u.referred_by);
+          }
+        }
+
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'awardQuiz': {
+        const { userId, correctCount } = p;
+        const count  = Math.max(0, Math.min(5, Number(correctCount) || 0));
+        const earned = count * 10;
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+
+        const subs = { ...(u.task_submissions || {}) };
+        if (subs._quiz) return res.json({ data: norm(u) });   // already claimed
+
+        subs._quiz = { score: count, earned, at: Date.now() };
+        const { data: updated } = await db.from('users').update({
+          task_submissions: subs,
+          balance:          (u.balance || 0) + earned,
+        }).eq('id', userId).select().single();
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'awardPremiumTest': {
+        const { userId, correctCount } = p;
+        const count  = Math.max(0, Math.min(5, Number(correctCount) || 0));
+        const earned = count * 42;
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+
+        const subs = { ...(u.task_submissions || {}) };
+        if (subs._ptest) return res.json({ data: norm(u) });   // already taken
+
+        subs._ptest = { score: count, earned, at: Date.now() };
+        subs._pbal  = Number(subs._pbal || 0) + earned;
+        const { data: updated } = await db.from('users').update({
+          task_submissions: subs,
+        }).eq('id', userId).select().single();
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'upgradePremiumWithBalance': {
+        const { userId } = p;
+        const { count: approvedWithdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests')
+          .select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'approved');
+        if (withdrawalCheckError || Number(approvedWithdrawalCount || 0) < 1) return res.json({ data: null, error: 'You can subscribe to Premium only after the admin approves your withdrawal.' });
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+
+        const subs     = { ...(u.task_submissions || {}) };
+        const pbal     = Number(subs._pbal || 0);
+        if (pbal < 599) return res.json({ data: null, error: 'You need at least KES 599 in your Premium balance to subscribe.' });
+        const consumed = 599;
+        subs._pbal     = pbal - consumed;
+        const { data: updated } = await db.from('users').update({
+          premium:          true,
+          premium_paid_at:  Date.now(),
+          task_submissions: subs,
+        }).eq('id', userId).select().single();
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'activateWithBalance': {
+        const { userId } = p;
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ data: null, error: 'User not found.' });
+        const existingAct = Number(u.task_submissions?._act || 0);
+        if (existingAct && Date.now() <= existingAct + ONE_MONTH_MS) return res.json({ data: norm(u) });
+
+        const balance  = Number(u.balance || 0);
+        if (balance < 50) return res.json({ data: null, error: 'Your balance is below KES 50. Top up the difference before activating.' });
+        const consumed = 50;
+        const subs = { ...(u.task_submissions || {}), _act: Date.now() };
+        const { data: updated } = await db.from('users').update({
+          activated:        true,
+          task_submissions: subs,
+          balance:          balance - consumed,
+        }).eq('id', userId).select().single();
+
+        try { if (updated?.email) await createEmailTransport('subscription').sendMail({ to: updated.email, subject: 'Your Gweno Hub account is activated', text: `Hello ${updated.full_name || 'Client'},\n\nYour Gweno Hub account has been activated successfully. Your activation fee of KSh 50 has been deducted from your balance. You can now sign in and continue to your dashboard.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGweno Hub Team` }); } catch (e) { console.error('[activation-confirmation-email]', e?.message || e); }
+
+        if (u.referred_by && u.referred_by !== userId) {
+          const { data: ref } = await db.from('users')
+            .select('balance,referral_count').eq('id', u.referred_by).maybeSingle();
+          if (ref) {
+            await db.from('users').update({
+              balance:        (ref.balance || 0) + 132,
+              referral_count: (ref.referral_count || 0) + 1,
+            }).eq('id', u.referred_by);
+          }
+        }
+        return res.json({ data: norm(updated) });
+      }
+
+      case 'upgradeToPremium': {
+        const { count: approvedWithdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests')
+          .select('id', { count: 'exact', head: true }).eq('user_id', p.userId).eq('status', 'approved');
+        if (withdrawalCheckError || Number(approvedWithdrawalCount || 0) < 1) return res.json({ data: null, error: 'You can subscribe to Premium only after the admin approves your withdrawal.' });
+        const { data } = await db.from('users').update({
+          premium: true, premium_paid_at: Date.now(),
+        }).eq('id', p.userId).select().single();
+        return res.json({ data: norm(data) });
+      }
+
+      case 'submitTask': {
+        const { userId, taskId, rewardAmount } = p;
+        const key = String(taskId);
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ success: false, message: 'User not found.' });
+
+        const subs = u.task_submissions || {};
+        if (subs._agent?.status === 'active') return res.json({ success: false, error: 'Agent accounts cannot participate in ordinary tasks.' });
+        if (subs._suspended) return res.json({ success: false, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
+        if (subs[key]) {
+          return res.json({
+            success: false,
+            alreadySubmitted: true,
+            message: `Already submitted on ${new Date(subs[key].submittedAt).toLocaleDateString('en-KE', { dateStyle: 'medium' })}.`,
+          });
+        }
+
+        subs[key] = { submittedAt: new Date().toISOString(), reward: rewardAmount };
+        const { data: updated } = await db.from('users').update({
+          task_submissions: subs,
+          completed_tasks:  (u.completed_tasks || 0) + 1,
+          balance:          (u.balance || 0) + rewardAmount,
+        }).eq('id', userId).select().single();
+
+        return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'createBid': {
+        const { data: u } = await db.from('users')
+          .select('active_bids,task_submissions').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ data: null });
+        if (u.task_submissions?._agent?.status === 'active') return res.json({ data: null, error: 'Agent accounts cannot participate in ordinary tasks.' });
+        if (u.task_submissions?._suspended) return res.json({ data: null, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
+        const { data } = await db.from('users').update({
+          active_bids: (u.active_bids || 0) + 1,
+        }).eq('id', p.userId).select().single();
+        return res.json({ data: norm(data) });
+      }
+
+      case 'checkPremiumEligibility': {
+        const { count, error } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true })
+          .eq('user_id', p.userId).eq('status', 'approved');
+        if (error) return res.json({ success: false, eligible: false, error: 'Could not verify withdrawal approval yet.' });
+        return res.json({ success: true, eligible: Number(count || 0) > 0, approvedWithdrawals: Number(count || 0) });
+      }
+
+      case 'checkWithdrawalEligibility': {
+        const { data: account } = await db.from('users').select('completed_tasks').eq('id', p.userId).maybeSingle();
+        const completed = Number(account?.completed_tasks || 0) > 0;
+        return res.json({ success: true, eligible: completed, completedTasks: Number(account?.completed_tasks || 0) });
+      }
+
+      case 'createWithdrawal': {
+        const userId   = clean(p.userId, 64);
+        const { data: earningAccount } = await db.from('users').select('completed_tasks,balance').eq('id', userId).maybeSingle();
+        if (Number(earningAccount?.completed_tasks || 0) < 1) {
+          return res.json({ data: null, error: 'You must have at least one task approved and credited to your balance before you can withdraw. Please apply for an available task first.' });
+        }   // from the verified session token
+        const method   = clean(p.method, 20) || 'mpesa';
+        const fullName = clean(p.fullName, 80);
+        const phone    = clean(p.phone, 20);
+        const idNumber = clean(p.idNumber, 120); // international packs bank details here
+        const amount   = Number(p.amount);
+        const feeRef   = clean(p.feeRef, 64);    // STK CheckoutRequestID of the paid fee
+        // Reject malformed withdrawal requests server-side.
+        if (!nonEmpty(userId))          return res.json({ data: null, error: 'Missing user.' });
+        if (!nonEmpty(fullName))        return res.json({ data: null, error: 'Account holder name is required.' });
+        if (!['mpesa', 'safaricom', 'airtel'].includes(method)) return res.json({ data: null, error: 'Unsupported withdrawal method.' });
+        if (['mpesa', 'safaricom', 'airtel'].includes(method) && !isPhone(phone)) return res.json({ data: null, error: 'A valid phone number is required.' });
+        if (!isPositiveNumber(amount))  return res.json({ data: null, error: 'A valid amount is required.' });
+        if (['mpesa', 'safaricom', 'airtel'].includes(method) && (!Number.isInteger(amount) || amount < 100 || amount > 40000 || amount > Number(earningAccount?.balance || 0))) {
+          return res.json({ data: null, error: 'Choose a mobile withdrawal amount from KES 100 up to your available balance, with a maximum of KES 40,000.' });
+        }
+
+        // ── Enforce a real, verified, single-use Daraja withdrawal-fee payment ──
+        // The fee must have been paid via M-Pesa STK (recorded server-side by the
+        // Daraja callback in mpesa_transactions), belong to THIS user, and not
+        // already be linked to another withdrawal. Cannot be bypassed by the client.
+        if (!nonEmpty(feeRef)) {
+          await logAction(db, { action: 'withdrawal_fee_missing', entity: 'withdrawal', entityId: userId, detail: `method:${method} — no fee reference` });
+          return res.json({ data: null, error: 'A verified withdrawal-fee payment is required before submitting.' });
+        }
+        const { data: fee } = await db.from('mpesa_transactions')
+          .select('*').eq('checkout_request_id', feeRef).maybeSingle();
+        const expectedMobileFee = isSupportedWithdrawalMethod(method) ? getWithdrawalFee(amount, method) : null;
+        const feeOk = fee
+          && fee.status === 'success'
+          && fee.purpose === 'withdrawal_fee'
+          && String(fee.user_id) === String(userId)
+          && !fee.withdrawal_id
+          && (!isSupportedWithdrawalMethod(method) || (expectedMobileFee !== null && Number(fee.amount) === expectedMobileFee));
+        if (!feeOk) {
+          const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
+            : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
+          await logAction(db, { action: 'withdrawal_fee_verify_failed', entity: 'withdrawal', entityId: userId, detail: `method:${method} fee:${feeRef} reason:${reason}` });
+          return res.json({ data: null, error: 'Your withdrawal-fee payment could not be verified. Please pay the fee and try again.' });
+        }
+
+        const deadline = Date.now() + 2 * 60 * 60 * 1000;
+        const { data, error } = await db.from('withdrawal_requests').insert({
+          user_id:      userId,
+          full_name:    fullName,
+          phone,
+          id_number:    idNumber,
+          amount,
+          status:       'pending',
+          withdrawal_method: method,
+          deadline,
+          requested_at: new Date().toISOString(),
+        }).select().single();
+        if (error) return res.json({ data: null, error: error.message });
+
+        // Consume the fee payment (link it to this withdrawal → non-reusable).
+        await db.from('mpesa_transactions').update({ withdrawal_id: String(data.id) }).eq('id', fee.id);
+        await logAction(db, { action: 'withdrawal_fee_verified', entity: 'withdrawal', entityId: data.id,
+          detail: `method:${method} user:${userId} fee_tx:${feeRef} receipt:${fee.mpesa_receipt || '—'} amount:KES ${fee.amount}` });
+
+        // Best-effort email notifications: never roll back a valid withdrawal if email fails.
+        try {
+          const { data: account } = await db.from('users').select('email,full_name').eq('id', userId).maybeSingle();
+          const transporter = createEmailTransport('withdrawal');
+          const adminTo = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || 'businesshub.comke@gmail.com';
+          const subject = `Withdrawal request received — ${fullName}`;
+          const details = `Withdrawal ID: ${data.id}\nName: ${fullName}\nEmail: ${account?.email || 'Not available'}\nAmount: KES ${amount.toLocaleString('en-KE')}\nMethod: ${method}\nPhone: ${phone || 'Not provided'}\nStatus: Pending`;
+          if (adminTo) {
+            try {
+              await transporter.sendMail({
+                to: adminTo,
+                subject: `[Gweno Hub] ${subject}`,
+                text: details,
+                html: `<h2>New withdrawal request</h2><pre style="font-family:Arial,sans-serif;white-space:pre-wrap;">${details.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`,
+              });
+            } catch (mailErr) { console.error('[withdrawal-email] admin notice failed:', mailErr?.message || mailErr); }
+          }
+          if (account?.email) {
+            try {
+              await transporter.sendMail({
+                to: account.email,
+                subject: 'We received your withdrawal request',
+                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\nWithdrawal reference: ${data.id}\n\nPlease ensure the account holder name and payment details match the details on your GWENO Hub account. Read the withdrawal Terms & Conditions before proceeding: ${(process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '')}/terms\n\nGweno Hub Team`,
+                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Please ensure your account holder name and payment details match the details on your GWENO Hub account. Please read the <a href="${(process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '')}/terms">Withdrawal Terms &amp; Conditions</a> before proceeding.</p><p>Gweno Hub Team</p>`,
+              });
+            } catch (mailErr) { console.error('[withdrawal-email] client confirmation failed:', mailErr?.message || mailErr); }
+          }
+        } catch (mailErr) { console.error('[withdrawal-email] notification setup failed:', mailErr?.message || mailErr); }
+
+        return res.json({ data: normWd(data) });
+      }
+
+      case 'getWithdrawal': {
+        const { data } = await db.from('withdrawal_requests')
+          .select('*').eq('user_id', p.userId)
+          .order('requested_at', { ascending: false }).limit(1).maybeSingle();
+        return res.json({ data: normWd(data) });
+      }
+
+      case 'updateWithdrawal': {
+        // Only the owner may update their own withdrawal (p.userId is the token uid).
+        const { data: wd } = await db.from('withdrawal_requests')
+          .select('user_id').eq('id', p.requestId).maybeSingle();
+        if (!wd || String(wd.user_id) !== String(p.userId)) return res.json({ data: null });
+        const { data } = await db.from('withdrawal_requests')
+          .update({ status: p.status, updated_at: new Date().toISOString() })
+          .eq('id', p.requestId).select().single();
+        return res.json({ data: normWd(data) });
+      }
+
+      // ─── Bulk withdrawal (balances ≥ KES 25,000) ──────────────────────────
+      // Record a successfully-paid M-Pesa withdrawal fee. Deduped by the
+      // Paystack reference so a page reload can't double-count.
+      case 'recordMpesaFee': {
+        const ref = clean(p.reference, 120);
+        const { data: u } = await db.from('users')
+          .select('task_submissions').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false });
+        const subs = { ...(u.task_submissions || {}) };
+        const refs = Array.isArray(subs._mpesaFeeRefs) ? subs._mpesaFeeRefs : [];
+        if (ref && refs.includes(ref)) {
+          return res.json({ success: true, duplicate: true, mpesaFeesPaid: Number(subs._mpesaFeesPaid || 0) });
+        }
+        subs._mpesaFeesPaid = Math.max(0, Number(subs._mpesaFeesPaid || 0)) + 1;
+        if (ref) subs._mpesaFeeRefs = [...refs, ref].slice(-20);
+        await db.from('users').update({ task_submissions: subs }).eq('id', p.userId);
+        await logAction(db, { action: 'mpesa_fee_paid', entity: 'user', entityId: p.userId,
+          detail: `count:${subs._mpesaFeesPaid}${ref ? ` ref:${ref}` : ''}` });
+        return res.json({ success: true, mpesaFeesPaid: subs._mpesaFeesPaid });
+      }
+
+      // ── Gamification: daily-login streak (server-dated, once per UTC day) ──
+      case 'recordDailyLogin': {
+        const { data: u } = await db.from('users')
+          .select('task_submissions').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false });
+        const subs = { ...(u.task_submissions || {}) };
+        const s = (subs._streak && typeof subs._streak === 'object') ? { ...subs._streak } : { count: 0, lastDay: null };
+        const today = new Date().toISOString().slice(0, 10);
+        const yday  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        let isNewDay = false, bonusXp = 0;
+        if (s.lastDay !== today) {
+          isNewDay  = true;
+          s.count   = (s.lastDay === yday) ? Math.max(0, Number(s.count || 0)) + 1 : 1;
+          s.lastDay = today;
+          bonusXp   = 20 + Math.min(Number(s.count), 7) * 5;   // escalating, caps at day 7
+          subs._streak = s;
+          await db.from('users').update({ task_submissions: subs }).eq('id', p.userId);
+          await logAction(db, { action: 'daily_login', entity: 'user', entityId: p.userId, detail: `streak:${s.count} bonusXp:${bonusXp}` });
+        }
+        return res.json({ success: true, streak: Math.max(0, Number(s.count || 0)), isNewDay, bonusXp, lastDay: s.lastDay });
+      }
+
+      // ── Gamification: leaderboard, top players by server-derived XP ──
+      case 'gamificationLeaderboard': {
+        const limit = Math.max(1, Math.min(25, Number(p.limit) || 10));
+        const { data: rows } = await db.from('users')
+          .select('id, full_name, completed_tasks, referral_count, balance, premium, premium_paid_at, task_submissions')
+          .limit(1000);
+        const ranked = (rows || []).map(r => {
+          const gu = norm(r);
+          const xp = computeXp(gu);
+          const parts = String(r.full_name || 'Member').trim().split(/\s+/);
+          const name = parts[0] + (parts[1] ? ` ${parts[1][0].toUpperCase()}.` : '');
+          return { id: r.id, name, xp, level: levelInfo(xp).name, tasks: gu.completedTasks };
+        }).sort((a, b) => b.xp - a.xp).slice(0, limit)
+          .map((e, i) => ({ ...e, rank: i + 1 }));
+        return res.json({ data: ranked });
+      }
+
+      // ── Public app settings (currently just the M-Pesa Buy Goods till) ──
+      case 'getSettings': {
+        let till = DEFAULT_TILL;
+        try {
+          const { data } = await db.from('app_settings').select('value').eq('key', 'mpesa_till').maybeSingle();
+          if (data?.value) till = String(data.value);
+        } catch (_) { /* table missing → fall back to default */ }
+        return res.json({ till });
+      }
+
+      // ── Admin: update a global setting (e.g. the M-Pesa till number) ──
+      case 'adminSetSetting': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const key   = clean(p.key, 40);
+        const value = String(p.value ?? '').replace(/[^0-9]/g, '').slice(0, 12);   // till = digits only
+        if (!key)   return res.json({ success: false, error: 'Missing setting key.' });
+        if (!value) return res.json({ success: false, error: 'Enter a valid till number.' });
+        try {
+          const { error } = await db.from('app_settings')
+            .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+          if (error) return res.json({ success: false, error: `${error.message} (run db/admin-tables.sql to create app_settings)` });
+          await logAction(db, { action: 'setting_update', entity: 'settings', entityId: key, detail: value });
+          return res.json({ success: true, key, value });
+        } catch (e) {
+          return res.json({ success: false, error: e.message });
+        }
+      }
+
+      // Server-authoritative fee quote for a bulk withdrawal (live FX + capped
+      // deductions from recorded history). Audited on every request.
+      case 'bulkWithdrawalQuote': {
+        // Shared fee quote for bulk (>= threshold) and the international flow.
+        // The bulk balance gate is skipped for the international context.
+        const isIntl = p.context === 'international';
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'User not found.' });
+        if (!isIntl && Number(u.balance || 0) < BULK_THRESHOLD_KES) {
+          return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });
+        }
+        const q = await computeBulkQuote(u, p.declaredFees);
+        await logAction(db, { action: `${isIntl ? 'international' : 'bulk'}_withdrawal_quote`, entity: 'user', entityId: p.userId,
+          detail: `bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} usd:${q.feeUsd} converted:${q.convertedKes} declared:${q.declaredFees} recorded:${q.recordedFees} deductions:${q.eligibleDeductions} deductionKes:${q.deductionKes} due:${q.amountDueKes}` });
+        return res.json({ success: true, eligible: true, ...q });
+      }
+
+      // Validate bank details, recompute the quote server-side (authoritative),
+      // and log the full bulk request for auditing. Returns the final breakdown.
+      case 'submitBulkWithdrawal': {
+        const isIntl = p.context === 'international';
+        const { data: u } = await db.from('users')
+          .select('*').eq('id', p.userId).maybeSingle();
+        if (Number(u?.completed_tasks || 0) < 1) {
+          return res.json({ success: false, eligible: false, error: 'You must have at least one task approved and credited to your balance before you can withdraw. Please apply for an available task first.' });
+        }
+        if (!u) return res.json({ success: false, error: 'User not found.' });
+        if (!isIntl && Number(u.balance || 0) < BULK_THRESHOLD_KES) {
+          return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });
+        }
+        const bankName      = clean(p.bankName, 80);
+        const accountName   = clean(p.accountName, 80);
+        const accountNumber = clean(p.accountNumber, 40);
+        const branch        = clean(p.branch, 80);
+        const swift         = clean(p.swift, 40);
+        if (!nonEmpty(bankName) || !nonEmpty(accountName) || !nonEmpty(accountNumber)) {
+          return res.json({ success: false, error: 'Bank name, account name and account number are required.' });
+        }
+        const q = await computeBulkQuote(u, p.declaredFees);
+        const bankPayload = {
+          kind: 'bank',
+          bankName, accountName, accountNumber, branch, swift,
+          country: isIntl ? (clean(p.country, 80) || 'International') : 'Kenya',
+        };
+        const { data: bankWd, error: bankWdErr } = await db.from('withdrawal_requests').insert({
+          user_id: p.userId,
+          full_name: accountName,
+          phone: clean(p.phone, 40),
+          id_number: `__BANK_WITHDRAWAL__${JSON.stringify(bankPayload)}`,
+          amount: Number(p.amount || q.amountDueKes || 0),
+          status: 'pending',
+          deadline: Date.now() + 2 * 60 * 60 * 1000,
+          requested_at: new Date().toISOString(),
+        }).select().single();
+        if (bankWdErr) return res.json({ success: false, error: bankWdErr.message });
+        await logAction(db, { action: 'bulk_withdrawal_request', entity: 'user', entityId: p.userId, entityRef: bankWd.id,
+          detail: `bank:${bankName} acct:${accountName}/${accountNumber}${branch ? ` branch:${branch}` : ''}${swift ? ` swift:${swift}` : ''} | bal:${q.balance} rate:${q.rate}${q.rateLive ? '' : '(fallback)'} converted:${q.convertedKes} declared:${q.declaredFees} recorded:${q.recordedFees} deductions:${q.eligibleDeductions}x${q.perFeeKes} due:${q.amountDueKes}` });
+        return res.json({ success: true, withdrawalId: bankWd.id, ...q, bank: { bankName, accountName, accountNumber, branch, swift } });
+      }
+
+      case 'inviteAgent': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: u } = await db.from('users').select('*').eq('id', String(p.userId)).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'Client not found.' });
+        const subs = { ...(u.task_submissions || {}) };
+        const agent = { ...(subs._agent || {}) };
+        if (agent.status === 'active') return res.json({ success: false, error: 'This account is already an active agent.' });
+        if (agent.status === 'pending') return res.json({ success: false, error: 'This client already has an application awaiting review.' });
+        agent.invitedAt = Date.now(); agent.status = 'invited'; agent.application = agent.application?.status === 'pending' ? agent.application : null;
+        subs._agent = agent;
+        const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
+        if (error) return res.json({ success: false, error: error.message });
+        try {
+          const transport = createEmailTransport('support');
+          const base = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
+          await transport.sendMail({ to: u.email, subject: 'You are invited to apply as a Gweno Hub agent', text: `Hello ${u.full_name || 'Client'},\n\nYou have been selected and invited to apply to become a Gweno Hub agent. Sign in to your account and complete the agent application form on your dashboard. You will remain a normal client while your application is pending.\n\nApply here: ${base}/agent-application\n\nGweno Hub Team` });
+        } catch (e) { return res.json({ success: true, warning: 'Invitation saved, but the email could not be sent. Check the configured email provider.', emailError: e?.message || '' }); }
+        await logAction(db, { action: 'agent_invited', entity: 'user', entityId: u.id, detail: `invited:${u.email}` });
+        return res.json({ success: true });
+      }
+
+      case 'submitAgentApplication': {
+        const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'Account not found.' });
+        const subs = { ...(u.task_submissions || {}) }, a = { ...(subs._agent || {}) };
+        if (!a.invitedAt) return res.json({ success: false, error: 'You must be invited by an administrator before applying.' });
+        if (a.status === 'active') return res.json({ success: false, error: 'You are already an active agent.' });
+        const f = p.application || {};
+        const required = ['fullName','email','phone','citizenship','representCountry','nationalId','dateOfBirth','address','education','experience','availability','cvName','cvData'];
+        for (const key of required) if (!String(f[key] || '').trim()) return res.json({ success: false, error: `Please complete ${key}.` });
+        if (!/\.(pdf|doc|docx|rtf|txt)$/i.test(String(f.cvName || ''))) return res.json({ success: false, error: 'Upload a PDF, DOC, DOCX, RTF, or TXT CV.' });
+        if (Buffer.byteLength(String(f.cvData || ''), 'utf8') > 7 * 1024 * 1024 || !/^data:[^;]+;base64,/.test(String(f.cvData || ''))) return res.json({ success: false, error: 'The CV file is invalid or exceeds the 5 MB limit.' });
+        if (f.citizenship === 'Kenya' && !String(f.kraPin || '').trim()) return res.json({ success: false, error: 'KRA PIN is required for applicants in Kenya.' });
+        const birth = new Date(String(f.dateOfBirth || '')); const ageLimit = new Date(); ageLimit.setFullYear(ageLimit.getFullYear() - 18);
+        if (!Number.isFinite(birth.getTime()) || birth > ageLimit) return res.json({ success: false, error: 'Applicants must be at least 18 years old.' });
+        if (!f.confirmEligibility || !f.agreeResponsibilities) return res.json({ success: false, error: 'Please confirm the eligibility requirements and agent responsibilities.' });
+        const storedApplication = { ...f }; delete storedApplication.cvData;
+        a.status = 'pending'; a.application = { ...storedApplication, status: 'pending', submittedAt: Date.now() };
+        subs._agent = a;
+        const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
+        if (error) return res.json({ success: false, error: error.message });
+        const adminTo = process.env.ADMIN_EMAIL || process.env.NOTIFY_EMAIL || 'businesshub.comke@gmail.com';
+        try {
+          const transport = createEmailTransport('support');
+          const summary = `New agent application\nName: ${f.fullName}\nEmail: ${f.email}\nPhone: ${f.phone}\nCitizenship: ${f.citizenship}\nCountry represented: ${f.representCountry}\nCounty: ${f.county || 'N/A'}\nNational ID: ${f.nationalId}\nKRA PIN: ${f.kraPin || 'N/A'}\nDate of birth: ${f.dateOfBirth}\nAddress: ${f.address}\nEducation: ${f.education}\nExperience: ${f.experience}\nAvailability: ${f.availability}\nCV: ${f.cvName}\n\nReview the application in the Gweno admin panel.`;
+          await transport.sendMail({ to: adminTo, subject: `Agent application: ${f.fullName}`, text: summary, attachments: [{ filename: String(f.cvName).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0,100), content: String(f.cvData).replace(/^data:[^;]+;base64,/, ''), encoding: 'base64' }] });
+        } catch (e) { console.error('[agent-application-email]', e?.message || e); }
+        await logAction(db, { action: 'agent_application_submitted', entity: 'user', entityId: u.id, detail: `application:${f.email}` });
+        return res.json({ success: true, data: norm({ ...u, task_submissions: subs }) });
+      }
+
+      case 'adminListAgents': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: rows, error } = await db.from('users').select('*').order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        const allRows = rows || []; const byId = new Map(allRows.map(x => [String(x.id), x]));
+        const agents = allRows.filter(u => u.task_submissions?._agent).map(u => {
+          const descendants = new Set(); let changed = true;
+          while (changed) { changed = false; for (const client of allRows) if (!descendants.has(String(client.id)) && (String(client.referred_by || '') === String(u.id) || descendants.has(String(client.referred_by || '')))) { descendants.add(String(client.id)); changed = true; } }
+          const qualified = new Set((u.task_submissions._agent.qualifiedClientIds || []).map(String));
+          const eatNow = new Date(Date.now()+3*60*60*1000); eatNow.setUTCHours(0,0,0,0); eatNow.setUTCDate(eatNow.getUTCDate()-((eatNow.getUTCDay()+6)%7)); const weekStartMs=eatNow.getTime()-3*60*60*1000;
+          const calculatedWeekQualified=[...qualified].filter(id=>{const c=byId.get(String(id));return Number(c?.task_submissions?._agentQualifiedAt||0)>=weekStartMs;}).length;
+          const currentWeekQualified=Number.isFinite(Number(u.task_submissions._agent.currentWeekQualifiedOverride))?Number(u.task_submissions._agent.currentWeekQualifiedOverride):calculatedWeekQualified;
+          return { ...norm(u), currentWeekQualified, agent: u.task_submissions._agent, recruitedClients: [...descendants].map(id => { const c = byId.get(id); return c ? { id:c.id, fullName:c.full_name, email:c.email, createdAt:c.created_at, qualified:qualified.has(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null } : null; }).filter(Boolean) };
+        });
+        return res.json({ data: agents });
+      }
+
+      case 'adminEditAgentMetrics': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ success:false, error:'Unauthorized' });
+        const { data: u } = await db.from('users').select('id,task_submissions').eq('id', String(p.userId)).maybeSingle();
+        if (!u) return res.json({ success:false, error:'Agent not found.' });
+        const subs = { ...(u.task_submissions || {}) }; const a = { ...(subs._agent || {}) };
+        if (!a.status) return res.json({ success:false, error:'This account has no agent record.' });
+        const fields = ['qualifiedCountOverride','currentWeekQualifiedOverride','pendingCommission','availableCommission','totalCommissionEarned','paidCommission'];
+        for (const field of fields) {
+          if (p[field] === undefined || p[field] === null || p[field] === '') continue;
+          const value = Number(p[field]);
+          if (!Number.isFinite(value) || value < 0 || (field.includes('Override') && !Number.isInteger(value))) return res.json({ success:false, error:`Invalid value for ${field}.` });
+          a[field] = value;
+        }
+        const effectiveQualifiedCount = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length;
+        const rewardResult = applyAgentMilestoneRewards(a, effectiveQualifiedCount);
+        a.manualMetricUpdatedAt = Date.now(); a.manualMetricUpdatedBy = 'admin'; a.manualMetricNote = clean(p.note || '', 300);
+        subs._agent = a;
+        const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
+        if (error) return res.json({ success:false, error:error.message });
+        if (rewardResult.rewardsAdded > 0) { try { const { data: owner } = await db.from('users').select('email,full_name').eq('id',u.id).maybeSingle(); if(owner?.email) await createEmailTransport('support').sendMail({ to:owner.email, subject:'Gweno Hub agent reward added to your commission balance', text:`Hello ${owner.full_name || 'Agent'},\n\nYour qualifying client count now meets one or more 10-client reward milestones. KSh ${rewardResult.rewardsAdded.toLocaleString('en-KE')} has been added to your available commission balance. Each set of 10 qualified clients earns KSh 25,000, and each milestone is credited only once.\n\nOpen your agent dashboard to review your balance and request a full-balance withdrawal: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/agent-dashboard\n\nGweno Hub Team` }); } catch(mailError) { console.error('[agent-reward-email]',mailError?.message||mailError); } }
+        await logAction(db, { action:'agent_metrics_manually_updated', entity:'user', entityId:u.id, detail:JSON.stringify({ fields, note:a.manualMetricNote, rewardsAdded:rewardResult.rewardsAdded }) });
+        return res.json({ success:true, agent:a, rewardsAdded:rewardResult.rewardsAdded });
+      }
+
+      case 'adminReviewAgentApplication': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: u } = await db.from('users').select('*').eq('id', String(p.userId)).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'Client not found.' });
+        const subs = { ...(u.task_submissions || {}) }, a = { ...(subs._agent || {}) };
+        if (!a.application || !['pending','invited'].includes(a.status)) return res.json({ success: false, error: 'No pending agent application was found.' });
+        if (p.decision === 'approve') {
+          a.status = 'active'; a.approvedAt = Date.now(); a.startedAt = Date.now();
+          a.code = a.code || `GW${String(u.id).replace(/\D/g, '').slice(-6).padStart(6,'0')}${Math.random().toString(36).slice(2,5).toUpperCase()}`;
+          a.application.status = 'approved'; a.application.reviewedAt = Date.now(); a.application.reviewNote = String(p.note || '').slice(0,500);
+          a.qualifiedClientIds = Array.isArray(a.qualifiedClientIds) ? a.qualifiedClientIds : [];
+          a.pendingCommission = Number(a.pendingCommission || 0); a.availableCommission = Number(a.availableCommission || 0); a.totalCommissionEarned = Number(a.totalCommissionEarned || 0); a.paidCommission = Number(a.paidCommission || 0);
+        } else {
+          a.status = 'declined'; a.declinedAt = Date.now(); a.application.status = 'declined'; a.application.reviewedAt = Date.now(); a.application.reviewNote = String(p.note || '').slice(0,500);
+        }
+        subs._agent = a;
+        const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
+        if (error) return res.json({ success: false, error: error.message });
+        try { const transport = createEmailTransport('support'); await transport.sendMail({ to: u.email, subject: p.decision === 'approve' ? 'Your Gweno Hub agent application is approved' : 'Update on your Gweno Hub agent application', text: `Hello ${u.full_name || 'Applicant'},\n\n${p.decision === 'approve' ? `Your agent application has been approved. Your agent referral link is ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/register?agent=${a.code}. Your agent dashboard is now available after signing in. You can request a bank commission withdrawal after 7 days, or earlier once you have 10 qualified clients whose withdrawals have been approved.` : `Your agent application has not been approved at this time. You remain a normal Gweno Hub client and may be invited to apply again in the future.`}\n\n${p.note ? `Admin note: ${p.note}\n\n` : ''}Gweno Hub Team` }); } catch (_) {}
+        await logAction(db, { action: `agent_application_${p.decision === 'approve' ? 'approved' : 'declined'}`, entity: 'user', entityId: u.id, detail: String(p.note || '') });
+        return res.json({ success: true, data: norm({ ...u, task_submissions: subs }) });
+      }
+
+      case 'getAgentDashboard': {
+        const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
+        const userSubs = { ...(u?.task_submissions || {}) }; const a = { ...(userSubs._agent || {}) };
+        if (!u || a.status !== 'active') return res.json({ success: false, error: 'Agent access is not active.' });
+        const commissionReadyAt = Number(a.startedAt || Date.now()) + AGENT_WITHDRAWAL_WAIT_MS;
+        const unlockByClients = (Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length) >= 10;
+        if ((Date.now() >= commissionReadyAt || unlockByClients) && Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; userSubs._agent = a; await db.from('users').update({ task_submissions: userSubs }).eq('id', u.id); }
+        const { data: all } = await db.from('users').select('id,full_name,email,phone,country,referred_by,created_at,task_submissions');
+        const rows = all || []; const byId = new Map(rows.map(x => [String(x.id), x]));
+        const descendants = new Set(); let changed = true;
+        while (changed) { changed = false; for (const x of rows) if (!descendants.has(String(x.id)) && (String(x.referred_by || '') === String(u.id) || descendants.has(String(x.referred_by || '')))) { descendants.add(String(x.id)); changed = true; } }
+        const clients = [...descendants].map(id => byId.get(id)).filter(Boolean);
+        const qualified = Array.isArray(a.qualifiedClientIds) ? a.qualifiedClientIds : [];
+        const start = Number(a.startedAt || Date.now()); const eatNow = new Date(Date.now() + 3*60*60*1000); eatNow.setUTCHours(0,0,0,0); const day = (eatNow.getUTCDay()+6)%7; eatNow.setUTCDate(eatNow.getUTCDate()-day); const weekStartMs = eatNow.getTime() - 3*60*60*1000;
+        const weekQualified = qualified.filter(id => { const c = byId.get(String(id)); const qAt = c?.task_submissions?._agentQualifiedAt; return qAt && Number(qAt) >= weekStartMs; }).length;
+        const weeklyMap = {};
+        for (const id of qualified) { const c = byId.get(String(id)); const qAt = Number(c?.task_submissions?._agentQualifiedAt || 0); if (!qAt) continue; const local = new Date(qAt + 3*60*60*1000); local.setUTCHours(0,0,0,0); local.setUTCDate(local.getUTCDate() - ((local.getUTCDay()+6)%7)); const key = local.toISOString().slice(0,10); weeklyMap[key] = (weeklyMap[key] || 0) + 1; }
+        const firstWeekDate = new Date(start + 3*60*60*1000); firstWeekDate.setUTCHours(0,0,0,0); firstWeekDate.setUTCDate(firstWeekDate.getUTCDate()-((firstWeekDate.getUTCDay()+6)%7));
+        const currentWeekDate = new Date(weekStartMs + 3*60*60*1000); currentWeekDate.setUTCHours(0,0,0,0);
+        const weeklyHistory = []; for (let cursor = new Date(firstWeekDate); cursor <= currentWeekDate; cursor.setUTCDate(cursor.getUTCDate()+7)) { const key=cursor.toISOString().slice(0,10); const count=Number(weeklyMap[key]||0); weeklyHistory.push({weekStart:key,qualified:count,target:10,shortfall:Math.max(0,10-count)}); } weeklyHistory.reverse();
+        const weekKey = new Date(weekStartMs).toISOString().slice(0,10); const eatDay = new Date(Date.now()+3*60*60*1000).getUTCDay();
+        if (eatDay >= 5 && weekQualified < 10 && a.lastTargetReminderWeek !== weekKey) {
+          try { await createEmailTransport('support').sendMail({ to:u.email, subject:'Gweno Hub agent weekly performance reminder', text:`Hello ${u.full_name || 'Agent'},\n\nYou currently have ${weekQualified} qualified client(s) for this week. Your weekly target is 10 clients whose withdrawals have been approved. Your account remains active, but your current shortfall is recorded for administrative review. Please continue recruiting and guiding clients through the process.\n\nGweno Hub Team` }); a.lastTargetReminderWeek = weekKey; userSubs._agent = a; await db.from('users').update({task_submissions:userSubs}).eq('id',u.id); } catch (e) { console.error('[agent-target-reminder]',e?.message||e); }
+        }
+        return res.json({ success: true, agent: a, clients: clients.map(c => ({ id:c.id, fullName:c.full_name, email:c.email, country:c.country, createdAt:c.created_at, qualified:qualified.includes(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null })), qualifiedCount: Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : qualified.length, weekQualified: Number.isFinite(Number(a.currentWeekQualifiedOverride)) ? Number(a.currentWeekQualifiedOverride) : weekQualified, weeklyHistory, target: 10, startDate: start, balances: { pending: Number(a.pendingCommission||0), available: Number(a.availableCommission||0), total: Number(a.totalCommissionEarned||0), paid: Number(a.paidCommission||0) }, commissionReadyAt, phone: u.phone || '', fullName: u.full_name || '', country: u.country || '' });
+      }
+
+      case 'requestAgentCommissionWithdrawal': {
+        const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
+        const subs = { ...(u?.task_submissions || {}) }, a = { ...(subs._agent || {}) };
+        if (!u || a.status !== 'active') return res.json({ success: false, error: 'Active agent account required.' });
+        const qualifiedCountForGate = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length;
+        if (qualifiedCountForGate < 10) return res.json({ success:false,error:'You can withdraw after reaching 10 qualified clients.' });
+        if (Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; }
+        const amount = Math.floor(Number(a.availableCommission || 0));
+        if (amount <= 0) return res.json({ success:false,error:'There is no available commission balance to withdraw.' });
+        const bankName = clean(p.bankName || '', 100);
+        const accountName = clean(p.accountName || '', 100);
+        const accountNumber = clean(p.accountNumber || '', 30).replace(/\D/g, '');
+        if (!bankName || !accountName || !/^\d{5,30}$/.test(accountNumber)) return res.json({ success:false,error:'Select a bank, enter the account holder’s full name, and enter a valid account number (5–30 digits).' });
+        const { data: pending } = await db.from('withdrawal_requests').select('id,status,id_number').eq('user_id', u.id).in('status', ['pending','processing','approved']);
+        if ((pending || []).some(x => String(x.id_number || '').startsWith('__AGENT_COMMISSION__'))) return res.json({ success:false,error:'You already have an agent commission withdrawal being processed.' });
+        const bankPayload = { kind:'agent_commission', code:a.code || '', amount, bankName, accountName, accountNumber, fee:0 };
+        const marker = '__AGENT_COMMISSION__' + JSON.stringify(bankPayload);
+        const { data: wd, error } = await db.from('withdrawal_requests').insert({ user_id:u.id, full_name:accountName, phone:'', id_number:marker, amount, status:'pending', withdrawal_method:'bank', deadline:Date.now()+2*60*60*1000, requested_at:new Date().toISOString() }).select().single();
+        if (error) return res.json({ success:false,error:error.message });
+        a.availableCommission = Math.max(0, Number(a.availableCommission || 0) - amount);
+        a.withdrawalHistory = [...(a.withdrawalHistory || []), { id:wd.id, amount, status:'pending', requestedAt:wd.requested_at, bankName, accountName, accountNumber, fee:0 }];
+        subs._agent = a; await db.from('users').update({ task_submissions:subs }).eq('id',u.id);
+        const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
+        try { const to=process.env.ADMIN_EMAIL||process.env.NOTIFY_EMAIL||'businesshub.comke@gmail.com'; await createEmailTransport('withdrawal').sendMail({to,subject:`Agent commission withdrawal request — ${accountName}`,text:`Agent: ${accountName}\nEmail: ${u.email}\nAmount: KES ${amount.toLocaleString('en-KE')}\nBank: ${bankName}\nAccount holder: ${accountName}\nBank account number: ${accountNumber}\nWithdrawal ID: ${wd.id}\nAgent fee: KES 0\nType: Full agent commission balance bank transfer\n\nReview this request in the Gweno admin panel.` }); } catch(mailError) { console.error('[agent-withdrawal-admin-email]',mailError?.message||mailError); }
+        try { if(u.email) await createEmailTransport('withdrawal').sendMail({to:u.email,subject:'Gweno Hub agent withdrawal request received',text:`Hello ${u.full_name || accountName},\n\nYour request to withdraw your full available agent commission balance has been received.\n\nAmount requested: KSh ${amount.toLocaleString('en-KE')}\nBank: ${bankName}\nAccount holder: ${accountName}\nBank account number: ${accountNumber}\nAgent withdrawal fee: KSh 0\nStatus: Pending admin review\nReference: ${wd.id}\n\nNo withdrawal fee has been charged. Your request will be reviewed by the administration team. Approval does not mean the bank transfer has already been sent; you will receive a status update.\n\nAgent dashboard: ${baseUrl}/agent-dashboard\n\nGweno Hub Team` }); } catch(mailError) { console.error('[agent-withdrawal-email]',mailError?.message||mailError); }
+        return res.json({success:true,withdrawalId:wd.id,amount,fee:0});
+      }
+
+      case 'listUsers': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { data: rows, error: listErr } = await db.from('users')
+          .select('*').order('created_at', { ascending: false });
+        if (listErr) return res.json({ data: [], error: listErr.message });
+        return res.json({ data: (rows || []).map(norm) });
+      }
+
+      case 'adminUpdateUser': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { userId, balance, premium, premiumPaidAt, activatedAt, clearActivation } = p;
+
+        const updates = {};
+        if (balance   !== undefined) updates.balance    = Number(balance);
+        if (premium   !== undefined) updates.premium    = Boolean(premium);
+        if (premiumPaidAt !== undefined) updates.premium_paid_at = premiumPaidAt;
+        if (p.fullName !== undefined && p.fullName.trim()) updates.full_name = p.fullName.trim();
+        if (p.email    !== undefined && p.email.trim())    updates.email     = p.email.trim();
+        if (p.phone    !== undefined)                      updates.phone     = p.phone.trim();
+        if (p.password !== undefined && String(p.password).trim()) updates.password = hashPassword(String(p.password).trim());
+
+        if (clearActivation || activatedAt !== undefined || p.suspended !== undefined || p.mpesaFeesPaid !== undefined) {
+          const { data: cur } = await db.from('users')
+            .select('task_submissions').eq('id', userId).maybeSingle();
+          const subs = { ...(cur?.task_submissions || {}) };
+
+          if (clearActivation) delete subs._act;
+          else if (activatedAt !== undefined) subs._act = activatedAt;
+
+          if (p.suspended !== undefined) {
+            subs._suspended   = Boolean(p.suspended);
+            subs._suspendedAt = p.suspended ? Date.now() : null;
+            subs._suspendReason = p.suspendReason ?? '';
+          }
+
+          // Admin-verified count of KES 650 M-Pesa fees the client actually paid.
+          // This is the ceiling for bulk/international fee credits, so a client
+          // can't claim more deductions than the admin has recorded.
+          if (p.mpesaFeesPaid !== undefined) {
+            subs._mpesaFeesPaid = Math.max(0, Math.min(3, Math.floor(Number(p.mpesaFeesPaid) || 0)));
+          }
+
+          updates.task_submissions = subs;
+        }
+
+        const { data: updated, error: updErr } = await db.from('users')
+          .update(updates).eq('id', userId).select().single();
+        if (updErr) return res.json({ success: false, error: updErr.message });
+        return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'adminListManualWithdrawals': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { data, error } = await db.from('manual_withdrawals')
+          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo')
+          .order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normManualWd) });
+      }
+
+      case 'adminCreateManualWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const name = cleanManualWithdrawalName(p.fullName);
+        const phone = cleanMaskedPhone(p.phone);
+        const country = cleanManualWithdrawalName(p.country);
+        const amount = Number(p.amount);
+        const status = String(p.status || 'pending').toLowerCase();
+        if (!name) return res.json({ success: false, error: 'Name is required.' });
+        if (!phone) return res.json({ success: false, error: 'Masked phone number is required.' });
+        if (!country) return res.json({ success: false, error: 'Country is required.' });
+        if (!(amount > 0) || !Number.isFinite(amount)) return res.json({ success: false, error: 'Amount must be greater than 0.' });
+        if (!validManualWithdrawalStatus(status)) return res.json({ success: false, error: 'Invalid withdrawal status.' });
+
+        // A client cannot have another non-failed manual withdrawal within 24 hours.
+        // A failed withdrawal may be followed by one new attempt; after that attempt,
+        // the new pending/successful record blocks another withdrawal until 24 hours pass.
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: recent, error: recentErr } = await db.from('manual_withdrawals')
+          .select('id,status,created_at').eq('phone_masked', phone)
+          .gte('created_at', since).order('created_at', { ascending: false }).limit(1);
+        if (recentErr) return res.json({ success: false, error: recentErr.message });
+        const latest = recent?.[0];
+        if (latest && latest.status !== 'failed') {
+          return res.json({ success: false, error: 'This masked phone number already has a withdrawal within the last 24 hours. It cannot be withdrawn twice in one day.' });
+        }
+        if (latest && latest.status === 'failed' && status === 'failed') {
+          return res.json({ success: false, error: 'A failed withdrawal cannot be recorded twice within 24 hours. The next attempt must be pending or successful.' });
+        }
+
+        const { data, error } = await db.from('manual_withdrawals').insert({
+          full_name: name,
+          phone_masked: phone,
+          country,
+          amount,
+          status,
+        }).select('id,full_name,phone_masked,country,amount,status,created_at,updated_at').single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, data: normManualWd(data) });
+      }
+
+      case 'adminUpdateManualWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        if (!p.requestId) return res.json({ success: false, error: 'Missing manual withdrawal ID.' });
+        const { data: current, error: currentErr } = await db.from('manual_withdrawals')
+          .select('*').eq('id', p.requestId).maybeSingle();
+        if (currentErr) return res.json({ success: false, error: currentErr.message });
+        if (!current) return res.json({ success: false, error: 'Manual withdrawal not found.' });
+
+        const name = cleanManualWithdrawalName(p.fullName !== undefined ? p.fullName : current.full_name);
+        const phone = cleanMaskedPhone(p.phone !== undefined ? p.phone : current.phone_masked);
+        const country = cleanManualWithdrawalName(p.country !== undefined ? p.country : current.country);
+        const amount = Number(p.amount !== undefined ? p.amount : current.amount);
+        const status = String(p.status !== undefined ? p.status : current.status).toLowerCase();
+        if (!name) return res.json({ success: false, error: 'Name is required.' });
+        if (!phone) return res.json({ success: false, error: 'Masked phone number is required.' });
+        if (!country) return res.json({ success: false, error: 'Country is required.' });
+        if (!(amount > 0) || !Number.isFinite(amount)) return res.json({ success: false, error: 'Amount must be greater than 0.' });
+        if (!validManualWithdrawalStatus(status)) return res.json({ success: false, error: 'Invalid withdrawal status.' });
+
+        // Do not run the duplicate-create guard when editing an existing record.
+        // Admins must be able to correct Pending/Failed to Successful after payment.
+
+        const { data, error } = await db.from('manual_withdrawals').update({
+          full_name: name,
+          phone_masked: phone,
+          country,
+          amount,
+          status,
+          updated_at: new Date().toISOString(),
+        }).eq('id', p.requestId).select('id,full_name,phone_masked,country,amount,status,created_at,updated_at').single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, data: normManualWd(data) });
+      }
+
+      case 'adminGenerateDemoManualWithdrawals': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const count = Math.max(1, Math.min(400, Math.floor(Number(p.count) || 10)));
+        const intervalMinutes = Math.max(1, Math.min(1440, Math.floor(Number(p.intervalMinutes) || 30)));
+        const minAmount = Math.max(1, Number(p.minAmount) || 1000);
+        const maxAmount = Math.max(minAmount, Number(p.maxAmount) || 10000);
+
+        // Generated entries are DEMONSTRATION records, not real customer payments.
+        // Country-specific name pools keep names aligned with the assigned country.
+        const countries = [
+          { country: 'Kenya', code: '+254', flag: '🇰🇪', method: 'mpesa', first: ['Brian','Mary','Kevin','Faith','Daniel','Amina','Wanjiku','Omondi','Otieno','Njeri','Kamau','Achieng','Kiptoo','Mwangi','Wairimu','Mutua','Kibet','Muthoni','Nyambura','Ouma'], last: ['Otieno','Wanjiku','Mwangi','Njeri','Ouma','Achieng','Kiptoo','Kamau','Mutua','Kibet','Muthoni','Nyambura','Omondi','Odhiambo','Wairimu','Kariuki','Chebet','Maina','Njoroge','Wambui'] },
+          { country: 'Uganda', code: '+256', flag: '🇺🇬', method: 'bank', first: ['Samuel','Sarah','Joseph','Diana','Moses','Chantal','Aisha','Brian','Grace','Patrick','Miriam','Isaac','Ruth','Peter','Esther','Daniel','Joan','David'], last: ['Kato','Namukasa','Okello','Namusoke','Niyonzima','Nakato','Ssemanda','Kakooza','Akena','Tumusiime','Atim','Mugisha','Nabirye','Byaruhanga','Ocen','Kiconco'] },
+          { country: 'Tanzania', code: '+255', flag: '🇹🇿', method: 'bank', first: ['Juma','Neema','Baraka','Asha','Hassan','Rehema','Zawadi','Mariam','Hamisi','Salma','Joseph','Amani','Fatuma','Omari','Hadija','Nuru'], last: ['Mushi','Mrema','Mwinyi','Mwakalinga','Mhando','Kweka','Msuya','Mashauri','Juma','Massawe','Nyerere','Bakari','Said','Magesa','Mwakipesile','Selemani'] },
+          { country: 'Rwanda', code: '+250', flag: '🇷🇼', method: 'bank', first: ['Eric','Grace','Patrick','Claudine','Jean','Alice','Emmanuel','Aline','Chantal','Diane','Samuel','Yvonne','Pacifique','Diane','Beatrice','Olivier'], last: ['Habimana','Uwase','Niyonzima','Mukamana','Ndayisenga','Nkurunziza','Mugabo','Ingabire','Mutesi','Iradukunda','Bizimana','Uwamahoro','Nsengimana','Kayitesi','Munyaneza','Rukundo'] },
+          { country: 'Burundi', code: '+257', flag: '🇧🇮', method: 'bank', first: ['Jean','Alice','Aline','Patrick','Chantal','Eric','Diane','Emmanuel','Odette','Nadia','Samuel','Claudine'], last: ['Ndayisenga','Nkurunziza','Niyonkuru','Nshimirimana','Nahimana','Ntahomvukiye','Manirakiza','Irakoze','Niyonzima','Barutwanayo','Bizimana','Niyibizi'] },
+          { country: 'South Sudan', code: '+211', flag: '🇸🇸', method: 'bank', first: ['James','Mary','Deng','Rebecca','Peter','Nyandeng','Grace','John','Sarah','Mabior','Akol','Joseph'], last: ['Deng','Nyandeng','Garang','Atem','Ajak','Bol','Kuol','Lual','Manyang','Akot','Majok','Malual'] },
+          { country: 'Ghana', code: '+233', flag: '🇬🇭', method: 'bank', first: ['Kwame','Ama','Kofi','Akosua','Yaw','Abena','Kojo','Efua','Nana','Adwoa','Kwesi','Esi'], last: ['Mensah','Owusu','Boateng','Asante','Osei','Appiah','Agyeman','Addo','Antwi','Acheampong','Amankwah','Frimpong'] },
+          { country: 'Nigeria', code: '+234', flag: '🇳🇬', method: 'bank', first: ['Chinedu','Adaeze','Emeka','Ngozi','Tunde','Adebayo','Chioma','Ifeoma','Oluwaseun','Bola','Uche','Amaka'], last: ['Okafor','Adeyemi','Okonkwo','Eze','Balogun','Nwosu','Ibrahim','Afolabi','Olawale','Obi','Abubakar','Akinyemi'] },
+          { country: 'South Africa', code: '+27', flag: '🇿🇦', method: 'bank', first: ['Thabo','Lerato','Sipho','Nomsa','Mandla','Zanele','Naledi','Bongani','Ayanda','Lindiwe','Kagiso','Nandi'], last: ['Nkosi','Dlamini','Mokoena','Ndlovu','Khumalo','Mthembu','Mahlangu','Naidoo','Pillay','Molefe','Maseko','Zulu'] },
+          { country: 'Zambia', code: '+260', flag: '🇿🇲', method: 'bank', first: ['Chanda','Bwalya','Mwila','Mwamba','Thandiwe','Mutinta','Lusungu','Tembo','Misozi','Natasha'], last: ['Banda','Phiri','Zulu','Mwanza','Tembo','Sakala','Mulenga','Chileshe','Mumba','Kapasa'] },
+          { country: 'Malawi', code: '+265', flag: '🇲🇼', method: 'bank', first: ['Chisomo','Tadala','Thoko','Yamikani','Mphatso','Memory','Blessings','Peter','Grace','Limbani'], last: ['Banda','Phiri','Moyo','Chirwa','Kamanga','Gondwe','Nkhoma','Zgambo','Kachale','Mvula'] },
+          { country: 'Ethiopia', code: '+251', flag: '🇪🇹', method: 'bank', first: ['Abebe','Hana','Dawit','Mekdes','Tesfaye','Selam','Meron','Samuel','Liya','Mulu'], last: ['Bekele','Tadesse','Kebede','Haile','Alemu','Demissie','Girma','Assefa','Worku','Mekonnen'] },
+        ];
+        const rows = [];
+        const base = Date.now();
+        const statusForIndex = (i) => i % 10 < 6 ? 'successful' : i % 10 < 9 ? 'pending' : 'failed';
+        for (let i = 0; i < count; i++) {
+          const c = countries[i % countries.length];
+          const cycle = Math.floor(i / countries.length);
+          const first = c.first[(cycle * 7 + i) % c.first.length];
+          const last = c.last[(cycle * 11 + i) % c.last.length];
+          const fullName = `${first} ${last}`;
+          const local = String(100000000 + ((i * 7919 + base) % 900000000));
+          const phone = `${c.code}${local.slice(0, 3)}*****${local.slice(-2)}`;
+          const amount = Math.round((minAmount + ((i * 1379) % Math.max(1, Math.floor(maxAmount - minAmount + 1)))) * 100) / 100;
+          rows.push({
+            full_name: fullName, phone_masked: phone, country: c.country, amount,
+            status: statusForIndex(i), is_demo: true,
+            created_at: new Date(base - (count - 1 - i) * intervalMinutes * 60 * 1000).toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        const { data, error } = await db.from('manual_withdrawals')
+          .insert(rows)
+          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo');
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, data: (data || []).map(normManualWd), count: data?.length || 0 });
+      }
+
+      case 'adminDeleteManualWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        if (!p.requestId) return res.json({ success: false, error: 'Missing manual withdrawal ID.' });
+        const { error } = await db.from('manual_withdrawals').delete().eq('id', p.requestId);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true });
+      }
+
+      case 'listPublicManualWithdrawals': {
+        const { data, error } = await db.from('manual_withdrawals')
+          .select('id,full_name,phone_masked,country,amount,status,created_at,updated_at,is_demo')
+          .order('created_at', { ascending: false }).limit(200);
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normManualWd) });
+      }
+
+      case 'adminListWithdrawals': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { data: wRows, error: wErr } = await db.from('withdrawal_requests')
+          .select('*').order('requested_at', { ascending: false });
+        if (wErr) return res.json({ data: [], error: wErr.message });
+        return res.json({ data: (wRows || []).map(normWd) });
+      }
+
+      case 'adminUpdateWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        // Capture the previous status so approval-triggered actions only run on the
+        // first transition to approved, not when an admin saves an already-approved row.
+        const { data: previousWithdrawal } = await db.from('withdrawal_requests')
+          .select('id,status,id_number,user_id').eq('id', p.requestId).maybeSingle();
+        const newlyApprovedNormalWithdrawal = p.status === 'approved'
+          && previousWithdrawal?.status !== 'approved'
+          && !String(previousWithdrawal?.id_number || '').startsWith('__AGENT_COMMISSION__');
+        const wUpdates = { updated_at: new Date().toISOString() };
+        if (p.status   !== undefined) wUpdates.status    = p.status;
+        if (p.amount   !== undefined) wUpdates.amount    = Number(p.amount);
+        if (p.phone    !== undefined) wUpdates.phone     = p.phone;
+        if (p.idNumber !== undefined) wUpdates.id_number = p.idNumber;
+        if (p.fullName !== undefined) wUpdates.full_name = p.fullName;
+        if (p.rejectReason !== undefined) wUpdates.reject_reason = p.rejectReason;
+        let { data: wUp, error: wUpErr } = await db.from('withdrawal_requests')
+          .update(wUpdates).eq('id', p.requestId).select().single();
+        // If the reject_reason column hasn't been added yet, retry without it so
+        // approve/reject/save still work (the reason just won't be stored).
+        if (wUpErr && /reject_reason/.test(wUpErr.message || '')) {
+          delete wUpdates.reject_reason;
+          ({ data: wUp, error: wUpErr } = await db.from('withdrawal_requests')
+            .update(wUpdates).eq('id', p.requestId).select().single());
+        }
+        if (wUpErr) return res.json({ success: false, error: wUpErr.message });
+        if (newlyApprovedNormalWithdrawal && wUp.user_id && !String(wUp.id_number || '').startsWith('__AGENT_COMMISSION__')) {
+          try {
+            const { data: target } = await db.from('users').select('id,referred_by,task_submissions').eq('id', wUp.user_id).maybeSingle();
+            if (target) {
+              const ts = { ...(target.task_submissions || {}) };
+              if (!ts._agentQualifiedAt) { ts._agentQualifiedAt = Date.now(); await db.from('users').update({ task_submissions: ts }).eq('id', target.id); }
+              const { data: all } = await db.from('users').select('id,referred_by,task_submissions');
+              const byId = new Map((all || []).map(x => [String(x.id), x])); let parent = String(target.referred_by || ''); const seen = new Set();
+              while (parent && !seen.has(parent)) {
+                seen.add(parent); const ancestor = byId.get(parent); if (!ancestor) break;
+                const aSubs = { ...(ancestor.task_submissions || {}) }; const a = { ...(aSubs._agent || {}) };
+                if (a.status === 'active' && !a.qualifiedClientIds?.map(String).includes(String(target.id))) {
+                  a.qualifiedClientIds = [...(a.qualifiedClientIds || []), String(target.id)];
+                  if (Number.isFinite(Number(a.qualifiedCountOverride))) a.qualifiedCountOverride = Number(a.qualifiedCountOverride) + 1;
+                  if (Number.isFinite(Number(a.currentWeekQualifiedOverride))) a.currentWeekQualifiedOverride = Number(a.currentWeekQualifiedOverride) + 1;
+                  a.pendingCommission = Number(a.pendingCommission || 0) + 434;
+                  a.totalCommissionEarned = Number(a.totalCommissionEarned || 0) + 434;
+                  const countForReward = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : a.qualifiedClientIds.length;
+                  const rewardResult = applyAgentMilestoneRewards(a, countForReward);
+                  aSubs._agent = a; await db.from('users').update({ task_submissions: aSubs }).eq('id', ancestor.id);
+                  try { if (ancestor.email) await createEmailTransport('support').sendMail({ to: ancestor.email, subject: rewardResult.rewardsAdded > 0 ? 'Gweno Hub agent reward earned' : 'Gweno agent commission earned', text: `Hello ${ancestor.full_name || 'Agent'},\n\nA client in your referral network has had a withdrawal approved. KSh 434 has been added to your pending agent commission. The same client earns commission only once, regardless of future withdrawals.${rewardResult.rewardsAdded > 0 ? `\n\nCongratulations. You reached a 10-client reward milestone and KSh ${rewardResult.rewardsAdded.toLocaleString('en-KE')} has also been added to your available commission balance. Every additional set of 10 qualified clients earns another KSh 25,000.\n\nAgent dashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/agent-dashboard` : ''}\n\nGweno Hub Team` }); } catch (commissionMailError) { console.error('[agent-commission-email]', commissionMailError?.message || commissionMailError); }
+                }
+                parent = String(ancestor.referred_by || '');
+              }
+            }
+          } catch (commissionError) { console.error('[agent-commission]', commissionError?.message || commissionError); }
+        }
+        if (p.status === 'declined' && String(wUp.id_number || '').startsWith('__AGENT_COMMISSION__')) {
+          try { const { data: owner } = await db.from('users').select('task_submissions').eq('id',wUp.user_id).maybeSingle(); if(owner){ const subs={...(owner.task_submissions||{})}; const a={...(subs._agent||{})}; if(!(a.withdrawalHistory||[]).some(x=>String(x.id)===String(wUp.id)&&x.status==='refunded')) { a.availableCommission=Number(a.availableCommission||0)+Number(wUp.amount||0); a.withdrawalHistory=(a.withdrawalHistory||[]).map(x=>String(x.id)===String(wUp.id)?{...x,status:'declined',refundedAt:Date.now()}:x); subs._agent=a; await db.from('users').update({task_submissions:subs}).eq('id',wUp.user_id); } } } catch(_){}
+        }
+        if (p.status !== undefined) {
+          try {
+            const { data: owner } = await db.from('users').select('email,full_name').eq('id', wUp.user_id).maybeSingle();
+            if (owner?.email) {
+              const transport = createEmailTransport('withdrawal');
+              const statusText = String(wUp.status || p.status);
+              const isNewApproval = newlyApprovedNormalWithdrawal;
+              const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
+              const premiumText = isNewApproval
+                ? `\n\nYour withdrawal request has been approved by our administration team. To proceed with receiving your funds, please upgrade to Gweno Hub Premium if you have not already done so. Sign in to your account and open the Premium Upgrade section: ${baseUrl}/premium\n\nPlease note that approval of the withdrawal request is not itself confirmation that payment has been sent. You will receive a further update when your payment status changes.`
+                : '';
+              const premiumHtml = isNewApproval
+                ? `<p>Your withdrawal request has been approved by our administration team. To proceed with receiving your funds, please upgrade to <strong>Gweno Hub Premium</strong> if you have not already done so. Sign in and open the <a href=\"${baseUrl}/premium\">Premium Upgrade section</a>.</p><p>Approval of the withdrawal request is not itself confirmation that payment has been sent. You will receive a further update when your payment status changes.</p>`
+                : '';
+              await transport.sendMail({
+                to: owner.email,
+                subject: isNewApproval ? 'Withdrawal approved — Premium upgrade required to receive funds' : `Withdrawal status update: ${statusText}`,
+                text: `Hello ${owner.full_name || wUp.full_name || 'Client'},\n\nYour withdrawal request for KES ${Number(wUp.amount || 0).toLocaleString('en-KE')} has been updated to: ${statusText}.\n\nReference: ${wUp.id}${premiumText}\n\nGweno Hub Team`,
+                html: `<p>Hello ${String(owner.full_name || wUp.full_name || 'Client').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>Your withdrawal request for <strong>KES ${Number(wUp.amount || 0).toLocaleString('en-KE')}</strong> has been updated to: <strong>${statusText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</strong>.</p><p>Reference: ${String(wUp.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>${premiumHtml}<p>Gweno Hub Team</p>`,
+              });
+            }
+          } catch (mailErr) { console.error('[withdrawal-email] status notice failed:', mailErr?.message || mailErr); }
+        }
+        return res.json({ success: true, data: normWd(wUp) });
+      }
+
+      case 'adminMarkWithdrawalPaid': {
+        // Manual payout: admin has sent the money via their M-Pesa Business
+        // account, now marks it paid and the user's balance is deducted.
+        // Idempotent via the status guard so a double-click can't double-deduct.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: wd } = await db.from('withdrawal_requests').select('*').eq('id', p.requestId).maybeSingle();
+        if (!wd) return res.json({ success: false, error: 'Withdrawal request not found.' });
+        if (wd.status === 'paid') return res.json({ success: false, error: 'This withdrawal is already marked paid.' });
+
+        const amount = Number(wd.amount || 0);
+        if (wd.user_id && amount > 0) {
+          const { data: u } = await db.from('users').select('balance,task_submissions').eq('id', wd.user_id).maybeSingle();
+          if (u) {
+            const userSubs = { ...(u.task_submissions || {}) };
+            if (String(wd.id_number || '').startsWith('__AGENT_COMMISSION__')) {
+              const a = { ...(userSubs._agent || {}) }; a.paidCommission = Number(a.paidCommission || 0) + amount;
+              a.withdrawalHistory = (a.withdrawalHistory || []).map(x => String(x.id) === String(wd.id) ? { ...x, status:'paid', paidAt:Date.now() } : x); userSubs._agent = a;
+              await db.from('users').update({ task_submissions: userSubs }).eq('id', wd.user_id);
+            } else {
+              const oldBalance = Number(u.balance || 0); const newBalance = Math.max(0, oldBalance - amount);
+              if (newBalance <= 0) userSubs._unwithdrawnCredits = [];
+              await db.from('users').update({ balance: newBalance, task_submissions: userSubs }).eq('id', wd.user_id);
+            }
+          }
+        }
+        const { data: updated, error } = await db.from('withdrawal_requests')
+          .update({ status: 'paid', updated_at: new Date().toISOString() }).eq('id', p.requestId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, { action: 'withdrawal_marked_paid', entity: 'withdrawal', entityId: p.requestId,
+          detail: `KES ${amount} to ${wd.phone || ''} (manual M-Pesa) — balance deducted` });
+        return res.json({ success: true, data: normWd(updated) });
+      }
+
+      case 'adminPayoutWithdrawal': {
+        // Admin-triggered real M-Pesa payout (B2C) for a withdrawal request.
+        // Deliberately manual (never auto) so money only leaves on approval.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        if (!isB2CConfigured()) return res.json({ success: false, error: 'M-Pesa B2C payouts are not configured yet.' });
+        const { data: wd } = await db.from('withdrawal_requests').select('*').eq('id', p.requestId).maybeSingle();
+        if (!wd) return res.json({ success: false, error: 'Withdrawal request not found.' });
+        if (wd.status === 'paid' || wd.status === 'processing') return res.json({ success: false, error: `This withdrawal is already ${wd.status}.` });
+        const amount = Number(wd.amount || 0);
+        if (!isValidMsisdn(wd.phone)) return res.json({ success: false, error: 'This request has no valid Safaricom number to pay.' });
+        if (!(amount > 0)) return res.json({ success: false, error: 'Invalid payout amount.' });
+
+        try {
+          const { ok, data } = await b2cPayment({ phone: wd.phone, amount, remarks: 'Gweno Hub withdrawal', occasion: String(p.requestId) });
+          if (!ok) return res.json({ success: false, error: data?.errorMessage || data?.ResponseDescription || 'B2C request was rejected by M-Pesa.' });
+          await db.from('mpesa_transactions').insert({
+            conversation_id: data.ConversationID || null,
+            originator_conversation_id: data.OriginatorConversationID || null,
+            withdrawal_id: String(p.requestId),
+            user_id: wd.user_id || null,
+            purpose: 'withdrawal_payout', direction: 'b2c',
+            amount, phone: normalizePhone(wd.phone), status: 'pending',
+          });
+          await db.from('withdrawal_requests').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', p.requestId);
+          await logAction(db, { action: 'withdrawal_payout', entity: 'withdrawal', entityId: p.requestId, detail: `KES ${amount} to ${normalizePhone(wd.phone)} (B2C queued)` });
+          return res.json({ success: true, message: data.ResponseDescription || 'Payout queued. It will be confirmed shortly.' });
+        } catch (e) {
+          return res.json({ success: false, error: e.message || 'B2C payout error.' });
+        }
+      }
+
+      case 'adminDeleteWithdrawal': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const { error: delErr } = await db.from('withdrawal_requests')
+          .delete().eq('id', p.requestId);
+        if (delErr) return res.json({ success: false, error: delErr.message });
+        return res.json({ success: true });
+      }
+
+      case 'adminDeleteUser': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        if (!p.userId) return res.json({ success: false, error: 'No user id provided.' });
+        const { error: delErr } = await db.from('users').delete().eq('id', p.userId);
+        if (delErr) return res.json({ success: false, error: delErr.message });
+        return res.json({ success: true });
+      }
+
+      case 'adminDeleteUsersById': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const ids = [...new Set((Array.isArray(p.userIds) ? p.userIds : [])
+          .map(id => String(id || '').trim()).filter(Boolean))];
+        if (!ids.length) return res.json({ success: false, error: 'Select at least one client.' });
+        if (ids.length > 500) return res.json({ success: false, error: 'Select no more than 500 accounts at a time.' });
+        const { data: matched, error: selErr } = await db.from('users').select('id').in('id', ids);
+        if (selErr) return res.json({ success: false, error: selErr.message });
+        const foundIds = (matched || []).map(row => row.id);
+        if (foundIds.length) {
+          const { error: delErr } = await db.from('users').delete().in('id', foundIds);
+          if (delErr) return res.json({ success: false, error: delErr.message });
+        }
+        return res.json({ success: true, deleted: foundIds.length });
+      }
+
+      case 'adminDeleteUsersByEmail': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        // Normalise the pasted list to a unique, lower-cased set of exact addresses
+        const targets = new Set(
+          (p.emails || []).map(e => String(e).trim().toLowerCase()).filter(Boolean)
+        );
+        if (!targets.size) return res.json({ success: false, error: 'No emails provided.' });
+
+        // Match case-insensitively in JS so we only ever delete EXACT addresses
+        const { data: rows, error: selErr } = await db.from('users').select('id,email');
+        if (selErr) return res.json({ success: false, error: selErr.message });
+
+        const matched  = (rows || []).filter(r => targets.has(String(r.email || '').trim().toLowerCase()));
+        const ids      = matched.map(r => r.id);
+        const foundSet = new Set(matched.map(r => String(r.email || '').trim().toLowerCase()));
+        const notFound = [...targets].filter(t => !foundSet.has(t));
+
+        if (ids.length) {
+          const { error: bulkErr } = await db.from('users').delete().in('id', ids);
+          if (bulkErr) return res.json({ success: false, error: bulkErr.message });
+        }
+        return res.json({
+          success: true,
+          deleted: ids.length,
+          deletedEmails: matched.map(r => r.email),
+          notFound,
+        });
+      }
+
+      // ─── Task management ──────────────────────────────────────────────────
+      case 'listTasks': {
+        // Public: active admin-created tasks for the dashboard/submit page.
+        // Offer tasks expire 9 hours after creation (handled server-side).
+        const { data, error } = await db.from('tasks')
+          .select('*').eq('active', true).order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        const OFFER_WINDOW_MS = 9 * 60 * 60 * 1000;
+        const nowMs = Date.now();
+        const live = (data || []).filter(t => {
+          if (String(t.id).startsWith('offer_') && t.created_at
+              && nowMs - new Date(t.created_at).getTime() > OFFER_WINDOW_MS) return false;
+          return true;
+        });
+        return res.json({ data: live.map(normTask) });
+      }
+
+      // ── Marketplace (Phase A): user-posted tasks ──────────────────────────
+      // Identity is derived from the signed session token; the creator is
+      // encoded in the task id ("<uid>~<rand>") so ownership needs no schema
+      // change and can be authorized on edit/delete.
+      case 'createUserTask': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const title = clean(p.title, 120);
+        if (!nonEmpty(title)) return res.json({ success: false, error: 'Task title is required.' });
+        const reward = Math.floor(Number(p.reward) || 0);
+        if (!(reward > 0))       return res.json({ success: false, error: 'Enter a valid reward amount.' });
+        if (reward > 1000000)    return res.json({ success: false, error: 'Reward amount is too high.' });
+        const category    = clean(p.category, 40) || 'General';
+        const description = clean(p.description, 2000);
+        const instructions = clean(p.instructions, 2000);
+        const deadline    = clean(p.deadline, 40);
+        const workers     = Math.max(1, Math.min(50, Math.floor(Number(p.workers) || 1)));
+
+        const { data: u } = await db.from('users').select('full_name, balance').eq('id', uid).maybeSingle();
+        if (!u) return res.status(403).json({ error: 'Unauthorized' });
+
+        // Escrow: the creator pre-funds the full payout (reward × workers). The
+        // amount is held out of their balance now and released to workers on
+        // approval (or refunded if the task is removed with unclaimed slots).
+        const hold    = reward * workers;
+        const balance = Number(u.balance || 0);
+        if (balance < hold) {
+          return res.json({ success: false, error: `Insufficient balance. Funding this task needs KES ${hold.toLocaleString('en-KE')} (reward × workers); your balance is KES ${balance.toLocaleString('en-KE')}.` });
+        }
+
+        // Anti-spam: cap active postings + block duplicate titles by the same user.
+        const { count } = await db.from('tasks')
+          .select('id', { count: 'exact', head: true }).like('id', `${uid}~%`).eq('active', true);
+        if ((count || 0) >= 15) return res.json({ success: false, error: 'You already have 15 active posted tasks. Remove some first.' });
+        const { data: dup } = await db.from('tasks')
+          .select('id').like('id', `${uid}~%`).eq('title', title).eq('active', true).limit(1);
+        if (dup && dup.length) return res.json({ success: false, error: 'You already have an active task with this title.' });
+
+        const id = `${uid}~${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const fullDesc  = deadline ? `${description}\n\nDeadline: ${deadline}` : description;
+        const questions = instructions ? [instructions] : [];
+        const { data, error } = await db.from('tasks').insert({
+          id, title, description: fullDesc, category,
+          poster: clean(u.full_name, 80) || 'Member', location: 'Remote',
+          questions, payment: reward, slots: workers, active: true,
+        }).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+
+        // Debit the escrow only after the task row was created successfully.
+        await db.from('users').update({ balance: balance - hold }).eq('id', uid);
+        await logAction(db, { action: 'user_task_posted', entity: 'task', entityId: id, detail: `by:${uid} reward:${reward} workers:${workers} escrow:${hold} "${title}"` });
+        return res.json({ success: true, task: normTask(data), escrowHeld: hold });
+      }
+
+      case 'listMyTasks': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('tasks')
+          .select('*').like('id', `${uid}~%`).order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normTask) });
+      }
+
+      case 'deleteMyTask': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const taskId = String(p.taskId || '');
+        if (!taskId.startsWith(`${uid}~`)) return res.status(403).json({ error: 'You can only remove your own tasks.' });
+        // Refund the escrow that hasn't been paid out yet: reward × unclaimed slots.
+        const { data: t } = await db.from('tasks').select('payment, slots, claimed').eq('id', taskId).maybeSingle();
+        if (!t) return res.json({ success: false, error: 'Task not found.' });
+        const refund = Math.max(0, Number(t.payment || 0) * (Number(t.slots || 0) - Number(t.claimed || 0)));
+        const { error } = await db.from('tasks').delete().eq('id', taskId);
+        if (error) return res.json({ success: false, error: error.message });
+        if (refund > 0) {
+          const { data: u } = await db.from('users').select('balance').eq('id', uid).maybeSingle();
+          if (u) await db.from('users').update({ balance: Number(u.balance || 0) + refund }).eq('id', uid);
+        }
+        await logAction(db, { action: 'user_task_removed', entity: 'task', entityId: taskId, detail: `by:${uid} refund:${refund}` });
+        return res.json({ success: true, refund });
+      }
+
+      // ── Marketplace review (Phase B): the task CREATOR reviews submissions to
+      // their own tasks. Approving releases escrow to the worker; rejecting or
+      // requesting corrections notifies the worker with a reason. ─────────────
+      case 'listMyReviewSubmissions': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('submissions')
+          .select('*').like('task_id', `${uid}~%`).order('created_at', { ascending: false }).limit(200);
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normSub) });
+      }
+
+      case 'reviewSubmission': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const status = p.status;
+        const allowed = ['approved', 'rejected', 'correction'];
+        if (!allowed.includes(status)) return res.json({ success: false, error: 'Invalid status.' });
+        const { data: sub } = await db.from('submissions').select('*').eq('id', p.submissionId).maybeSingle();
+        if (!sub) return res.json({ success: false, error: 'Submission not found.' });
+        // Authorization: the submission's task must belong to this creator.
+        if (!String(sub.task_id || '').startsWith(`${uid}~`)) {
+          return res.status(403).json({ error: 'You can only review submissions to your own tasks.' });
+        }
+        const reason = clean(p.reason, 500);
+        const reward = Number(sub.reward || 0);
+        const isNewApproval = status === 'approved' && sub.status !== 'approved';
+
+        if (isNewApproval) {
+          // Enforce the worker cap: never pay out more than the funded slots.
+          const { data: t } = await db.from('tasks').select('slots, claimed').eq('id', sub.task_id).maybeSingle();
+          if (t && Number(t.claimed || 0) >= Number(t.slots || 0)) {
+            return res.json({ success: false, error: 'All funded worker slots for this task are already filled.' });
+          }
+          if (sub.user_id && reward > 0) {
+            const { data: w } = await db.from('users').select('balance, completed_tasks').eq('id', sub.user_id).maybeSingle();
+            if (w) {
+              await db.from('users').update({
+                balance:         Number(w.balance || 0) + reward,
+                completed_tasks: Number(w.completed_tasks || 0) + 1,
+              }).eq('id', sub.user_id);
+            }
+          }
+          if (t) await db.from('tasks').update({ claimed: Number(t.claimed || 0) + 1 }).eq('id', sub.task_id);
+        }
+
+        const updates = { status, updated_at: new Date().toISOString() };
+        if (p.reason !== undefined) updates.reason = reason;
+        const { data: updated, error } = await db.from('submissions').update(updates).eq('id', p.submissionId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+
+        // Notify the worker of the outcome.
+        const tt = sub.task_title || 'your task';
+        if (status === 'approved') {
+          await pushNotif(db, sub.user_id, { type: 'approved', title: 'Submission approved — you got paid', body: `Your work on "${tt}" was approved and KES ${reward.toLocaleString('en-KE')} was credited to your balance.` });
+        } else if (status === 'rejected') {
+          await pushNotif(db, sub.user_id, { type: 'rejected', title: 'Submission rejected', body: `Your work on "${tt}" was rejected.${reason ? ` Reason: ${reason}` : ''}` });
+        } else {
+          await pushNotif(db, sub.user_id, { type: 'correction', title: 'Corrections requested', body: `The creator asked for changes on "${tt}".${reason ? ` ${reason}` : ''}` });
+        }
+        await logAction(db, { action: `creator_review_${status}`, entity: 'submission', entityId: p.submissionId, detail: `by:${uid} task:${sub.task_id} worker:${sub.user_id} reward:${reward}${reason ? ` reason:${reason}` : ''}` });
+        return res.json({ success: true, submission: normSub(updated) });
+      }
+
+      // ── Payment ledger ────────────────────────────────────────────────────
+      // Record a payment attempt (idempotent by provider+reference). Used by the
+      // manual M-Pesa Till flow so every payment is persisted + auditable, not
+      // just emailed. Daraja STK/B2C keep their own detailed mpesa_transactions.
+      case 'logPayment': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+        const type     = clean(p.type, 40) || 'other';
+        const amount   = Math.max(0, Number(p.amount) || 0);
+        const provider = clean(p.provider, 30) || 'mpesa_till';
+        const phone    = clean(p.phone, 30);
+        const reference = clean(p.reference, 120) || `till:${uid}:${type}:${amount}`;
+        try {
+          const { data: ex } = await db.from('payment_events')
+            .select('id').eq('provider', provider).eq('reference', reference).maybeSingle();
+          if (ex) {
+            await db.from('payment_events').update({ status: 'pending', updated_at: new Date().toISOString() }).eq('id', ex.id);
+            return res.json({ success: true, id: ex.id, duplicate: true });
+          }
+          const { data, error } = await db.from('payment_events').insert({
+            user_id: uid, type, amount, currency: 'KES', provider, reference, phone,
+            status: 'pending', verify_status: 'unverified',
+          }).select().single();
+          if (error) return res.json({ success: false, error: error.message });
+          await logAction(db, { action: 'payment_pending', entity: 'payment', entityId: reference, detail: `${provider} ${type} KES ${amount} by:${uid}` });
+          return res.json({ success: true, id: data?.id });
+        } catch (e) {
+          return res.json({ success: false, error: e?.message || 'Ledger unavailable' });
+        }
+      }
+
+      // Admin unified transactions view (merges the Daraja ledger + payment_events).
+      case 'adminListTransactions': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const mapDStatus = s => ({ success: 'successful', pending: 'pending', failed: 'failed', timeout: 'failed', cancelled: 'cancelled' }[s] || s || 'pending');
+        let daraja = [], events = [];
+        try { const { data } = await db.from('mpesa_transactions').select('*').order('created_at', { ascending: false }).limit(500); daraja = data || []; } catch (_) {}
+        try { const { data } = await db.from('payment_events').select('*').order('created_at', { ascending: false }).limit(500); events = data || []; } catch (_) {}
+        const fromDaraja = daraja.map(r => ({
+          id: `m${r.id}`, provider: 'daraja', type: r.purpose || '', amount: Number(r.amount || 0), currency: 'KES',
+          reference: r.mpesa_receipt || r.checkout_request_id || r.conversation_id || '', phone: r.phone || '', email: '',
+          userId: r.user_id || '', status: mapDStatus(r.status),
+          verifyStatus: (String(r.result_code) === '0' || r.status === 'success') ? 'verified' : 'unverified',
+          createdAt: r.created_at,
+        }));
+        const fromEvents = events.map(r => ({
+          id: `e${r.id}`, provider: r.provider || '', type: r.type || '', amount: Number(r.amount || 0), currency: r.currency || 'KES',
+          reference: r.reference || '', phone: r.phone || '', email: r.email || '', userId: r.user_id || '',
+          status: r.status || 'pending', verifyStatus: r.verify_status || 'unverified', createdAt: r.created_at,
+        }));
+        let all = [...fromDaraja, ...fromEvents].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        if (p.provider) all = all.filter(t => t.provider === p.provider);
+        if (p.type)     all = all.filter(t => t.type === p.type);
+        if (p.status)   all = all.filter(t => t.status === p.status);
+        return res.json({ data: all.slice(0, 600) });
+      }
+
+      // ── Notifications ─────────────────────────────────────────────────────
+      case 'markNotificationsRead': {
+        const uid = verifyToken(p.authToken);
+        if (!uid) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: u } = await db.from('users').select('task_submissions').eq('id', uid).maybeSingle();
+        if (!u) return res.json({ success: false });
+        const subs = { ...(u.task_submissions || {}) };
+        if (Array.isArray(subs._notifs) && subs._notifs.length) {
+          subs._notifs = subs._notifs.map(n => ({ ...n, read: true }));
+          await db.from('users').update({ task_submissions: subs }).eq('id', uid);
+        }
+        return res.json({ success: true });
+      }
+
+      case 'adminListTasks': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('tasks')
+          .select('*').order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normTask) });
+      }
+
+      case 'adminCreateTask': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        if (!p.title || !String(p.title).trim()) return res.json({ success: false, error: 'Title is required.' });
+        const id = 'task_' + Date.now();
+        const { data, error } = await db.from('tasks').insert({
+          id,
+          title:       String(p.title).trim(),
+          description: p.description ?? '',
+          category:    p.category ?? 'General',
+          poster:      p.poster   ?? 'Gweno Hub',
+          location:    p.location ?? 'Remote',
+          questions:   Array.isArray(p.questions) ? p.questions : [],
+          payment:     Number(p.payment ?? 0),
+          slots:       Number(p.slots ?? 0),
+          active:      p.active !== undefined ? Boolean(p.active) : true,
+        }).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, task: normTask(data) });
+      }
+
+      case 'adminUpdateTask': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const updates = {};
+        ['title', 'description', 'category', 'poster', 'location'].forEach(k => {
+          if (p[k] !== undefined) updates[k] = p[k];
+        });
+        if (p.payment   !== undefined) updates.payment = Number(p.payment);
+        if (p.slots     !== undefined) updates.slots   = Number(p.slots);
+        if (p.active    !== undefined) updates.active  = Boolean(p.active);
+        if (p.questions !== undefined) updates.questions = Array.isArray(p.questions) ? p.questions : [];
+        const { data, error } = await db.from('tasks')
+          .update(updates).eq('id', p.taskId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, task: normTask(data) });
+      }
+
+      case 'adminDeleteTask': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const taskId = String(p.taskId || '');
+        // If it's a user-posted (community) task, refund the creator's unpaid
+        // escrow before removing it (admin fraud/dispute removal).
+        if (taskId.includes('~')) {
+          const creator = taskId.split('~')[0];
+          const { data: t } = await db.from('tasks').select('payment, slots, claimed').eq('id', taskId).maybeSingle();
+          if (t) {
+            const refund = Math.max(0, Number(t.payment || 0) * (Number(t.slots || 0) - Number(t.claimed || 0)));
+            if (refund > 0) {
+              const { data: u } = await db.from('users').select('balance').eq('id', creator).maybeSingle();
+              if (u) await db.from('users').update({ balance: Number(u.balance || 0) + refund }).eq('id', creator);
+              await pushNotif(db, creator, { type: 'refund', title: 'Task removed — escrow refunded', body: `An admin removed your task and KES ${refund.toLocaleString('en-KE')} of unused escrow was refunded to your balance.` });
+            }
+          }
+        }
+        const { error } = await db.from('tasks').delete().eq('id', taskId);
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, { action: 'admin_task_removed', entity: 'task', entityId: taskId, detail: taskId.includes('~') ? 'community task (escrow refunded)' : 'admin task' });
+        return res.json({ success: true });
+      }
+
+      case 'adminSeedTasks': {
+        // One-time migration: copy the built-in starter tasks into the DB so
+        // they become editable/deletable. Skips titles that are already present.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: existing, error: exErr } = await db.from('tasks').select('title');
+        if (exErr) return res.json({ success: false, error: exErr.message });
+        const have = new Set((existing || []).map(r => r.title));
+        const rows = TASKS.filter(t => !have.has(t.title)).map(t => ({
+          id:          'task_seed_' + t.id,
+          title:       t.title,
+          description: t.description ?? '',
+          category:    t.category ?? 'General',
+          poster:      t.poster   ?? 'Gweno Hub',
+          location:    t.location ?? 'Remote',
+          questions:   Array.isArray(t.questions) ? t.questions : [],
+          payment:     Number(t.payment ?? 0),
+          slots:       0,
+          active:      true,
+        }));
+        if (!rows.length) return res.json({ success: true, inserted: 0, message: 'Already migrated.' });
+        const { error: insErr } = await db.from('tasks').insert(rows);
+        if (insErr) return res.json({ success: false, error: insErr.message });
+        return res.json({ success: true, inserted: rows.length });
+      }
+
+      // ─── Task applications (proposals) ────────────────────────────────────
+      case 'createApplication': {
+        // Public: a user submits a proposal to work on a task. One active
+        // (pending/approved) application per user per task.
+        // Sanitize + validate server-side.
+        const userId    = clean(p.userId, 64);
+        const taskId    = clean(p.taskId, 64);
+        const userEmail = clean(p.userEmail, 120);
+        const userName  = clean(p.userName, 80);
+        const taskTitle = clean(p.taskTitle, 160);
+        const message   = clean(p.message, 600);
+        const extra     = clean(p.extra, 600);
+        if (!nonEmpty(userId) || !nonEmpty(taskId)) return res.json({ success: false, error: 'Missing user or task.' });
+        if (!nonEmpty(message)) return res.json({ success: false, error: 'A proposal message is required.' });
+        const { data: applicant } = await db.from('users').select('task_submissions').eq('id', userId).maybeSingle();
+        if (applicant?.task_submissions?._agent?.status === 'active') return res.json({ success: false, error: 'Agent accounts cannot apply for ordinary tasks.' });
+        if (applicant?.task_submissions?._suspended) return res.json({ success: false, error: 'Your account is on hold. You can still view your balance and request a withdrawal, but earning activities are paused until the hold is released.' });
+
+        const { data: prior } = await db.from('applications')
+          .select('id,status').eq('user_id', userId).eq('task_id', taskId)
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (prior && (prior.status === 'pending' || prior.status === 'approved')) {
+          return res.json({
+            success: false,
+            alreadyApplied: true,
+            status: prior.status,
+            message: prior.status === 'approved'
+              ? 'Your application for this task is already approved.'
+              : 'You already have an application awaiting review for this task.',
+          });
+        }
+
+        const { data, error } = await db.from('applications').insert({
+          user_id:    userId,
+          user_email: userEmail,
+          user_name:  userName,
+          task_id:    taskId,
+          task_title: taskTitle,
+          message:    clampWords(message, 40),
+          extra:      extra ? clampWords(extra, 40) : '',
+          status:     'pending',
+        }).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, application: normApp(data) });
+      }
+
+      case 'listUserApplications': {
+        // Public: a user's own applications, so the dashboard knows which tasks
+        // are unlocked / pending / need attention.
+        const { userId, email } = p;
+        let query = db.from('applications').select('*');
+        if (userId)     query = query.eq('user_id', userId);
+        else if (email) query = query.eq('user_email', email);
+        else return res.json({ data: [] });
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normApp) });
+      }
+
+
+      // ── Client reviews ─────────────────────────────────────────────────────
+      case 'submitReview': {
+        const reviewText = clean(p.reviewText, 1200);
+        if (!nonEmpty(reviewText)) return res.json({ success: false, error: 'Review text is required.' });
+        if (reviewText.length < 10) return res.json({ success: false, error: 'Please write a little more about your experience.' });
+
+        // Identity is always taken from the authenticated database user. The
+        // client never supplies or controls the public name/phone/country.
+        const { data: u, error: userErr } = await db.from('users')
+          .select('id,full_name,phone,country').eq('id', p.userId).maybeSingle();
+        if (userErr || !u) return res.json({ success: false, error: 'User account could not be found.' });
+
+        const { data, error } = await db.from('reviews').insert({
+          user_id:    u.id,
+          full_name:  clean(u.full_name, 80),
+          phone:      clean(u.phone, 30),
+          country:    clean(u.country, 60),
+          review_text: reviewText,
+          status:     'pending',
+        }).select('id,status,created_at').single();
+
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, {
+          action: 'review_submitted', entity: 'review', entityId: data.id,
+          detail: `${u.full_name || ''}, ${u.country || ''}`,
+        });
+        return res.json({ success: true, review: {
+          id: data.id, status: data.status, createdAt: data.created_at,
+        }});
+      }
+
+      case 'listApprovedReviews': {
+        const { data: rows, error } = await db.from('reviews')
+          .select('id,user_id,full_name,phone,country,review_text,status,created_at,approved_at')
+          .eq('status', 'approved')
+          .order('approved_at', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (error) return res.json({ data: [], error: error.message });
+
+        // Return only the fields the public page needs. Phone numbers are masked
+        // on the server so the raw number never reaches the browser.
+        const maskPublicPhone = (phone) => {
+          const raw = String(phone || '').replace(/[^0-9+]/g, '');
+          if (!raw) return '';
+          const digits = raw.replace(/\D/g, '');
+          if (digits.length <= 6) return raw.replace(/\d/g, '*');
+          const prefix = raw.startsWith('+') ? '+' : '';
+          const visibleStart = digits.slice(0, Math.min(5, digits.length - 4));
+          const ending = digits.slice(-2);
+          return `${prefix}${visibleStart}*****${ending}`;
+        };
+
+        return res.json({ data: (rows || []).map(r => ({
+          id: r.id,
+          name: r.full_name || 'Client',
+          phone: maskPublicPhone(r.phone),
+          country: r.country || '',
+          text: r.review_text || '',
+          status: 'approved',
+          createdAt: r.created_at,
+          approvedAt: r.approved_at,
+          kind: 'real',
+        })) });
+      }
+
+
+      case 'adminListReviews': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('reviews')
+          .select('id,user_id,full_name,phone,country,review_text,status,created_at,approved_at,approved_by')
+          .order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(r => ({
+          id: r.id,
+          userId: r.user_id,
+          name: r.full_name || '—',
+          phone: r.phone || '—',
+          country: r.country || '—',
+          text: r.review_text || '',
+          status: r.status || 'pending',
+          createdAt: r.created_at,
+          approvedAt: r.approved_at,
+          approvedBy: r.approved_by,
+        })) });
+      }
+
+      case 'adminUpdateReview': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const reviewId = clean(p.reviewId, 100);
+        const status = clean(p.status, 20);
+        const allowed = ['pending', 'approved', 'rejected'];
+        if (!reviewId) return res.json({ success: false, error: 'Missing review ID.' });
+        if (!allowed.includes(status)) return res.json({ success: false, error: 'Invalid review status.' });
+
+        const updates = { status };
+        if (status === 'approved') {
+          updates.approved_at = new Date().toISOString();
+          updates.approved_by = 'admin';
+        } else {
+          updates.approved_at = null;
+          updates.approved_by = null;
+        }
+
+        const { data, error } = await db.from('reviews')
+          .update(updates).eq('id', reviewId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, {
+          action: `review_${status}`, entity: 'review', entityId: reviewId,
+          detail: `${data?.full_name || ''}, ${data?.country || ''}`,
+        });
+        return res.json({ success: true, review: {
+          id: data.id, status: data.status, approvedAt: data.approved_at,
+        }});
+      }
+
+      case 'adminListApplications': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('applications')
+          .select('*').order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normApp) });
+      }
+
+      case 'adminUpdateApplication': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { applicationId, status, reason } = p;
+        const allowed = ['pending', 'approved', 'rejected', 'correction'];
+        if (!allowed.includes(status)) return res.json({ success: false, error: 'Invalid status.' });
+        const updates = { status, updated_at: new Date().toISOString() };
+        if (reason !== undefined) updates.reason = String(reason || '');
+        const { data, error } = await db.from('applications')
+          .update(updates).eq('id', applicationId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, {
+          action: `application_${status}`, entity: 'application', entityId: applicationId,
+          detail: `${data?.task_title || ''}, ${data?.user_email || ''}${reason ? `, ${reason}` : ''}`,
+        });
+        if (status !== 'pending') {
+          try {
+            const email = data?.user_email;
+            if (email) await createEmailTransport('support').sendMail({
+              to: email,
+              subject: status === 'approved' ? 'Your Gweno Hub task application was approved' : status === 'correction' ? 'Action required on your Gweno Hub task application' : 'Update on your Gweno Hub task application',
+              text: `Hello ${data?.user_name || 'Client'},\n\nYour application for “${data?.task_title || 'the selected task'}” has been updated to: ${status}.\n${reason ? `Admin note: ${reason}\n` : ''}${status === 'approved' ? 'Please sign in to your dashboard to review the next steps.' : status === 'correction' ? 'Please review the note above and make the requested corrections.' : 'You can review available tasks in your dashboard.'}\n\nGweno Hub Team`,
+            });
+          } catch (mailErr) { console.error('[task-application-email]', mailErr?.message || mailErr); }
+        }
+        return res.json({ success: true, application: normApp(data) });
+      }
+
+      case 'adminListActions': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('admin_actions')
+          .select('*').order('created_at', { ascending: false }).limit(300);
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normAction) });
+      }
+
+      case 'unsubscribeUser': {
+        // Public but token-protected. Broadcast opt-out must not disable password
+        // resets, security notices, or transactional account email.
+        const { uid, token } = p;
+        if (!verifyUnsubToken(uid, token)) return res.json({ success: false, error: 'Invalid or expired unsubscribe link.' });
+        const { data: user, error: readError } = await db.from('users').select('task_submissions').eq('id', uid).maybeSingle();
+        if (readError || !user) return res.json({ success: false, error: 'Could not update email preferences. Please contact support.' });
+        const submissions = { ...(user.task_submissions || {}), _marketingUnsubscribed: true };
+        const { error } = await db.from('users').update({ task_submissions: submissions }).eq('id', uid);
+        if (error) return res.json({ success: false, error: 'Could not update email preferences. Please contact support.' });
+        await logAction(db, { action: 'unsubscribe', entity: 'user', entityId: uid, detail: 'User opted out of promotional/broadcast emails' });
+        return res.json({ success: true });
+      }
+
+      // ─── Submitted-task review ────────────────────────────────────────────
+      case 'adminListSubmissions': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await db.from('submissions')
+          .select('*').order('created_at', { ascending: false });
+        if (error) return res.json({ data: [], error: error.message });
+        return res.json({ data: (data || []).map(normSub) });
+      }
+
+      case 'adminUpdateSubmission': {
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { submissionId, status, reason } = p;
+        const allowed = ['pending', 'approved', 'rejected', 'correction'];
+        if (!allowed.includes(status)) return res.json({ success: false, error: 'Invalid status.' });
+        const { data: sub } = await db.from('submissions')
+          .select('*').eq('id', submissionId).maybeSingle();
+        if (!sub) return res.json({ success: false, error: 'Submission not found.' });
+
+        // Approving a not-yet-approved submission credits the reward to the user.
+        // Capture the details needed for the confirmation email, and whether the
+        // balance credit actually succeeded (the email must only go out if it did).
+        const isNewApproval = status === 'approved' && sub.status !== 'approved';
+        const reward = Number(sub.reward || 0);
+        let creditUser = null;   // { email, name, newBalance, unsubscribed } when credited
+        if (isNewApproval) {
+          if (sub.user_id && reward > 0) {
+            const { data: u } = await db.from('users')
+              .select('balance,completed_tasks,email,full_name,unsubscribed,task_submissions').eq('id', sub.user_id).maybeSingle();
+            if (u) {
+              const newBalance = Number(u.balance || 0) + reward;
+              const userSubs = { ...(u.task_submissions || {}) };
+              const credits = Array.isArray(userSubs._unwithdrawnCredits) ? userSubs._unwithdrawnCredits : [];
+              const creditId = String(sub.id);
+              if (!credits.some(item => String(item.id) === creditId)) {
+                credits.push({ id: creditId, amount: reward, creditedAt: Date.now(), reminderSentAt: null });
+              }
+              userSubs._unwithdrawnCredits = credits;
+              const { error: balErr } = await db.from('users').update({
+                balance:         newBalance,
+                completed_tasks: Number(u.completed_tasks || 0) + 1,
+                task_submissions: userSubs,
+              }).eq('id', sub.user_id);
+              if (!balErr) {
+                creditUser = { email: u.email, name: u.full_name, previousBalance: Number(u.balance || 0), newBalance, unsubscribed: !!u.unsubscribed };
+              }
+            }
+          }
+          if (sub.task_id) {
+            const { data: t } = await db.from('tasks')
+              .select('claimed').eq('id', sub.task_id).maybeSingle();
+            if (t) await db.from('tasks').update({ claimed: Number(t.claimed || 0) + 1 }).eq('id', sub.task_id);
+          }
+        }
+
+        // Commit the status change (this is the "approval committed" step).
+        const updates = { status, updated_at: new Date().toISOString() };
+        if (reason !== undefined) updates.reason = String(reason || '');
+        const { data: updated, error } = await db.from('submissions')
+          .update(updates).eq('id', submissionId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        await logAction(db, {
+          action: `submission_${status}`, entity: 'submission', entityId: submissionId,
+          detail: `${sub.task_title || ''}, ${sub.user_email || ''}${reason ? `, ${reason}` : ''}`,
+        });
+
+        // Auto-send the "Task Approved & Earnings Credited" email, only after a
+        // successful new approval whose balance credit committed. Email failure
+        // never rolls back the approval; it's logged so the admin can resend.
+        let email = null;
+        if (isNewApproval && creditUser && creditUser.email) {
+          const amtStr = `KES ${reward.toLocaleString('en-KE')}`;
+          try {
+            if (creditUser.unsubscribed) {
+              email = { attempted: false, sent: false, status: 'Skipped (unsubscribed)' };
+            } else {
+              const mail = await sendApprovalEmail({
+                userEmail: creditUser.email, userName: creditUser.name,
+                taskName: sub.task_title, amount: reward, previousBalance: creditUser.previousBalance, updatedBalance: creditUser.newBalance,
+              });
+              email = { attempted: true, sent: !!mail.success, status: mail.success ? 'Sent' : 'Failed', message: mail.message || '' };
+            }
+          } catch (e) {
+            email = { attempted: true, sent: false, status: 'Failed', message: e?.message || 'Send error' };
+          }
+          await logAction(db, {
+            action: 'approval_email', entity: 'submission', entityId: submissionId,
+            detail: `user:${sub.user_id} task:${sub.task_id} amount:${amtStr} status:${email.status}${email.message ? ` (${email.message})` : ''}`,
+          });
+        }
+
+        return res.json({ success: true, submission: normSub(updated), email });
+      }
+
+      case 'adminResendApprovalEmail': {
+        // Manually re-send the approval/payment-confirmation email for an
+        // already-approved submission (e.g. after an earlier delivery failure).
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { submissionId } = p;
+        const { data: sub } = await db.from('submissions')
+          .select('*').eq('id', submissionId).maybeSingle();
+        if (!sub) return res.json({ success: false, error: 'Submission not found.' });
+        if (sub.status !== 'approved') return res.json({ success: false, error: 'Only approved submissions can have an approval email sent.' });
+
+        const { data: u } = await db.from('users')
+          .select('balance,email,full_name,unsubscribed').eq('id', sub.user_id).maybeSingle();
+        if (!u || !u.email) return res.json({ success: false, error: 'User email not found.' });
+
+        const reward = Number(sub.reward || 0);
+        const amtStr = `KES ${reward.toLocaleString('en-KE')}`;
+        if (u.unsubscribed) {
+          await logAction(db, { action: 'approval_email_resend', entity: 'submission', entityId: submissionId,
+            detail: `user:${sub.user_id} task:${sub.task_id} amount:${amtStr} status:Skipped (unsubscribed)` });
+          return res.json({ success: false, unsubscribed: true, error: 'This user has unsubscribed from emails.' });
+        }
+
+        const mail = await sendApprovalEmail({
+          userEmail: u.email, userName: u.full_name,
+          taskName: sub.task_title, amount: reward, previousBalance: Math.max(0, Number(u.balance || 0) - reward), updatedBalance: Number(u.balance || 0),
+        });
+        await logAction(db, { action: 'approval_email_resend', entity: 'submission', entityId: submissionId,
+          detail: `user:${sub.user_id} task:${sub.task_id} amount:${amtStr} status:${mail.success ? 'Sent' : 'Failed'}${mail.message ? ` (${mail.message})` : ''}` });
+        return res.json({ success: !!mail.success, message: mail.message });
+      }
+
+      case 'adminClearTasks': {
+        // Delete ALL tasks so a fresh set can be created with current dates.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: before } = await db.from('tasks').select('id');
+        const { error } = await db.from('tasks').delete().not('id', 'is', null);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, deleted: (before || []).length });
+      }
+
+      case 'adminMigratePremiumBalances': {
+        // One-time: move any leftover premium-test balance (_pbal) into each
+        // user's main dashboard balance, then drop the _pbal key. Idempotent.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: rows, error: selErr } = await db.from('users').select('id,balance,task_submissions');
+        if (selErr) return res.json({ success: false, error: selErr.message });
+        let migrated = 0;
+        let totalMoved = 0;
+        for (const u of (rows || [])) {
+          const subs = { ...(u.task_submissions || {}) };
+          const pbal = Number(subs._pbal || 0);
+          if (pbal > 0) {
+            delete subs._pbal;
+            const { error: updErr } = await db.from('users').update({
+              balance: Number(u.balance || 0) + pbal,
+              task_submissions: subs,
+            }).eq('id', u.id);
+            if (!updErr) { migrated += 1; totalMoved += pbal; }
+          }
+        }
+        return res.json({ success: true, migrated, totalMoved });
+      }
+
+      case 'listUserSubmissions': {
+        // A user's own submissions (used by the dashboard to show "already
+        // submitted / already done" and auto-clear after 3 hours).
+        const { userId, email } = p;
+        let query = db.from('submissions').select('id,task_id,task_title,status,reason,note,created_at,updated_at');
+        if (userId)      query = query.eq('user_id', userId);
+        else if (email)  query = query.eq('user_email', email);
+        else return res.json({ data: [] });
+        const { data, error } = await query;
+        if (error) return res.json({ data: [], error: error.message });
+        // The dashboard shows "already submitted/done", then the task clears
+        // 3 hours after submission, that timing is decided here (server-side).
+        const CLEAR_MS = 3 * 60 * 60 * 1000;
+        const nowMs = Date.now();
+        return res.json({ data: (data || []).map(r => ({
+          id:        r.id,
+          taskId:    r.task_id,
+          taskTitle: r.task_title,
+          status:    r.status,
+          reason:    r.reason || '',
+          note:      r.note || '',
+          updatedAt: r.updated_at || null,
+          createdAt: r.created_at,   // used only to pick the latest submission per task
+          cleared:   r.created_at ? (nowMs - new Date(r.created_at).getTime() > CLEAR_MS) : false,
+        })) });
+      }
+
+      case 'adminSeedOfferTasks': {
+        // Launch a fresh batch of 15 limited-time OFFER tasks (KES 2,000 to 4,200).
+        // No premium needed, one submission each (slots=1), 9-hour window (from
+        // created_at). Re-running replaces the batch and restarts the 9 hours.
+        if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+        await db.from('tasks').delete().like('id', 'offer%');
+        const OFFERS = [
+          { title: 'Write 3 Instagram captions for a coffee shop',        category: 'Writing',       payment: 2000 },
+          { title: 'Transcribe a 5-minute audio clip',                    category: 'Transcription', payment: 2200 },
+          { title: 'Summarize a 2-page article into 150 words',           category: 'Writing',       payment: 2400 },
+          { title: 'Format a 3-page document neatly',                     category: 'Admin',         payment: 2500 },
+          { title: 'Enter 50 rows of product data into a spreadsheet',    category: 'Data Entry',    payment: 2600 },
+          { title: 'Translate 200 words from English to Swahili',         category: 'Translation',   payment: 2800 },
+          { title: 'Complete a 10-question market research survey',        category: 'Survey',        payment: 2900 },
+          { title: 'Proofread a 400-word blog post',                      category: 'Admin',         payment: 3000 },
+          { title: 'Research and list 8 competitor prices',               category: 'Research',      payment: 3200 },
+          { title: 'Write a 250-word product description',                category: 'Writing',       payment: 3400 },
+          { title: 'Test a mobile app and report 5 bugs',                 category: 'Testing',       payment: 3600 },
+          { title: 'Create 5 short-form video content ideas',             category: 'Marketing',     payment: 3800 },
+          { title: 'Voice-record a clear 1-minute script',                category: 'Audio',         payment: 4000 },
+          { title: 'Build a 6-question onboarding quiz',                  category: 'Education',     payment: 4100 },
+          { title: 'Design a simple logo concept for a boutique',         category: 'Design',        payment: 4200 },
+        ];
+        const rows = OFFERS.map((o, i) => ({
+          id:          `offer_${i + 1}`,
+          title:       o.title,
+          description: `${o.title}. Limited-time OFFER, no premium needed and first come, first served (only one person can complete each offer). Submit your completed work the same way as any other task before the offer ends.`,
+          category:    o.category,
+          poster:      'Gweno Hub • Offer',
+          location:    'Remote',
+          questions:   [],
+          payment:     o.payment,
+          slots:       1,
+          claimed:     0,
+          active:      true,
+        }));
+        const { error } = await db.from('tasks').insert(rows);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true, inserted: rows.length });
+      }
+
+      // ─── Profile (self-service) ───────────────────────────────────────────
+      case 'updateProfile': {
+        // Username is freely editable. Full Name is NOT changed here — it now
+        // requires the kes 480 profile-change fee (handled in changeContact).
+        // Extended fields (address, postalCode, state) are stored in _profile so
+        // the page can round-trip them, but the UI keeps them read-only.
+        const userId = clean(p.userId, 64);
+        if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
+
+        const { data: u } = await db.from('users')
+          .select('task_submissions').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'User not found.' });
+
+        const updates = {};   // full_name intentionally not settable here (fee-gated)
+
+        const subs    = { ...(u.task_submissions || {}) };
+        const profile = { ...(subs._profile || {}) };
+        if (p.username   !== undefined) profile.username   = clean(p.username, 40);
+        if (p.address    !== undefined) profile.address    = clean(p.address, 160);
+        if (p.postalCode !== undefined) profile.postalCode = clean(p.postalCode, 20);
+        if (p.state      !== undefined) profile.state      = clean(p.state, 80);
+        subs._profile = profile;
+        updates.task_submissions = subs;
+
+        const { data: updated, error } = await db.from('users')
+          .update(updates).eq('id', userId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        try {
+          const { data: contact } = await db.from('users').select('email,full_name').eq('id', userId).maybeSingle();
+          if (contact?.email) await createEmailTransport('support').sendMail({ to: contact.email, subject: 'Your Gweno Hub profile was updated', text: `Hello ${contact.full_name || 'Client'},\n\nYour profile has been updated successfully. Fields changed: ${Object.keys(profile).filter(k => p[k] !== undefined).join(', ') || 'profile details'}. If you did not make this change, please contact Gweno Hub support.\n\nGweno Hub Team` });
+        } catch (mailErr) { console.error('[profile-update-email]', mailErr?.message || mailErr); }
+        return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'updateAvatar': {
+        const userId = clean(p.userId, 64);
+        const avatar = String(p.avatar ?? '');
+        if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
+        // Accept only image data URLs, and cap the stored size (~3MB of base64).
+        if (avatar && !/^data:image\/(png|jpeg|jpg|webp);base64,/.test(avatar)) {
+          return res.json({ success: false, error: 'Unsupported image format.' });
+        }
+        if (avatar.length > 3_000_000) {
+          return res.json({ success: false, error: 'Image is too large after processing.' });
+        }
+        const { data: u } = await db.from('users')
+          .select('task_submissions').eq('id', userId).maybeSingle();
+        if (!u) return res.json({ success: false, error: 'User not found.' });
+
+        const subs    = { ...(u.task_submissions || {}) };
+        const profile = { ...(subs._profile || {}) };
+        profile.avatar = avatar;          // '' clears it back to initials
+        subs._profile  = profile;
+
+        const { data: updated, error } = await db.from('users')
+          .update({ task_submissions: subs }).eq('id', userId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        try {
+          const { data: contact } = await db.from('users').select('email,full_name').eq('id', userId).maybeSingle();
+          if (contact?.email) await createEmailTransport('support').sendMail({ to: contact.email, subject: 'Your Gweno Hub profile picture was updated', text: `Hello ${contact.full_name || 'Client'},\n\nYour profile picture was updated successfully. If you did not make this change, please contact Gweno Hub support.\n\nGweno Hub Team` });
+        } catch (mailErr) { console.error('[profile-avatar-email]', mailErr?.message || mailErr); }
+        return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'changeContact': {
+        // Changing personal name / email / phone requires a verified, single-use
+        // kes 480 profile-change fee paid via Daraja (recorded by the STK callback
+        // in mpesa_transactions). Values arrive as newFullName/newEmail/newPhone
+        // (the uid-based auth guard strips a body `email`). Cannot be bypassed.
+        const userId = clean(p.userId, 64);
+        if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
+
+        const feeRef = clean(p.feeRef, 120);
+        if (!nonEmpty(feeRef)) {
+          return res.json({ success: false, needsFee: true, error: 'A kes 480 profile-change fee is required.' });
+        }
+        const { data: fee } = await db.from('mpesa_transactions')
+          .select('*').eq('checkout_request_id', feeRef).maybeSingle();
+        const feeOk = fee && fee.status === 'success' && fee.purpose === 'profile_change'
+          && String(fee.user_id) === String(userId) && !fee.withdrawal_id;
+        if (!feeOk) {
+          const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
+            : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
+          await logAction(db, { action: 'profile_fee_verify_failed', entity: 'user', entityId: userId, detail: `fee:${feeRef} reason:${reason}` });
+          return res.json({ success: false, needsFee: true, error: 'Your kes 480 payment could not be verified. Please pay the fee and try again.' });
+        }
+
+        const updates = {};
+        if (p.newFullName !== undefined && p.newFullName !== '') {
+          const fullName = clean(p.newFullName, 80);
+          if (!nonEmpty(fullName)) return res.json({ success: false, error: 'Full name cannot be empty.' });
+          updates.full_name = fullName;
+        }
+        if (p.newEmail !== undefined && p.newEmail !== '') {
+          const email = clean(p.newEmail, 120).toLowerCase();
+          if (!isEmail(email)) return res.json({ success: false, error: 'A valid email address is required.' });
+          const { data: existing } = await db.from('users').select('id').ilike('email', email).limit(2);
+          if ((existing || []).some(r => String(r.id) !== String(userId))) {
+            return res.json({ success: false, error: 'That email is already in use by another account.' });
+          }
+          updates.email = email;
+        }
+        if (p.newPhone !== undefined && p.newPhone !== '') {
+          const phone = clean(p.newPhone, 20);
+          if (!isPhone(phone)) return res.json({ success: false, error: 'A valid phone number is required.' });
+          updates.phone = phone;
+        }
+        if (Object.keys(updates).length === 0) return res.json({ success: false, error: 'Nothing to update.' });
+
+        const { data: updated, error } = await db.from('users')
+          .update(updates).eq('id', userId).select().single();
+        if (error) return res.json({ success: false, error: error.message });
+        // Consume the fee (link it → single-use), then log.
+        await db.from('mpesa_transactions').update({ withdrawal_id: `profile:${Date.now()}` }).eq('id', fee.id);
+        await logAction(db, { action: 'profile_changed', entity: 'user', entityId: userId, detail: `${Object.keys(updates).join(',')} fee:${feeRef}` });
+        try {
+          const notifyEmail = updated?.email;
+          if (notifyEmail) await createEmailTransport('support').sendMail({ to: notifyEmail, subject: 'Your Gweno Hub profile was updated', text: `Hello ${updated.full_name || 'Client'},\n\nYour profile was updated successfully. Fields changed: ${Object.keys(updates).join(', ')}. If you did not make this change, contact Gweno Hub support immediately.\n\nGweno Hub Team` });
+        } catch (mailErr) { console.error('[profile-contact-update-email]', mailErr?.message || mailErr); }
+        return res.json({ success: true, user: norm(updated) });
+      }
+
+      case 'deleteAccount': {
+        // Self-service permanent deletion, keyed by the session user id. Best-effort
+        // cleanup of the user's related rows first, then the user record itself.
+        const userId = clean(p.userId, 64);
+        if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
+        try { await db.from('submissions').delete().eq('user_id', userId); } catch (_) {}
+        try { await db.from('applications').delete().eq('user_id', userId); } catch (_) {}
+        try { await db.from('withdrawal_requests').delete().eq('user_id', userId); } catch (_) {}
+        const { error } = await db.from('users').delete().eq('id', userId);
+        if (error) return res.json({ success: false, error: error.message });
+        return res.json({ success: true });
+      }
+
+      default:
+        return res.status(400).json({ error: `Unknown op: ${op}` });
+    }
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
