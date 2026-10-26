@@ -662,7 +662,6 @@ function UsersTab({ users, secret, onRefresh }) {
                       disabled={isSaving} onClick={() => saveUser(user)}>
                       {isSaving ? 'Saving…' : 'Save'}
                     </button>
-                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#0f766e' }} disabled={isSaving || user.agent?.status === 'active' || user.agent?.status === 'pending'} onClick={async () => { if (!confirm(`Invite ${user.fullName || user.email} to apply as a Gweno agent?`)) return; const r = await dbProxy('inviteAgent', { adminSecret: secret, userId: user.id }); setMsg(prev => ({ ...prev, [user.id]: { type: r.success ? 'ok' : 'err', text: r.success ? (r.warning || 'Agent invitation sent.') : (r.error || 'Invitation failed.') } })); await onRefresh(); }}>♙ {user.agent?.status === 'active' ? 'Active Agent' : user.agent?.status === 'pending' ? 'Application Pending' : user.agent?.status === 'invited' ? 'Resend Agent Invite' : 'Invite as Agent'}</button>
                     <button
                       style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#4b5563', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                       disabled={isSaving || !user.email}
@@ -698,7 +697,7 @@ function UsersTab({ users, secret, onRefresh }) {
 // ─── Manual Withdrawal Records ────────────────────────────────────────────────
 function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
   const [form, setForm] = useState({ fullName: '', phone: '', country: '', amount: '', status: 'pending' });
-  const [demoForm, setDemoForm] = useState({ count: 400, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000 });
+  const [demoForm, setDemoForm] = useState({ count: 10, intervalMinutes: 30, minAmount: 1000, maxAmount: 10000 });
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState({});
   const [deleting, setDeleting] = useState({});
@@ -825,11 +824,11 @@ function ManualWithdrawalsSection({ manualWithdrawals, secret, onRefresh }) {
       <form onSubmit={generateDemoWithdrawals} style={{ margin: '0 20px 18px', padding: 14, border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC', display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Demo Client Generator</div>
-          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Creates up to 400 country-matched demonstration records. Demo records are labelled on the public board and are separate from genuine manual records.</div>
+          <div style={{ marginTop: 3, color: '#64748B', fontSize: 11 }}>Publishes generated withdrawal records publicly using the same format as manually posted withdrawals.</div>
         </div>
         <div>
           <label style={styles.fieldLabel}>Clients</label>
-          <input type="number" min="1" max="400" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.count} onChange={e => setDemoForm({ ...demoForm, count: e.target.value })} />
+          <input type="number" min="1" max="50" style={{ ...styles.input, marginBottom: 0 }} value={demoForm.count} onChange={e => setDemoForm({ ...demoForm, count: e.target.value })} />
         </div>
         <div>
           <label style={styles.fieldLabel}>Interval (minutes)</label>
@@ -982,7 +981,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
   // Manual payout confirmation: admin has already sent the money via their
   // M-Pesa Business account; this marks it paid and deducts the user's balance.
   async function markPaid(wd) {
-    if (!confirm(`Confirm you have SENT KES ${Number(wd.amount).toLocaleString()} to ${wd.isAgentCommission ? `${wd.accountName} at ${wd.bankName || 'the selected bank'} (account ${wd.accountNumber})` : `${wd.phone} via your M-Pesa Business account`}.\n\nThis marks the request paid. This action cannot be undone.`)) return;
+    if (!confirm(`Confirm you have SENT KES ${Number(wd.amount).toLocaleString()} to ${wd.phone} via your M-Pesa Business account.\n\nThis marks the request paid and deducts KES ${Number(wd.amount).toLocaleString()} from the user's balance. Cannot be undone.`)) return;
     setSaving(prev => ({ ...prev, [wd.id]: true }));
     const res = await dbProxy('adminMarkWithdrawalPaid', { adminSecret: secret, requestId: wd.id });
     setSaving(prev => ({ ...prev, [wd.id]: false }));
@@ -1049,7 +1048,7 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>ID: {wd.userId}</div>
                   </td>
 
-                  {/* Withdrawal details for administrator processing */}
+                  {/* Withdrawal details: phone is masked; bank account is masked */}
                   <td style={styles.td}>
                     <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Method</div>
                     <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6 }}>{wd.withdrawalMethod === 'bank' ? 'Bank' : wd.withdrawalMethod === 'safaricom' ? 'Safaricom' : 'M-Pesa'}</div>
@@ -1057,13 +1056,8 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
                       <>
                         <div style={{ fontSize: 11, color: '#64748B' }}>Bank</div>
                         <div style={{ fontSize: 12, marginBottom: 5 }}>{wd.bankName || '—'}</div>
-                        <div style={{ fontSize: 11, color: '#64748B' }}>Account name</div>
-                        <div style={{ fontSize: 12, marginBottom: 5 }}>{wd.accountName || '—'}</div>
-                        <div style={{ fontSize: 11, color: '#64748B' }}>Account number / IBAN</div>
-                        <div style={{ fontWeight: 700, letterSpacing: 1, wordBreak: 'break-word' }}>{wd.accountNumber || '—'}</div>
-                        {wd.country && <div style={{ fontSize: 12, marginTop: 4 }}>Country: {wd.country}</div>}
-                        {wd.branch && <div style={{ fontSize: 12 }}>Branch: {wd.branch}</div>}
-                        {wd.swift && <div style={{ fontSize: 12 }}>SWIFT/BIC: {wd.swift}</div>}
+                        <div style={{ fontSize: 11, color: '#64748B' }}>Account number</div>
+                        <div style={{ fontWeight: 700, letterSpacing: 1 }}>{wd.accountNumber || '—'}</div>
                       </>
                     ) : (
                       <>
@@ -1198,6 +1192,8 @@ function ReviewsTab({ secret }) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
+      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
+
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load reviews: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
@@ -1505,6 +1501,8 @@ function TasksTab({ secret }) {
         {nm && <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 600, color: nm.type === 'ok' ? '#1f2937' : '#1f2937' }}>{nm.text}</span>}
       </div>
 
+      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
+
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load tasks: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
@@ -1623,6 +1621,8 @@ function SubmissionsTab({ secret }) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
+      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
+
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load submissions: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
@@ -1827,6 +1827,8 @@ function ApplicationsTab({ secret }) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
+      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
+
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load applications: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
@@ -1915,6 +1917,8 @@ function AuditTab({ secret }) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
+      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
+
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load the audit log: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code>.
@@ -1996,6 +2000,8 @@ function TransactionsTab({ secret }) {
   const [provider, setProvider] = useState('');
   const [type,     setType]     = useState('');
   const [status,   setStatus]   = useState('');
+  const [verifying, setVerifying] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
 
   async function load() {
     setLoaded(false);
@@ -2010,6 +2016,24 @@ function TransactionsTab({ secret }) {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [provider, type, status]);
 
   const providerLabel = { daraja: 'Daraja (M-Pesa)', paystack: 'Paystack', mpesa_till: 'M-Pesa Till' };
+
+  async function verifyTransaction(t) {
+    if (!t?.id || verifying) return;
+    const unverify = t.verifyStatus === 'verified';
+    const confirmText = unverify
+      ? 'Mark this transaction as unverified? Any completed payment effects will remain unchanged.'
+      : 'Verify this transaction? For Daraja payments, this runs the normal successful-payment processing. Only do this after confirming the client was charged.';
+    if (typeof window !== 'undefined' && !window.confirm(confirmText)) return;
+    setVerifying(t.id); setActionMessage('');
+    try {
+      const result = await dbProxy('adminVerifyTransaction', { adminSecret: secret, transactionId: t.id, verifyAction: unverify ? 'unverify' : 'verify' });
+      if (!result.success) { setActionMessage(result.error || 'Could not update transaction.'); return; }
+      setActionMessage(result.message || 'Transaction updated.');
+      await load();
+    } catch (e) {
+      setActionMessage(e?.message || 'Could not update transaction.');
+    } finally { setVerifying(''); }
+  }
 
   return (
     <div style={{ padding: '20px 32px' }}>
@@ -2040,6 +2064,8 @@ function TransactionsTab({ secret }) {
         <span style={{ fontSize: 13, color: '#64748B' }}>{loaded ? `${rows.length} transactions` : 'Loading…'}</span>
       </div>
 
+      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
+
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           Could not load transactions: <strong>{err}</strong>. If this mentions a missing table, run <code>db/payments-tables.sql</code> in your Supabase SQL editor.
@@ -2058,7 +2084,7 @@ function TransactionsTab({ secret }) {
                 <td style={styles.td}>{providerLabel[t.provider] || t.provider || '—'}</td>
                 <td style={{ ...styles.td, fontFamily: 'monospace', fontSize: 11, maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.reference || '—'}</td>
                 <td style={styles.td}><span style={{ ...styles.badge, background: t.status === 'successful' ? '#e5e7eb' : '#f3f4f6', color: '#111827' }}>{t.status}</span></td>
-                <td style={styles.td}><span style={{ fontSize: 11, color: '#64748B' }}>{t.verifyStatus}</span></td>
+                <td style={styles.td}><div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}><span style={{ fontSize: 11, color: '#64748B' }}>{t.verifyStatus || 'unverified'}</span><button type="button" style={{ ...styles.btn, width: 'auto', padding: '5px 8px', fontSize: 11, opacity: verifying === t.id ? 0.6 : 1 }} disabled={!!verifying} onClick={() => verifyTransaction(t)}>{verifying === t.id ? 'Working…' : t.verifyStatus === 'verified' ? 'Unverify' : 'Verify'}</button></div></td>
                 <td style={{ ...styles.td, fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(t.createdAt ? new Date(t.createdAt).getTime() : null)}</td>
               </tr>
             ))}
@@ -2070,14 +2096,6 @@ function TransactionsTab({ secret }) {
       </div>
     </div>
   );
-}
-
-function AgentsTab({ secret, onRefresh }) {
- const [agents,setAgents]=useState([]);const [busy,setBusy]=useState(false);const [notice,setNotice]=useState('');
- async function load(){setBusy(true);const r=await dbProxy('adminListAgents',{adminSecret:secret});setAgents(r.data||[]);if(r.error)setNotice(r.error);setBusy(false);}useEffect(()=>{load();},[]);
- async function review(u,decision){const note=window.prompt(decision==='approve'?'Optional approval note:':'Reason for declining (optional):','')||'';if(!confirm(`${decision==='approve'?'Approve':'Decline'} the agent application for ${u.fullName||u.email}?`))return;const r=await dbProxy('adminReviewAgentApplication',{adminSecret:secret,userId:u.id,decision,note});setNotice(r.success?`Application ${decision==='approve'?'approved':'declined'}.`:r.error||'Action failed.');await load();await onRefresh();}
- async function editMetrics(u){const a=u.agent||{};const ask=(label,key,def)=>window.prompt(label,String(def??0));const values={};const specs=[['Qualified clients','qualifiedCountOverride',a.qualifiedCountOverride??(a.qualifiedClientIds||[]).length],['This week qualified clients','currentWeekQualifiedOverride',a.currentWeekQualifiedOverride??u.currentWeekQualified??0],['Pending commission (KES)','pendingCommission',a.pendingCommission??0],['Available commission (KES)','availableCommission',a.availableCommission??0],['Total commission earned (KES)','totalCommissionEarned',a.totalCommissionEarned??0],['Paid commission (KES)','paidCommission',a.paidCommission??0]];for(const [label,key,def] of specs){const v=ask(label,key,def);if(v===null)return;values[key]=v;}const note=window.prompt('Reason for this manual adjustment (optional):','')||'';const r=await dbProxy('adminEditAgentMetrics',{adminSecret:secret,userId:u.id,...values,note});setNotice(r.success?'Agent figures updated.':r.error||'Could not update agent figures.');await load();await onRefresh();}
- return <section style={{padding:20}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2>Agent applications and monitoring</h2><button style={styles.btn} onClick={load} disabled={busy}>{busy?'Loading…':'Refresh'}</button></div>{notice&&<p>{notice}</p>}<div style={{overflowX:'auto'}}><table style={styles.table}><thead><tr>{['Client','Status','Country / County','Qualified clients','Commission','Referral link','Review'].map(x=><th key={x} style={styles.th}>{x}</th>)}</tr></thead><tbody>{agents.map(u=>{const a=u.agent||{};const f=a.application||{};return <tr key={u.id}><td style={styles.td}>{u.fullName}<br/><small>{u.email}</small></td><td style={styles.td}>{a.status||'—'}<br/><small>{f.submittedAt?new Date(f.submittedAt).toLocaleDateString():''}</small>{a.status==='active'&&<div style={{marginTop:5,fontSize:12}}>This week: {u.currentWeekQualified||0}/10{(u.currentWeekQualified||0)<10?' · Shortfall recorded':''}</div>}</td><td style={styles.td}>{f.representCountry||u.country||'—'}{f.county?` / ${f.county}`:''}</td><td style={styles.td}>{Number.isFinite(Number(a.qualifiedCountOverride))?Number(a.qualifiedCountOverride):(a.qualifiedClientIds||[]).length}<details><summary>View recruited clients ({(u.recruitedClients||[]).length})</summary><div style={{maxHeight:180,overflow:'auto'}}>{(u.recruitedClients||[]).map(c=><div key={c.id} style={{padding:'4px 0',borderBottom:'1px solid #e2e8f0'}}>{c.fullName||c.email}<br/><small>{c.email} · {c.qualified?'Qualified':'Not qualified'}</small></div>)}</div></details></td><td style={styles.td}>Total KES {Number(a.totalCommissionEarned||0).toLocaleString()}<br/>Pending KES {Number(a.pendingCommission||0).toLocaleString()}<br/>Available KES {Number(a.availableCommission||0).toLocaleString()}<details><summary>Commission payments ({(a.withdrawalHistory||[]).length})</summary>{(a.withdrawalHistory||[]).map(w=><div key={w.id} style={{padding:'4px 0',borderBottom:'1px solid #e2e8f0'}}>KES {Number(w.amount||0).toLocaleString()} · {w.status}<br/><small>{w.requestedAt?new Date(w.requestedAt).toLocaleDateString():''}</small></div>)}</details></td><td style={styles.td}>{a.code?`${(typeof window!=='undefined'?window.location.origin:'https://gweno.business')}/register?agent=${a.code}`:'Not assigned'}</td><td style={styles.td}>{a.status==='pending'&&<><button style={{...styles.btn,marginBottom:5}} onClick={()=>review(u,'approve')}>Approve</button><button style={{...styles.btn,background:'#b91c1c'}} onClick={()=>review(u,'decline')}>Decline</button></>}{a.status==='declined'&&<span>Can be invited again from Users</span>}{a.status==='active'&&<span>Active</span>}<div style={{marginTop:8}}><button style={{...styles.btn,fontSize:12}} onClick={()=>editMetrics(u)}>Edit figures</button></div></td></tr>})}{!agents.length&&<tr><td colSpan={7} style={styles.td}>No agent invitations or applications found.</td></tr>}</tbody></table></div><p style={{fontSize:12,color:'#64748b'}}>Applications are stored with the account record. CVs are also emailed to the configured admin email. Weekly qualification is based on distinct clients with admin-approved withdrawals.</p></section>
 }
 
 export default function AdminPanel() {
@@ -2179,7 +2197,6 @@ export default function AdminPanel() {
       <div className="gw-admin-tabs" style={styles.tabs}>
         {[
           { key: 'users',        label: `👤 Users (${users.length})` },
-          { key: 'agents',       label: '♙ Agents' },
           { key: 'withdrawals',  label: `💸 Withdrawals (${withdrawals.length})` },
           { key: 'reviews',      label: '⭐ Reviews' },
           { key: 'transactions', label: '💳 Transactions' },
@@ -2198,7 +2215,6 @@ export default function AdminPanel() {
       </div>
 
       <div className="admin-tab-panel">
-        {tab === 'agents'       && <AgentsTab secret={secret} onRefresh={refresh} />}
         {tab === 'users'        && <UsersTab        users={users}             secret={secret} onRefresh={refresh} />}
         {tab === 'withdrawals'  && <WithdrawalsTab  withdrawals={withdrawals} manualWithdrawals={manualWithdrawals} secret={secret} onRefresh={refresh} />}
         {tab === 'reviews'      && <ReviewsTab      secret={secret} />}

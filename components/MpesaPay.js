@@ -4,6 +4,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { getToken } from '../lib/auth';
 import Icon from './Icon';
+import { getToken } from '../lib/auth';
 
 const PHONE_RE = /^(?:\+?254|0)?(7|1)\d{8}$/;
 const POLL_MS = 3000;
@@ -15,8 +16,38 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
   const [msg, setMsg] = useState('');
   const pollRef = useRef(null);
   const doneRef = useRef(false);
+  const recoveryCheckedRef = useRef(false);
 
   useEffect(() => () => clearInterval(pollRef.current), []);
+
+  // If an admin verified a previously charged withdrawal fee after a failed
+  // callback, reuse it automatically. The user must never be prompted to pay again.
+  useEffect(() => {
+    if (purpose !== 'withdrawal_fee' || recoveryCheckedRef.current) return;
+    recoveryCheckedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const authToken = getToken();
+        if (!authToken) return;
+        const response = await fetch('/api/db', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op: 'getAvailableVerifiedWithdrawalFee', authToken }),
+        });
+        const result = await response.json().catch(() => ({}));
+        const fee = result?.fee;
+        if (cancelled || !result?.success || !fee?.checkoutRequestId) return;
+        // Only reuse a fee matching this flow's required fee; do not consume a
+        // fee paid for a different withdrawal option or amount.
+        if (!fee.manuallyVerified && Number(fee.amount) !== Math.round(Number(amount) || 0)) return;
+        doneRef.current = true;
+        setState('success');
+        setMsg('Previously paid withdrawal fee verified by admin. No further payment is required.');
+        onSuccess?.({ success: true, status: 'success', checkoutRequestId: fee.checkoutRequestId, recovered: true });
+      } catch (_) { /* Normal payment remains available if recovery lookup fails. */ }
+    })();
+    return () => { cancelled = true; };
+  }, [purpose, amount, onSuccess]);
 
   function stop() {
     clearInterval(pollRef.current);
