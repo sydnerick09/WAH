@@ -4,7 +4,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { getToken } from '../lib/auth';
 import Icon from './Icon';
-import { getToken } from '../lib/auth';
 
 const PHONE_RE = /^(?:\+?254|0)?(7|1)\d{8}$/;
 const POLL_MS = 3000;
