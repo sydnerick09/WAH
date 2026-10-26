@@ -33,12 +33,15 @@ export default async function handler(req, res) {
 
   const db = adminDb();
   if (!db) return res.status(503).json({ success: false, message: 'Service unavailable.' });
-  const { data: u } = await db.from('users').select('balance').eq('id', uid).maybeSingle();
+  const { data: u } = await db.from('users').select('balance,activated,task_submissions,premium,premium_paid_at').eq('id', uid).maybeSingle();
   if (!u) return res.status(401).json({ success: false, message: 'Please log in again.' });
 
   // Canonical, server-side amount per purpose.
   let amount = 0;
   if (purpose === 'activation' || purpose === 'activation_topup') {
+    const activatedAt = Number(u.task_submissions?._act || 0);
+    const currentlyActive = Boolean(activatedAt && Date.now() <= activatedAt + 30 * 24 * 60 * 60 * 1000);
+    if (currentlyActive) return res.json({ success: false, message: 'Your account is already active. No activation payment is needed.' });
     amount = Math.max(0, ACTIVATION_FEE - Number(u.balance || 0));
     if (amount <= 0) return res.json({ success: false, message: 'Your balance already covers activation.' });
   } else if (purpose === 'premium' || purpose === 'premium_topup') {
@@ -87,11 +90,15 @@ export default async function handler(req, res) {
     if (!ok) {
       return res.json({ success: false, message: data?.errorMessage || data?.ResponseDescription || 'Could not start the M-Pesa prompt. Please try again.' });
     }
-    await createTransaction({
+    const recorded = await createTransaction({
       checkoutRequestId: data.CheckoutRequestID,
       merchantRequestId: data.MerchantRequestID,
       userId: uid, purpose, amount, phone: normalizePhone(phone),
     });
+    if (!recorded?.ok) {
+      console.error('[stk-push] Could not persist M-Pesa transaction:', recorded?.error || 'unknown database error');
+      return res.status(503).json({ success: false, paymentPromptStarted: true, message: 'Safaricom may have started the payment prompt, but GWENO could not save its tracking record. Do not pay again yet. Contact support with your M-Pesa message.' });
+    }
     return res.json({ success: true, checkoutRequestId: data.CheckoutRequestID, amount, customerMessage: data.CustomerMessage });
   } catch (e) {
     console.error('[stk-push]', e.message);

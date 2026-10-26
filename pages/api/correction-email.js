@@ -4,13 +4,13 @@
 // Reason is editable from the admin panel before sending. Dynamic placeholders
 // ({TASK_NAME}, {USER_NAME}, {USER_EMAIL}, {UNSUBSCRIBE_LINK}) are replaced here.
 //   ADMIN_SECRET               = same secret the admin panel uses
-// Email delivery uses SMTP_USER and SMTP_PASS for Gmail SMTP.
+// Email delivery uses RESEND_API_KEY and RESEND_FROM_EMAIL for Resend.
 //   SUPABASE_* (optional)      = used only to honour the unsubscribe opt-out
 import { createEmailTransport } from '../../lib/emailTransport';
 import { createClient } from '@supabase/supabase-js';
 import { unsubscribeUrl } from '../../lib/unsubToken';
 
-const SITE_URL = (process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '');
+const SITE_URL = (process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://gweno.business').replace(/\/$/, '');
 
 const SUBJECT = 'Task Submission Returned for Corrections';
 
@@ -90,22 +90,12 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: false, message: 'A valid recipient email is required.' });
   }
 
-  // Honour the unsubscribe opt-out (best-effort, needs the DB configured).
-  try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (url && key && userId) {
-      const db = createClient(url, key, { auth: { persistSession: false } });
-      const { data: u } = await db.from('users').select('unsubscribed').eq('id', userId).maybeSingle();
-      if (u && u.unsubscribed) {
-        return res.status(200).json({ success: false, unsubscribed: true, message: 'This user has unsubscribed from emails.' });
-      }
-    }
-  } catch (_) { /* if the check fails, still allow the important correction notice */ }
+  // Correction notices are transactional task emails and must still be sent
+  // when a user opts out of promotional/broadcast messages.
 
   const transporter = getTransporter();
   if (!transporter) {
-    return res.status(200).json({ success: false, configured: false, message: 'Email (SMTP) is not configured.' });
+    return res.status(200).json({ success: false, configured: false, message: 'Resend is not configured.' });
   }
 
   const vars = {

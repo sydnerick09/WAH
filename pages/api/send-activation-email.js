@@ -96,16 +96,12 @@ export default async function handler(req, res) {
   if (subscriptionType === 'premium' && !isPremium) {
     return res.status(403).json({ success: false, message: 'Premium is not active, so a successful subscription email cannot be sent.' });
   }
-  if (client.unsubscribed) {
-    return res.status(403).json({ success: false, message: 'This client has unsubscribed from email.' });
-  }
-
   const transporter = getTransporter();
 
   if (!transporter) {
     return res.status(500).json({
       success: false,
-      message: 'Email (SMTP) is not configured.',
+      message: 'Resend is not configured.',
     });
   }
 

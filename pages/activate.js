@@ -13,34 +13,6 @@ import { useMpesaEnabled } from '../lib/useMpesaEnabled';
 
 const FEE = 50;
 
-async function sendActivationEmail(activatedUser, beforeBalance = null) {
-  if (!activatedUser?.email) return false;
-
-  try {
-    const response = await fetch('/api/send-activation-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: activatedUser.email,
-        name:
-          activatedUser.full_name ||
-          activatedUser.fullName ||
-          activatedUser.name ||
-          'Client',
-        beforeBalance: beforeBalance === null ? undefined : Number(beforeBalance),
-        afterBalance: Number(activatedUser.balance || 0),
-        deducted: beforeBalance === null ? undefined : 50,
-      }),
-    });
-    const result = await response.json().catch(() => ({}));
-    return response.ok && result.success === true;
-  } catch (err) {
-    // Do not undo successful activation if email sending fails.
-    console.error('[activation-email]', err);
-    return false;
-  }
-}
-
 export default function ActivatePage() {
   const router = useRouter();
   const { user, ready } = useUser();
@@ -50,8 +22,6 @@ export default function ActivatePage() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [doneUser, setDoneUser] = useState(null);
-  const [emailFailed, setEmailFailed] = useState(false);
-  const [emailRetrying, setEmailRetrying] = useState(false);
   const [till,     setTill]     = useState('1545320');
   const mpesa = useMpesaEnabled();
 
@@ -71,14 +41,14 @@ export default function ActivatePage() {
   // Called after a successful STK payment: refresh the user (the server already
   // activated the account in the callback) and show the success screen.
  async function onMpesaPaid() {
+  // The server-side M-Pesa callback sends the payment receipt and activation
+  // email after it verifies and applies the payment. Do not send a duplicate
+  // activation email from the browser.
   const u = await getCurrentUser().catch(() => null);
-
   if (u) {
     setCurrentUser(u);
     setDoneUser(u);
-    setEmailFailed(!(await sendActivationEmail(u, balance)));
   }
-
   setStep('success');
 }
 
@@ -89,7 +59,6 @@ export default function ActivatePage() {
       const updated = await activateWithBalance(user.id);
       if (updated) {
   setDoneUser(updated);
-  setEmailFailed(!(await sendActivationEmail(updated, balance)));
   setStep('success');
 } else {
         setError('Activation failed. Please try again.');
@@ -101,12 +70,6 @@ export default function ActivatePage() {
     }
   }
 
-  async function retryActivationEmail() {
-    if (!doneUser || emailRetrying) return;
-    setEmailRetrying(true);
-    setEmailFailed(!(await sendActivationEmail(doneUser, balance)));
-    setEmailRetrying(false);
-  }
 
   if (!ready || !user || !step) {
     return <FlowSkeleton rows={2} />;
@@ -174,8 +137,6 @@ export default function ActivatePage() {
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb', textAlign: 'left', marginTop: 12 }}>
             Your account is now active. KES 50 has been deducted as your activation fee, you can now bid on tasks. Your remaining balance is <strong>KES {Number(doneUser?.balance || 0).toLocaleString()}</strong>.
           </div>
-          {emailFailed && <div className="pay-message" role="status" style={{ marginTop: 12, textAlign: 'left' }}>Your account is activated and your balance has been updated, but the confirmation email could not be sent. You can retry sending it below. Your activation will not be charged again.</div>}
-          {emailFailed && <button className="withdraw-close-btn" style={{ marginTop: 10 }} onClick={retryActivationEmail} disabled={emailRetrying}>{emailRetrying ? 'Retrying email…' : 'Retry Confirmation Email'}</button>}
           <button className="pay-btn" style={{ background: '#000000', marginTop: 20 }} onClick={() => router.push('/dashboard')}>
             Start Bidding
           </button>

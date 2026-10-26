@@ -1,6 +1,6 @@
 // pages/api/broadcast.js
 // Admin-only: sends a message to a selected registered-client group.
-// Protected by ADMIN_SECRET; sends through the configured SMTP account.
+// Protected by ADMIN_SECRET; sends through the configured Resend account.
 
 import { createClient } from '@supabase/supabase-js';
 import { createEmailTransport } from '../../lib/emailTransport';
@@ -64,8 +64,8 @@ async function broadcastHandler(req, res) {
   try {
     transporter = getTransporter();
   } catch (err) {
-    console.error('[broadcast] SMTP configuration error:', err?.message || err);
-    return res.status(503).json({ success: false, configured: false, message: err?.message || 'SMTP is not configured.' });
+    console.error('[broadcast] Resend configuration error:', err?.message || err);
+    return res.status(503).json({ success: false, configured: false, message: err?.message || 'Resend is not configured.' });
   }
 
 
@@ -143,18 +143,18 @@ async function broadcastHandler(req, res) {
   const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
   const baseUrl = (configuredBase || (requestHost ? `${requestProto}://${requestHost}` : '')).replace(/\/$/, '');
 
-  let sent = 0; // Accepted by the SMTP server; acceptance does not guarantee inbox delivery.
+  let sent = 0; // Accepted by Resend; acceptance does not guarantee inbox delivery.
   let failed = 0;
   const errors = [];
   const recordError = async (email, err) => {
     failed += 1;
-    const message = String(err?.message || err || 'Unknown SMTP error');
+    const message = String(err?.message || err || 'Unknown Resend error');
     if (errors.length < 20) errors.push({ email, error: message });
     console.error('[broadcast] send error:', email, message);
     // Keep processing other recipients even if one email fails.
   };
 
-  // Process recipients in manageable groups using a small reusable SMTP pool.
+  // Process recipients in manageable groups using a small Resend API requests.
   const BATCH_SIZE = 100;
   for (let offset = 0; offset < recipients.length; offset += BATCH_SIZE) {
     const batch = recipients.slice(offset, offset + BATCH_SIZE);
@@ -226,7 +226,7 @@ async function broadcastHandler(req, res) {
       }
     } else {
       // A small concurrency limit keeps a 159-recipient broadcast from spending
-      // more than a minute waiting on sequential SMTP connections.
+      // more than a minute waiting on sequential Resend API requests.
       const CONCURRENCY = 3;
       for (let i = 0; i < prepared.length; i += CONCURRENCY) {
         const group = prepared.slice(i, i + CONCURRENCY);
@@ -256,8 +256,8 @@ async function broadcastHandler(req, res) {
     recipientType: test ? 'test' : recipientType,
     errors,
     message: failed > 0
-      ? `SMTP accepted ${sent} email(s); ${failed} failed. Acceptance does not guarantee inbox delivery. Review the returned errors.`
-      : `SMTP accepted ${sent} email(s). Acceptance does not guarantee inbox delivery.`,
+      ? `Resend accepted ${sent} email(s); ${failed} failed. Acceptance does not guarantee inbox delivery. Review the returned errors.`
+      : `Resend accepted ${sent} email(s). Acceptance does not guarantee inbox delivery.`,
   });
 }
 

@@ -148,8 +148,10 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "File processing failed." });
   }
 
-  // ── 6. SMTP transporter ───────────────────────────────────────────────────
-  const transporter = createEmailTransport('admin');
+  // ── 6. Resend transport ───────────────────────────────────────────────────
+  let transporter = null;
+  try { transporter = createEmailTransport('admin'); }
+  catch (err) { console.error('[submit-task] Resend configuration error:', err?.message || err); }
 
   const destination = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || "businesshub.comke@gmail.com";
 
@@ -177,8 +179,9 @@ export default async function handler(req, res) {
     attachments: [{ filename: fileName, content: fileBuffer, contentType: mimeType }],
   };
 
-  let emailSent = true;
+  let emailSent = Boolean(transporter);
   try {
+    if (!transporter) throw new Error('Resend is not configured.');
     await transporter.sendMail(mailOptions);
     console.log(`[submit-task] Email sent to ${destination}`);
   } catch (err) {
@@ -188,8 +191,9 @@ export default async function handler(req, res) {
 
   // Auto-reply confirmation to the client uses the no-reply sender.
   if (userEmail && userEmail !== "N/A") {
-    const clientTransporter = createEmailTransport("noreply");
+    let clientTransporter;
     try {
+      clientTransporter = createEmailTransport("noreply");
       await clientTransporter.sendMail({
         to: userEmail,
         subject: `We received your submission, ${taskTitle}`,
@@ -278,6 +282,8 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error("[submit-task] submission log error:", err.message);
   }
+
+  try { transporter?.close(); } catch (_) {}
 
   // ── 8. Cleanup temp file ───────────────────────────────────────────────────
   try { await fs.promises.unlink(filePath); } catch (_) {}

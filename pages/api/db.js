@@ -612,7 +612,7 @@ export default async function handler(req, res) {
           const configuredBase = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL;
           const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
           const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
-          const base = String(configuredBase || (requestHost ? `${requestProto}://${requestHost}` : 'https://onlinejob-pi.vercel.app')).replace(/\/$/, '');
+          const base = String(configuredBase || (requestHost ? `${requestProto}://${requestHost}` : 'https://gweno.business')).replace(/\/$/, '');
           const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
           const delivery = await sendResetEmail({ userEmail: u.email, userName: u.full_name, resetUrl });
           if (!delivery?.success) {
@@ -728,11 +728,14 @@ export default async function handler(req, res) {
         if (pbal < 599) return res.json({ data: null, error: 'You need at least KES 599 in your Premium balance to subscribe.' });
         const consumed = 599;
         subs._pbal     = pbal - consumed;
-        const { data: updated } = await db.from('users').update({
+        const { data: updated, error: updateError } = await db.from('users').update({
           premium:          true,
           premium_paid_at:  Date.now(),
           task_submissions: subs,
         }).eq('id', userId).select().single();
+        if (updateError) return res.json({ data: null, error: updateError.message });
+        try { if (updated?.email) await createEmailTransport('transactional').sendMail({ to: updated.email, subject: 'Your Gweno Hub Premium Is Active', text: `Hello ${updated.full_name || 'Client'},\n\nYour Premium subscription is now active. KES 599 has been applied from your Premium balance.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGWENO Hub Team` }); }
+        catch (mailErr) { console.error('[premium-balance-email]', mailErr?.message || mailErr); }
         return res.json({ data: norm(updated) });
       }
 
@@ -773,9 +776,12 @@ export default async function handler(req, res) {
         const { count: approvedWithdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests')
           .select('id', { count: 'exact', head: true }).eq('user_id', p.userId).eq('status', 'approved');
         if (withdrawalCheckError || Number(approvedWithdrawalCount || 0) < 1) return res.json({ data: null, error: 'You can subscribe to Premium only after the admin approves your withdrawal.' });
-        const { data } = await db.from('users').update({
+        const { data, error } = await db.from('users').update({
           premium: true, premium_paid_at: Date.now(),
         }).eq('id', p.userId).select().single();
+        if (error) return res.json({ data: null, error: error.message });
+        try { if (data?.email) await createEmailTransport('transactional').sendMail({ to: data.email, subject: 'Your Gweno Hub Premium Is Active', text: `Hello ${data.full_name || 'Client'},\n\nYour Premium subscription is now active.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGWENO Hub Team` }); }
+        catch (mailErr) { console.error('[premium-upgrade-email]', mailErr?.message || mailErr); }
         return res.json({ data: norm(data) });
       }
 
@@ -934,8 +940,8 @@ export default async function handler(req, res) {
               await transporter.sendMail({
                 to: account.email,
                 subject: 'We received your withdrawal request',
-                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\nWithdrawal reference: ${data.id}\n\nPlease ensure the account holder name and payment details match the details on your GWENO Hub account. Read the withdrawal Terms & Conditions before proceeding: ${(process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '')}/terms\n\nGweno Hub Team`,
-                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Please ensure your account holder name and payment details match the details on your GWENO Hub account. Please read the <a href="${(process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '')}/terms">Withdrawal Terms &amp; Conditions</a> before proceeding.</p><p>Gweno Hub Team</p>`,
+                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\nWithdrawal reference: ${data.id}\n\nPlease ensure the account holder name and payment details match the details on your GWENO Hub account. Read the withdrawal Terms & Conditions before proceeding: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/terms\n\nGweno Hub Team`,
+                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Please ensure your account holder name and payment details match the details on your GWENO Hub account. Please read the <a href="${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/terms">Withdrawal Terms &amp; Conditions</a> before proceeding.</p><p>Gweno Hub Team</p>`,
               });
             } catch (mailErr) { console.error('[withdrawal-email] client confirmation failed:', mailErr?.message || mailErr); }
           }
@@ -1621,6 +1627,13 @@ export default async function handler(req, res) {
         if (error) return res.json({ success: false, error: error.message });
         await logAction(db, { action: 'withdrawal_marked_paid', entity: 'withdrawal', entityId: p.requestId,
           detail: `KES ${amount} to ${wd.phone || ''} (manual M-Pesa) — balance deducted` });
+        try {
+          const { data: owner } = await db.from('users').select('email,full_name').eq('id', wd.user_id).maybeSingle();
+          if (owner?.email) await createEmailTransport('withdrawal').sendMail({
+            to: owner.email, subject: 'Your GWENO Hub withdrawal has been marked as paid',
+            text: `Hello ${owner.full_name || wd.full_name || 'Client'},\n\nYour withdrawal request for KES ${amount.toLocaleString('en-KE')} has been marked as paid by the GWENO Hub team.\nReference: ${wd.id}\n\nIf the funds have not arrived, please contact support and provide this reference.\n\nGWENO Hub Team`,
+          });
+        } catch (mailErr) { console.error('[withdrawal-paid-email]', mailErr?.message || mailErr); }
         return res.json({ success: true, data: normWd(updated) });
       }
 
@@ -1860,10 +1873,11 @@ export default async function handler(req, res) {
           if (sub.user_id && reward > 0) {
             const { data: w } = await db.from('users').select('balance, completed_tasks').eq('id', sub.user_id).maybeSingle();
             if (w) {
-              await db.from('users').update({
+              const { error: rewardError } = await db.from('users').update({
                 balance:         Number(w.balance || 0) + reward,
                 completed_tasks: Number(w.completed_tasks || 0) + 1,
               }).eq('id', sub.user_id);
+              if (rewardError) return res.json({ success: false, error: `Could not credit task earnings: ${rewardError.message}` });
             }
           }
           if (t) await db.from('tasks').update({ claimed: Number(t.claimed || 0) + 1 }).eq('id', sub.task_id);
@@ -1883,6 +1897,24 @@ export default async function handler(req, res) {
         } else {
           await pushNotif(db, sub.user_id, { type: 'correction', title: 'Corrections requested', body: `The creator asked for changes on "${tt}".${reason ? ` ${reason}` : ''}` });
         }
+        // Email the worker for every creator review result. Email failure must
+        // not undo the saved review or the balance credit.
+        try {
+          const { data: worker } = await db.from('users').select('email,full_name').eq('id', sub.user_id).maybeSingle();
+          if (worker?.email) {
+            const base = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
+            const subject = status === 'approved' ? 'Your task was verified and approved' : status === 'rejected' ? 'Update on your task submission' : 'Corrections required for your task';
+            const outcome = status === 'approved'
+              ? `Your submission for "${tt}" was approved and KES ${reward.toLocaleString('en-KE')} was credited to your balance.`
+              : status === 'rejected'
+                ? `Your submission for "${tt}" was rejected.${reason ? ` Reason: ${reason}` : ''}`
+                : `Your submission for "${tt}" needs corrections.${reason ? ` Reason: ${reason}` : ''} Please open the relevant task in your dashboard and submit the corrected work.`;
+            await createEmailTransport('transactional').sendMail({
+              to: worker.email, subject,
+              text: `Hello ${worker.full_name || 'Client'},\n\n${outcome}\n\nDashboard: ${base}/dashboard\n\nGWENO Hub Team`,
+            });
+          }
+        } catch (mailErr) { console.error('[creator-review-email]', mailErr?.message || mailErr); }
         await logAction(db, { action: `creator_review_${status}`, entity: 'submission', entityId: p.submissionId, detail: `by:${uid} task:${sub.task_id} worker:${sub.user_id} reward:${reward}${reason ? ` reason:${reason}` : ''}` });
         return res.json({ success: true, submission: normSub(updated) });
       }
@@ -2380,9 +2412,8 @@ export default async function handler(req, res) {
                 completed_tasks: Number(u.completed_tasks || 0) + 1,
                 task_submissions: userSubs,
               }).eq('id', sub.user_id);
-              if (!balErr) {
-                creditUser = { email: u.email, name: u.full_name, previousBalance: Number(u.balance || 0), newBalance, unsubscribed: !!u.unsubscribed };
-              }
+              if (balErr) return res.json({ success: false, error: `Could not credit task earnings: ${balErr.message}` });
+              creditUser = { email: u.email, name: u.full_name, previousBalance: Number(u.balance || 0), newBalance, unsubscribed: !!u.unsubscribed };
             }
           }
           if (sub.task_id) {
@@ -2410,15 +2441,11 @@ export default async function handler(req, res) {
         if (isNewApproval && creditUser && creditUser.email) {
           const amtStr = `KES ${reward.toLocaleString('en-KE')}`;
           try {
-            if (creditUser.unsubscribed) {
-              email = { attempted: false, sent: false, status: 'Skipped (unsubscribed)' };
-            } else {
-              const mail = await sendApprovalEmail({
-                userEmail: creditUser.email, userName: creditUser.name,
-                taskName: sub.task_title, amount: reward, previousBalance: creditUser.previousBalance, updatedBalance: creditUser.newBalance,
-              });
-              email = { attempted: true, sent: !!mail.success, status: mail.success ? 'Sent' : 'Failed', message: mail.message || '' };
-            }
+            const mail = await sendApprovalEmail({
+              userEmail: creditUser.email, userName: creditUser.name,
+              taskName: sub.task_title, amount: reward, previousBalance: creditUser.previousBalance, updatedBalance: creditUser.newBalance,
+            });
+            email = { attempted: true, sent: !!mail.success, status: mail.success ? 'Sent' : 'Failed', message: mail.message || '' };
           } catch (e) {
             email = { attempted: true, sent: false, status: 'Failed', message: e?.message || 'Send error' };
           }

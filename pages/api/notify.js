@@ -22,14 +22,15 @@ export default async function handler(req, res) {
     details = '',
   } = req.body || {};
 
-  const transporter = getTransporter();
-  if (!transporter) {
-    // No credentials configured yet, tell the client so it can fall back gracefully.
-    return res.status(200).json({ success: false, configured: false, message: 'Email is not configured yet.' });
+  let transporter = null;
+  let adminTransporter = null;
+  try { transporter = getTransporter(); adminTransporter = createEmailTransport('admin'); }
+  catch (error) {
+    console.error('[notify] Resend configuration error:', error?.message || error);
+    return res.status(503).json({ success: false, configured: false, message: error?.message || 'Resend is not configured.' });
   }
 
   const admin = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || 'businesshub.comke@gmail.com';
-  const adminTransporter = createEmailTransport('admin');
 
   const detailRows = `
     <table cellpadding="8" style="border-collapse:collapse;font-family:Inter,Arial,sans-serif;font-size:14px;">
