@@ -1192,8 +1192,6 @@ function ReviewsTab({ secret }) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
-      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
-
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load reviews: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
@@ -1501,8 +1499,6 @@ function TasksTab({ secret }) {
         {nm && <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 600, color: nm.type === 'ok' ? '#1f2937' : '#1f2937' }}>{nm.text}</span>}
       </div>
 
-      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
-
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load tasks: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
@@ -1621,8 +1617,6 @@ function SubmissionsTab({ secret }) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
-      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
-
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load submissions: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
@@ -1827,8 +1821,6 @@ function ApplicationsTab({ secret }) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
-      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
-
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load applications: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code> in your Supabase SQL editor.
@@ -1917,8 +1909,6 @@ function AuditTab({ secret }) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
-      {actionMessage && <div role="status" style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>{actionMessage}</div>}
-
       {err && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#1f2937', fontSize: 13, maxWidth: 820 }}>
           ⚠️ Could not load the audit log: <strong>{err}</strong>. If this mentions a missing table, run the one-time SQL in <code>db/admin-tables.sql</code>.

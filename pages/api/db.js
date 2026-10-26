@@ -784,18 +784,33 @@ export default async function handler(req, res) {
         }   // from the verified session token
         const method   = clean(p.method, 20) || 'mpesa';
         const fullName = clean(p.fullName, 80);
-        const phone    = clean(p.phone, 20);
-        const idNumber = clean(p.idNumber, 120); // international packs bank details here
+        const phone    = clean(p.phone, 40);
+        let idNumber   = clean(p.idNumber, 120);
         const amount   = Number(p.amount);
         const feeRef   = clean(p.feeRef, 64);    // STK CheckoutRequestID of the paid fee
+        const mobileMethod = ['mpesa', 'safaricom', 'airtel'].includes(method);
+        const bankMethod = ['postbank', 'international', 'bank'].includes(method);
+        const bankDetails = p.bankDetails && typeof p.bankDetails === 'object' ? p.bankDetails : null;
         // Reject malformed withdrawal requests server-side.
         if (!nonEmpty(userId))          return res.json({ data: null, error: 'Missing user.' });
         if (!nonEmpty(fullName))        return res.json({ data: null, error: 'Account holder name is required.' });
-        if (!['mpesa', 'safaricom', 'airtel'].includes(method)) return res.json({ data: null, error: 'Unsupported withdrawal method.' });
-        if (['mpesa', 'safaricom', 'airtel'].includes(method) && !isPhone(phone)) return res.json({ data: null, error: 'A valid phone number is required.' });
-        if (!isPositiveNumber(amount))  return res.json({ data: null, error: 'A valid amount is required.' });
-        if (['mpesa', 'safaricom', 'airtel'].includes(method) && (!Number.isInteger(amount) || amount < 100 || amount > 40000 || amount > Number(earningAccount?.balance || 0))) {
+        if (!mobileMethod && !bankMethod) return res.json({ data: null, error: 'Unsupported withdrawal method.' });
+        if (mobileMethod && !isPhone(phone)) return res.json({ data: null, error: 'A valid phone number is required.' });
+        if (!isPositiveNumber(amount) || amount > Number(earningAccount?.balance || 0)) return res.json({ data: null, error: 'A valid amount up to your available balance is required.' });
+        if (mobileMethod && (!Number.isInteger(amount) || amount < 100 || amount > 40000)) {
           return res.json({ data: null, error: 'Choose a mobile withdrawal amount from KES 100 up to your available balance, with a maximum of KES 40,000.' });
+        }
+        if (bankMethod) {
+          const bankName = clean(bankDetails?.bankName, 80);
+          const accountName = clean(bankDetails?.accountName || fullName, 80);
+          const accountNumber = clean(bankDetails?.accountNumber, 60);
+          const branch = clean(bankDetails?.branch, 80);
+          const swift = clean(bankDetails?.swift, 40);
+          const country = clean(bankDetails?.country, 80) || (method === 'postbank' ? 'Kenya' : 'International');
+          if (!nonEmpty(bankName) || !nonEmpty(accountName) || !nonEmpty(accountNumber)) {
+            return res.json({ data: null, error: 'Bank name, account holder name and account number are required.' });
+          }
+          idNumber = `__BANK_WITHDRAWAL__${JSON.stringify({ kind: 'bank', bankName, accountName, accountNumber, branch, swift, country })}`;
         }
 
         // ── Enforce a real, verified, single-use Daraja withdrawal-fee payment ──

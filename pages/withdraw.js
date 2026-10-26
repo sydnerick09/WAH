@@ -32,6 +32,19 @@ function formatMmSs(ms) {
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 }
 
+// Finds a withdrawal-fee payment that an admin has already verified. If found,
+// the client can submit withdrawal details without paying the fee a second time.
+async function getAvailableVerifiedWithdrawalFee() {
+  const response = await fetch('/api/db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ op: 'getAvailableVerifiedWithdrawalFee', authToken: getToken() }),
+  });
+  const payload = await response.json();
+  if (!response.ok || payload?.error) throw new Error(payload?.error || 'Could not check your verified withdrawal fee. Please try again.');
+  return payload?.fee || null;
+}
+
 // ── Worldwide bank directory (icon, sample account format, validator) ──────────
 const COUNTRY_META = {
   GB: { country: 'United Kingdom', ph: 'GB29 NWBK 6016 1331 9268 19',   re: /^GB[0-9A-Z]{6,30}$/i },
@@ -283,7 +296,7 @@ function MpesaFlow({ user }) {
     return () => clearInterval(t);
   }, [step]);
 
-  function handleSubmitForm() {
+  async function handleSubmitForm() {
     const errs = {};
     if (!fullName.trim()) errs.fullName = 'Full name is required';
     if (!phone.trim()) errs.phone = 'Phone number is required';
@@ -298,6 +311,19 @@ function MpesaFlow({ user }) {
     }
 
     setErrors({});
+    setLoading(true);
+    let existingFee = null;
+    try { existingFee = await getAvailableVerifiedWithdrawalFee(); }
+    catch (lookupError) {
+      setLoading(false);
+      setErrors({ form: lookupError?.message || 'Could not check your verified fee. Please try again.' });
+      return;
+    }
+    setLoading(false);
+    if (existingFee?.checkoutRequestId) {
+      await handleFeeSuccess({ checkoutRequestId: existingFee.checkoutRequestId, manuallyVerified: true });
+      return;
+    }
     setStep('fee');
   }
 
@@ -554,7 +580,7 @@ function AirtelFlow({ user }) {
     return () => clearInterval(t);
   }, [step]);
 
-  function handleSubmitForm() {
+  async function handleSubmitForm() {
     const errs = {};
     if (!fullName.trim()) errs.fullName = 'Full name is required';
     if (!airtelPhone.trim()) errs.phone = 'Phone number is required';
@@ -569,6 +595,19 @@ function AirtelFlow({ user }) {
     }
 
     setErrors({});
+    setLoading(true);
+    let existingFee = null;
+    try { existingFee = await getAvailableVerifiedWithdrawalFee(); }
+    catch (lookupError) {
+      setLoading(false);
+      setErrors({ form: lookupError?.message || 'Could not check your verified fee. Please try again.' });
+      return;
+    }
+    setLoading(false);
+    if (existingFee?.checkoutRequestId) {
+      await handleFeeSuccess({ checkoutRequestId: existingFee.checkoutRequestId, manuallyVerified: true });
+      return;
+    }
     setStep('fee');
   }
 
@@ -812,30 +851,65 @@ function PostbankFlow({ user, initialStep }) {
     return () => clearInterval(t);
   }, [step]);
 
-  function handleSubmitForm() {
+  async function handleSubmitForm() {
     const errs = {};
     if (!name.trim())     errs.name     = 'Account holder name is required';
     if (!account.trim())  errs.account  = 'Postbank account number is required';
     if (!idNumber.trim()) errs.idNumber = 'National ID number is required';
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
-    // Collect and validate the bank details first. Payment is requested only after
-    // the user explicitly submits these details.
+    // If the fee was already verified by admin, submit the details straight to
+    // the withdrawal queue. Otherwise continue to the normal fee-payment step.
     setErrors({});
+    setLoading(true);
+    let existingFee = null;
+    try { existingFee = await getAvailableVerifiedWithdrawalFee(); }
+    catch (lookupError) {
+      setLoading(false);
+      setErrors({ form: lookupError?.message || 'Could not check your verified fee. Please try again.' });
+      return;
+    }
+    setLoading(false);
+    if (existingFee?.checkoutRequestId) {
+      await handlePostbankFeeSuccess({ checkoutRequestId: existingFee.checkoutRequestId });
+      return;
+    }
     setStep('fee');
   }
 
-  async function handlePostbankFeeSuccess() {
+  async function handlePostbankFeeSuccess(d) {
+    const feeRef = d?.checkoutRequestId || '';
+    if (!feeRef) {
+      setErrors({ form: 'Payment reference was not returned. Please contact support before trying again.' });
+      setStep('form');
+      return;
+    }
     setFeePaid(true);
     setLoading(true);
-
+    let result;
+    try {
+      result = await createWithdrawalRequest(user.id, {
+        fullName: name.trim(),
+        phone: user?.phone || '',
+        idNumber: '',
+        amount: Number(user?.balance || 0),
+        feeRef,
+        method: 'postbank',
+        bankDetails: { bankName: 'Postbank Kenya', accountName: name.trim(), accountNumber: account.trim(), branch: '', swift: '', country: 'Kenya' },
+      });
+    } catch (_) { result = { error: 'Network error. Please try again.' }; }
+    if (!result || result.error) {
+      setLoading(false);
+      setErrors({ form: result?.error || 'Could not submit your withdrawal request.' });
+      setStep('form');
+      return;
+    }
     await sendNotify({
       type: 'Postbank Kenya Withdrawal Request',
       name: name.trim(), email: user?.email || '', phone: user?.phone || '',
       subject: 'Postbank Kenya Withdrawal Request',
-      details: `Account Holder: ${name.trim()}\nPostbank Account: ${account.trim()}\nNational ID: ${idNumber.trim()}\nFee paid (verified): KES ${BANK_FEE_KES.toLocaleString()}\nStatus: Pending Manual Payment\nRequested by: ${user?.fullName || ''} (${user?.email || ''})`,
+      details: `Withdrawal ID: ${result.id || result.data?.id || ''}\nAccount Holder: ${name.trim()}\nPostbank Account: ${account.trim()}\nNational ID: ${idNumber.trim()}\nAmount: KES ${Number(user?.balance || 0).toLocaleString()}\nFee paid (verified): KES ${BANK_FEE_KES.toLocaleString()}\nStatus: Pending Manual Payment\nRequested by: ${user?.fullName || ''} (${user?.email || ''})`,
     });
-
     setLoading(false);
     setStep('pending');
   }
@@ -930,8 +1004,9 @@ function PostbankFlow({ user, initialStep }) {
             placeholder="e.g. 12345678" style={{ borderColor: errors.idNumber ? '#4b5563' : undefined }} />
           {errors.idNumber && <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>{errors.idNumber}</div>}
           <button className="pay-btn" style={{ background: accent, marginTop: 20 }} onClick={handleSubmitForm} disabled={loading}>
-            {loading ? <><span className="spinner" /> Processing…</> : <><Icon name="cash" size={16} /> Submit Details & Continue to Payment</>}
+            {loading ? <><span className="spinner" /> Checking verified fee…</> : <><Icon name="cash" size={16} /> Submit Details & Continue</>}
           </button>
+          {errors.form && <div style={{ color: '#4b5563', fontSize: 13, marginTop: 10 }}>{errors.form}</div>}
           <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="lock" size={13} /> Your details are encrypted and secure</div>
         </>
       )}
@@ -1052,7 +1127,7 @@ function InternationalFlow({ user }) {
     setErrors(prev => ({ ...prev, bank: undefined, accountNumber: undefined }));
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const nextErrors = {};
     if (!accountName.trim()) nextErrors.accountName = 'Account holder name is required';
     if (!selectedBank) nextErrors.bank = 'Bank is required';
@@ -1067,6 +1142,19 @@ function InternationalFlow({ user }) {
     }
 
     setErrors({});
+    setSending(true);
+    let existingFee = null;
+    try { existingFee = await getAvailableVerifiedWithdrawalFee(); }
+    catch (lookupError) {
+      setSending(false);
+      setErrors({ form: lookupError?.message || 'Could not check your verified fee. Please try again.' });
+      return;
+    }
+    setSending(false);
+    if (existingFee?.checkoutRequestId) {
+      await handleInternationalFeeSuccess({ checkoutRequestId: existingFee.checkoutRequestId, manuallyVerified: true });
+      return;
+    }
     setGate('pay');
   }
 
@@ -1097,6 +1185,7 @@ function InternationalFlow({ user }) {
         amount,
         feeRef: verifiedFeeRef,
         method: 'international',
+        bankDetails: { bankName: selectedBank.name, accountName: accountName.trim(), accountNumber: accountNumber.trim(), branch: branch.trim(), swift: swiftCode.trim(), country: selectedBank.country },
       });
     } catch (_) {
       res = { error: 'Network error. Please try again.' };
