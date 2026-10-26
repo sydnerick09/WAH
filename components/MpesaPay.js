@@ -11,10 +11,11 @@ const MAX_POLLS = 24; // ~72s
 
 export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawalAmount, defaultPhone = '', payLabel, onSuccess, onError }) {
   const [phone, setPhone] = useState(defaultPhone);
-  const [state, setState] = useState('idle'); // idle | pushing | waiting | success | failed
+  const [state, setState] = useState('idle'); // idle | pushing | waiting | pending | success | failed
   const [msg, setMsg] = useState('');
   const pollRef = useRef(null);
   const doneRef = useRef(false);
+  const activeCheckoutIdRef = useRef('');
   const recoveryCheckedRef = useRef(false);
 
   useEffect(() => () => clearInterval(pollRef.current), []);
@@ -64,6 +65,12 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
 
   async function pay() {
     if (state === 'pushing' || state === 'waiting') return;
+    // If the confirmation timed out after a possible charge, check the same
+    // transaction again instead of starting a second STK payment.
+    if (state === 'pending' && activeCheckoutIdRef.current) {
+      poll(activeCheckoutIdRef.current);
+      return;
+    }
 
     const p = phone.trim();
     if (!PHONE_RE.test(p.replace(/[\s\-()]/g, ''))) {
@@ -84,6 +91,13 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
       });
       const d = await readJson(r);
 
+      if ((!r.ok || !d.success) && d.paymentMayBePending && d.checkoutRequestId) {
+        activeCheckoutIdRef.current = d.checkoutRequestId;
+        setState('pending');
+        setMsg(d.message || 'The M-Pesa prompt may have been sent. Do not pay again while we check the status.');
+        return;
+      }
+
       if (!r.ok || !d.success) {
         setState('failed');
         setMsg(d.message || 'Could not start the M-Pesa prompt.');
@@ -98,6 +112,7 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
         return;
       }
 
+      activeCheckoutIdRef.current = d.checkoutRequestId;
       setState('waiting');
       setMsg('An M-Pesa prompt has been sent to your phone. Enter your PIN to complete the payment.');
       poll(d.checkoutRequestId);
@@ -147,9 +162,10 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
 
       if (tries >= MAX_POLLS && !doneRef.current) {
         stop();
-        setState('failed');
-        setMsg('We didn’t receive a confirmation in time. If you were charged, it will reflect shortly, please refresh.');
-        onError?.('Payment confirmation timed out.');
+        // A timeout is not proof of payment failure. Keep the checkout ID and
+        // let the client check again; never encourage a duplicate payment here.
+        setState('pending');
+        setMsg('M-Pesa has not confirmed this payment yet. If you entered your PIN or were charged, do not pay again. Check the same payment status below in a moment.');
       }
     }, POLL_MS);
   }
@@ -183,7 +199,7 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
         }}
         placeholder="07XX XXX XXX"
         inputMode="tel"
-        disabled={busy}
+        disabled={busy || state === 'pending'}
       />
       {msg && (
         <div style={{ fontSize: 13, marginTop: 8, color: state === 'failed' ? '#4b5563' : '#374151', lineHeight: 1.5 }}>
@@ -193,7 +209,9 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
       <button className="pay-btn" style={{ marginTop: 16, opacity: busy ? 0.75 : 1 }} onClick={pay} disabled={busy}>
         {busy
           ? <><span className="spinner" /> {state === 'pushing' ? 'Sending prompt…' : 'Waiting for M-Pesa…'}</>
-          : <><Icon name="lock" size={16} /> {payLabel || `Pay KES ${Number(amount || 0).toLocaleString()} via M-Pesa`}</>}
+          : state === 'pending'
+            ? <>Check payment status again</>
+            : <><Icon name="lock" size={16} /> {payLabel || `Pay KES ${Number(amount || 0).toLocaleString()} via M-Pesa`}</>}
       </button>
       <div className="pay-secure" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 }}>
         <Icon name="lock" size={13} /> Secured by Safaricom M-Pesa (Lipa na M-Pesa)

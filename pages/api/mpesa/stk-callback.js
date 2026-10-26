@@ -17,12 +17,15 @@ export default async function handler(req, res) {
       for (const it of (cb.CallbackMetadata?.Item || [])) {
         if (it.Name === 'MpesaReceiptNumber') receipt = it.Value;
       }
-      await completeStk({
+      const result = await completeStk({
         checkoutRequestId: cb.CheckoutRequestID,
         resultCode: cb.ResultCode,
         resultDesc: cb.ResultDesc,
         receipt,
       });
+      if (result?.error || result?.pending) {
+        console.error('[stk-callback] payment confirmation still needs processing:', result.error || 'account update pending');
+      }
     }
   } catch (e) {
     console.error('[stk-callback]', e.message);
