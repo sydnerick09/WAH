@@ -106,6 +106,14 @@ function TaskModal({ task, user, application, onClose, onBidClick, onApply, onUp
             <div className="modal-payment-amount">KES {task.payment.toLocaleString()}</div>
           </div>
           <p className="modal-desc">{task.description}</p>
+          {task.resourceDocument && (
+            <div style={{ margin: '12px 0', padding: 12, border: '1px solid #e5e7eb', borderRadius: 10 }}>
+              <strong style={{ display: 'block', marginBottom: 5 }}>Task brief / source document</strong>
+              <a href={task.resourceDocument} target="_blank" rel="noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
+                Open or download the task instructions
+              </a>
+            </div>
+          )}
           {task.questions?.length > 0 && (
             <div className="modal-questions">
               <h4>Questions from Poster</h4>
@@ -216,9 +224,18 @@ function ProposalModal({ task, existing, onClose, onSubmit }) {
           ) : (
             <>
               <p style={{ fontSize: 14, color: 'var(--gray)', marginBottom: 4 }}>
-                You&apos;re applying for <strong>{task.title}</strong>. Tell us why you&apos;re a good fit, this proposal
-                is reviewed before you can begin the task.
+                You&apos;re applying for a task in <strong>{task.category || 'General'}</strong>. The detailed work brief stays locked until your proposal is approved.
+                Explain your suitability below and address the screening questions. Your proposal is reviewed before you can begin.
               </p>
+              {task.applicationQuestions?.length > 0 && (
+                <div style={{ margin: '14px 0', padding: 12, borderRadius: 10, background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Task suitability questions</div>
+                  <ol style={{ margin: 0, paddingLeft: 20, color: '#374151', fontSize: 13, lineHeight: 1.6 }}>
+                    {task.applicationQuestions.map((q, i) => <li key={i} style={{ marginBottom: 5 }}>{q}</li>)}
+                  </ol>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 7 }}>Please address each question in your proposal; do not include confidential information.</div>
+                </div>
+              )}
               <div className="pay-phone-label" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span>Your proposal / cover letter <span style={{ color: '#374151' }}>*</span></span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: msgWords >= MAX_PROPOSAL_WORDS ? '#374151' : 'var(--gray)' }}>{msgWords}/{MAX_PROPOSAL_WORDS} words</span>
@@ -720,7 +737,20 @@ export default function Dashboard() {
         body: JSON.stringify({ op: 'listTasks' }),
       });
       const { data } = await r.json();
-      if (Array.isArray(data)) { setDbTasks(shuffle(data)); setTasksReady(true); }
+      if (Array.isArray(data)) {
+          const taskMetadata = new Map((TASKS || []).map(t => [String(t.title || '').toLowerCase(), t]));
+          const enriched = data.map(t => ({ ...(taskMetadata.get(String(t.title || '').toLowerCase()) || {}), ...t,
+            // Keep database IDs/status authoritative while restoring bundled task brief metadata.
+            id: t.id, title: t.title,
+            resourceDocument: taskMetadata.get(String(t.title || '').toLowerCase())?.resourceDocument || t.resourceDocument,
+            applicationQuestions: taskMetadata.get(String(t.title || '').toLowerCase())?.applicationQuestions || t.applicationQuestions,
+          }));
+          const knownTitles = new Set(enriched.map(t => String(t.title || '').toLowerCase()));
+          // Keep newly added bundled tasks visible even if the one-time admin seed
+          // has not yet been run; existing database task IDs remain authoritative.
+          const notYetSeeded = (TASKS || []).filter(t => !knownTitles.has(String(t.title || '').toLowerCase()));
+          setDbTasks(shuffle([...enriched, ...notYetSeeded])); setTasksReady(true);
+        }
     } catch (_) {}
   }, []);
 

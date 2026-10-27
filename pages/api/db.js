@@ -518,6 +518,18 @@ export default async function handler(req, res) {
           } catch (referralMailError) { console.error('[agent-referral-join-email]', referralMailError?.message || referralMailError); }
         }
 
+        // Send a registration confirmation to the newly registered client. Email
+        // failure must never roll back a successful account creation.
+        try {
+          await createEmailTransport('support').sendMail({
+            to: email,
+            subject: 'Welcome to Gweno Hub — your account is created',
+            text: `Hello ${fullName},\n\nYour Gweno Hub account has been created successfully. Sign in to complete any required activation steps, review available tasks, and track your account status from your dashboard.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGweno Hub Team`,
+          });
+        } catch (welcomeMailError) {
+          console.error('[client-registration-email]', welcomeMailError?.message || welcomeMailError);
+        }
+
         return res.json({ success: true, user: norm(data), authToken: issueToken(data.id) });
       }
 
@@ -2180,6 +2192,18 @@ export default async function handler(req, res) {
           status:     'pending',
         }).select().single();
         if (error) return res.json({ success: false, error: error.message });
+        // Alert the operations inbox whenever a new task application is submitted.
+        // Application creation succeeds even if the notification provider is unavailable.
+        try {
+          const notifyTo = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || 'businesshub.comke@gmail.com';
+          await createEmailTransport('support').sendMail({
+            to: notifyTo,
+            subject: `New task application: ${taskTitle || taskId}`,
+            text: `A client has applied for a task on Gweno Hub.\n\nClient: ${userName || 'Client'}\nClient email: ${userEmail || 'Not provided'}\nTask: ${taskTitle || taskId}\nTask ID: ${taskId}\nApplication ID: ${data.id}\nStatus: Pending review\n\nOpen the admin panel to review the application.`,
+          });
+        } catch (applicationMailError) {
+          console.error('[task-application-notification]', applicationMailError?.message || applicationMailError);
+        }
         return res.json({ success: true, application: normApp(data) });
       }
 

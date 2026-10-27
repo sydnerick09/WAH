@@ -40,7 +40,13 @@ export default function SubmitPage() {
     })();
   }, []);
 
-  const task = [...dbTasks, ...TASKS].find(t => String(t.id) === String(router.query.task));
+  const taskBase = [...dbTasks, ...TASKS].find(t => String(t.id) === String(router.query.task));
+  const taskStatic = taskBase ? (TASKS || []).find(t => String(t.title || '').toLowerCase() === String(taskBase.title || '').toLowerCase()) : null;
+  const task = taskBase ? {
+    ...(taskStatic || {}), ...taskBase,
+    resourceDocument: taskStatic?.resourceDocument || taskBase.resourceDocument,
+    applicationQuestions: taskStatic?.applicationQuestions || taskBase.applicationQuestions,
+  } : null;
   // Offers and community (user-posted, id contains "~") tasks skip the proposal
   // + premium gates and go straight to proof submission.
   const isOfferTask = String(task?.id || '').startsWith('offer_') || String(task?.id || '').includes('~');
@@ -166,6 +172,14 @@ export default function SubmitPage() {
       <div className="pay-message" style={{ marginBottom: 18 }}>
         Attach your completed work for <strong>{task.title}</strong> ({task.category}) and submit. Accepted: documents, images, audio, video or zip, up to {MAX_MB} MB.
       </div>
+      {task.description && <div className="pay-message" style={{ marginBottom: 18, textAlign: 'left' }}>
+        <strong>Task instructions</strong><p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{task.description}</p>
+      </div>}
+      {task.resourceDocument && <div className="pay-message" style={{ marginBottom: 18, textAlign: 'left' }}>
+        <strong>Required task document</strong><p style={{ margin: '8px 0 0' }}>
+          <a href={task.resourceDocument} target="_blank" rel="noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Open or download task brief and supplied sample material</a>
+        </p>
+      </div>}
 
       <div className="pay-phone-label">Your completed work (file)</div>
       <label

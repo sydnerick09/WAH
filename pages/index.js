@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { getCurrentUser } from '../lib/auth';
 import StatsPanel from '../components/StatsPanel';
 import Icon from '../components/Icon';
+import { TASKS } from '../lib/tasks';
 
 const HOW_ITEMS = [
   {
@@ -410,38 +411,7 @@ export default function Home() {
               gap: 20,
             }}
           >
-            {[
-              {
-                title: 'Write 5 WhatsApp Business Status Captions',
-                pay: 'KES 1,200',
-                category: 'Writing',
-              },
-              {
-                title: '30-Day Social Media Content Calendar',
-                pay: 'KES 4,000',
-                category: 'Marketing',
-              },
-              {
-                title: 'Translate Customer Service Policy to Swahili',
-                pay: 'KES 3,300',
-                category: 'Translation',
-              },
-              {
-                title: 'Write a 500-Word Blog Post for SMEs',
-                pay: 'KES 3,900',
-                category: 'Writing',
-              },
-              {
-                title: 'Research Top 5 Co-Working Spaces in Nairobi',
-                pay: 'KES 3,000',
-                category: 'Research',
-              },
-              {
-                title: 'Write 10 Product Reviews for Electronics Store',
-                pay: 'KES 4,300',
-                category: 'Writing',
-              },
-            ].map((t, i) => (
+            {(TASKS || []).slice(-6).map((t, i) => (
               <div
                 key={i}
                 style={{
@@ -494,7 +464,7 @@ export default function Home() {
                       color: 'var(--green)',
                     }}
                   >
-                    {t.pay}
+                    {`KES ${Number(t.payment || 0).toLocaleString('en-KE')}`}
                   </span>
 
                   <Link
