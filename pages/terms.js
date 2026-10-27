@@ -255,6 +255,10 @@ const TERMS_HTML = `<header>
   GWENO Hub staff will not request passwords, PINs, OTP codes, or other
   sensitive authentication credentials through unofficial communication
   channels.
+  You will be required to provide accurate personal details, including your email address, phone number, and national ID number where necessary. This information is required to verify your identity and ensure that your account details match your official documents.
+
+Since we do not meet clients in person for individual verification, it is important that all the information you provide is correct and consistent with your official records.
+
 </p>
 
 <p>
