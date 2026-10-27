@@ -4,7 +4,7 @@
 // Reason is editable from the admin panel before sending. Dynamic placeholders
 // ({TASK_NAME}, {USER_NAME}, {USER_EMAIL}, {UNSUBSCRIBE_LINK}) are replaced here.
 //   ADMIN_SECRET               = same secret the admin panel uses
-// Email delivery uses RESEND_API_KEY and RESEND_FROM_EMAIL for Resend.
+// Email delivery uses the shared Gmail SMTP transport.
 //   SUPABASE_* (optional)      = used only to honour the unsubscribe opt-out
 import { createEmailTransport } from '../../lib/emailTransport';
 import { createClient } from '@supabase/supabase-js';
@@ -95,7 +95,7 @@ export default async function handler(req, res) {
 
   const transporter = getTransporter();
   if (!transporter) {
-    return res.status(200).json({ success: false, configured: false, message: 'Resend is not configured.' });
+    return res.status(200).json({ success: false, configured: false, message: 'Gmail SMTP is not configured.' });
   }
 
   const vars = {

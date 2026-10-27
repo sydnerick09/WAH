@@ -1,5 +1,5 @@
 // pages/api/notify.js
-// Automated email: notifies the admin of a client message and sends the client an automatic confirmation reply.\n// Delivery uses the shared Resend API configuration.\nimport { createEmailTransport } from '../../lib/emailTransport';
+// Automated email: notifies the admin of a client message and sends the client an automatic confirmation reply.\n// Delivery uses the shared Gmail SMTP configuration.\nimport { createEmailTransport } from '../../lib/emailTransport';
 
 function getTransporter() {
   return createEmailTransport('support');
@@ -26,11 +26,11 @@ export default async function handler(req, res) {
   let adminTransporter = null;
   try { transporter = getTransporter(); adminTransporter = createEmailTransport('admin'); }
   catch (error) {
-    console.error('[notify] Resend configuration error:', error?.message || error);
-    return res.status(503).json({ success: false, configured: false, message: error?.message || 'Resend is not configured.' });
+    console.error('[notify] Gmail SMTP configuration error:', error?.message || error);
+    return res.status(503).json({ success: false, configured: false, message: error?.message || 'Gmail SMTP is not configured.' });
   }
 
-  const admin = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || 'businesshub.comke@gmail.com';
+  const admin = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.SMTP_REPLY_TO_EMAIL || 'businesshub.comke@gmail.com';
 
   const detailRows = `
     <table cellpadding="8" style="border-collapse:collapse;font-family:Inter,Arial,sans-serif;font-size:14px;">

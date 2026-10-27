@@ -148,12 +148,12 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "File processing failed." });
   }
 
-  // ── 6. Resend transport ───────────────────────────────────────────────────
+  // ── 6. Gmail SMTP transport ───────────────────────────────────────────────────
   let transporter = null;
   try { transporter = createEmailTransport('admin'); }
-  catch (err) { console.error('[submit-task] Resend configuration error:', err?.message || err); }
+  catch (err) { console.error('[submit-task] Gmail SMTP configuration error:', err?.message || err); }
 
-  const destination = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO_EMAIL || "businesshub.comke@gmail.com";
+  const destination = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.SMTP_REPLY_TO_EMAIL || "businesshub.comke@gmail.com";
 
   // ── 7. Send email ─────────────────────────────────────────────────────────
   const mailOptions = {
@@ -181,7 +181,7 @@ export default async function handler(req, res) {
 
   let emailSent = Boolean(transporter);
   try {
-    if (!transporter) throw new Error('Resend is not configured.');
+    if (!transporter) throw new Error('Gmail SMTP is not configured.');
     await transporter.sendMail(mailOptions);
     console.log(`[submit-task] Email sent to ${destination}`);
   } catch (err) {

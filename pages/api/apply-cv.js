@@ -1,7 +1,7 @@
 // pages/api/apply-cv.js
 // Optional CV upload on registration, emails the applicant's CV (as an
 // attachment) to the admin address that receives withdrawal requests, etc.
-// Uses the shared Resend transport + NOTIFY_EMAIL setup as /api/notify and /api/submit-task.
+// Uses the shared Gmail SMTP transport + NOTIFY_EMAIL setup as /api/notify and /api/submit-task.
 import formidable from "formidable";
 import fs from "fs";
 import { createEmailTransport } from "../../lib/emailTransport";
@@ -63,13 +63,13 @@ export default async function handler(req, res) {
   }
 
   let transporter = null;
-  try { transporter = createEmailTransport('admin'); } catch (err) { console.error('[apply-cv] Resend configuration error:', err?.message || err); }
+  try { transporter = createEmailTransport('admin'); } catch (err) { console.error('[apply-cv] Gmail SMTP configuration error:', err?.message || err); }
 
   const destination = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || "gweno_admin@gweno.business";
 
   let emailSent = Boolean(transporter);
   try {
-    if (!transporter) throw new Error('Resend is not configured.');
+    if (!transporter) throw new Error('Gmail SMTP is not configured.');
     await transporter.sendMail({
       to: destination,
       replyTo: email && email !== "N/A" ? email : undefined,

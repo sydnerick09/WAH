@@ -181,7 +181,7 @@ function SendEmailModal({ modal, secret, onClose }) {
 
       const data = await r.json();
       if (data.success) {
-        setResult({ ok: true, text: data.message || `Resend accepted the email request for ${modal.user.email}. Check Resend email logs for final delivery status.` });
+        setResult({ ok: true, text: data.message || `Gmail SMTP accepted the email request for ${modal.user.email}. Check the deployment logs if delivery fails.` });
         setTimeout(() => onClose(), 1200);
       } else {
         setResult({ ok: false, text: data.message || data.error || 'Failed to send email.' });
@@ -1305,17 +1305,17 @@ function BroadcastTab({ secret, userCount }) {
         data.message = `Broadcast request failed with HTTP ${r.status}.`;
       }
       if (data.requiresVerifiedSender) {
-        setResult({ ok: false, text: data.message || 'A verified Resend sender is required for broadcasts.' });
+        setResult({ ok: false, text: data.message || 'Configure Gmail SMTP in Vercel before sending broadcasts.' });
       } else if (typeof data.sent === 'number' && typeof data.failed === 'number') {
         const summary = test
-          ? `Test email: Resend accepted ${data.sent}; ${data.failed} failed.`
-          : `Resend accepted ${data.sent} email(s); ${data.failed} failed out of ${data.total} eligible client(s). Accepted does not guarantee inbox delivery.`;
+          ? `Test email: Gmail SMTP accepted ${data.sent}; ${data.failed} failed.`
+          : `Gmail SMTP accepted ${data.sent} email(s); ${data.failed} failed out of ${data.total} eligible client(s). Acceptance does not guarantee inbox delivery.`;
         const examples = Array.isArray(data.errors) && data.errors.length
           ? ` First errors: ${data.errors.slice(0, 3).map(item => `${item.email}: ${item.error}`).join(' | ')}`
           : '';
         setResult({ ok: data.failed === 0 && data.sent > 0, text: `${summary}${examples}` });
       } else if (data.success) {
-        setResult({ ok: true, text: data.message || 'Email request accepted by Resend.' });
+        setResult({ ok: true, text: data.message || 'Email request accepted by Gmail SMTP.' });
       } else {
         setResult({ ok: false, text: data.message || 'Failed to send.' });
       }
@@ -1605,7 +1605,7 @@ function SubmissionsTab({ secret }) {
     const res = await dbProxy('adminResendApprovalEmail', { adminSecret: secret, submissionId: s.id });
     setBusy(p => ({ ...p, [s.id]: false }));
     if (res.success) flash(s.id, { type: 'ok', text: '✉️ Approval email resent.' });
-    else flash(s.id, { type: 'err', text: res.error || res.message || 'Resend failed.' });
+    else flash(s.id, { type: 'err', text: res.error || res.message || 'Email sending failed.' });
   }
 
   function openCorrection(s) { setCorrecting(s.id); setReason(s.reason || ''); setMsg(p => { const n = { ...p }; delete n[s.id]; return n; }); }

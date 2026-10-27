@@ -101,7 +101,7 @@ export default async function handler(req, res) {
   if (!transporter) {
     return res.status(500).json({
       success: false,
-      message: 'Resend is not configured.',
+      message: 'Gmail SMTP is not configured.',
     });
   }
 
