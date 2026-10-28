@@ -517,7 +517,8 @@ function ReferralModal({ user, onClose }) {
   const [copied, setCopied] = useState(false);
 
   const referralLink = user?.activated
-    ? `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`
+    ? `https://gweno.business
+/join?ref=${user.id || 'USER123'}`
     : 'Activate your account to unlock referral link';
 
   function copyLink() {
@@ -880,7 +881,8 @@ export default function Dashboard() {
 
   const initials     = user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
   const unreadNotifs = (user.notifications || []).filter(n => !n.read).length;
-  const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER123'}`;
+  const referralLink = `https://gweno.business
+/join?ref=${user.id || 'USER123'}`;
 
   if (user.suspended) {
     return (

@@ -178,7 +178,8 @@ export default function ProfilePage() {
     return <ProfileSkeleton />;
   }
 
-  const referralLink = `https://onlinejob-pi.vercel.app/join?ref=${user.id || 'USER'}`;
+  const referralLink = `https://gweno.business
+/join?ref=${user.id || 'USER'}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&color=000000&bgcolor=ffffff&data=${encodeURIComponent(referralLink)}`;
 
   // ── Editable fields (Full Name, Username) ────────────────────────────────────

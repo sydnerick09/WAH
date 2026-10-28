@@ -609,7 +609,8 @@ export default async function handler(req, res) {
           const configuredBase = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL;
           const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
           const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
-          const base = String(configuredBase || (requestHost ? `${requestProto}://${requestHost}` : 'https://onlinejob-pi.vercel.app')).replace(/\/$/, '');
+          const base = String(configuredBase || (requestHost ? `${requestProto}://${requestHost}` : 'https://gweno.business
+')).replace(/\/$/, '');
           const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
           const delivery = await sendResetEmail({ userEmail: u.email, userName: u.full_name, resetUrl });
           if (!delivery?.success) {
@@ -916,8 +917,10 @@ export default async function handler(req, res) {
               await transporter.sendMail({
                 to: account.email,
                 subject: 'We received your withdrawal request',
-                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\nWithdrawal reference: ${data.id}\n\nPlease ensure the account holder name and payment details match the details on your GWENO Hub account. Read the withdrawal Terms & Conditions before proceeding: ${(process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '')}/terms\n\nGweno Hub Team`,
-                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Please ensure your account holder name and payment details match the details on your GWENO Hub account. Please read the <a href="${(process.env.PUBLIC_BASE_URL || 'https://onlinejob-pi.vercel.app').replace(/\/$/, '')}/terms">Withdrawal Terms &amp; Conditions</a> before proceeding.</p><p>Gweno Hub Team</p>`,
+                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\nWithdrawal reference: ${data.id}\n\nPlease ensure the account holder name and payment details match the details on your GWENO Hub account. Read the withdrawal Terms & Conditions before proceeding: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business
+').replace(/\/$/, '')}/terms\n\nGweno Hub Team`,
+                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Please ensure your account holder name and payment details match the details on your GWENO Hub account. Please read the <a href="${(process.env.PUBLIC_BASE_URL || 'https://gweno.business
+').replace(/\/$/, '')}/terms">Withdrawal Terms &amp; Conditions</a> before proceeding.</p><p>Gweno Hub Team</p>`,
               });
             } catch (mailErr) { console.error('[withdrawal-email] client confirmation failed:', mailErr?.message || mailErr); }
           }

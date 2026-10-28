@@ -21,7 +21,8 @@ For each row: Name (left), your value (right), Environment = **Production**, Sav
 | `DARAJA_INITIATOR_NAME` | *(B2C initiator name)* |
 | `DARAJA_SECURITY_CREDENTIAL` | *(encrypted initiator password from the portal)* |
 | `DARAJA_B2C_SHORTCODE` | *(often the same store number)* |
-| `DARAJA_CALLBACK_BASE_URL` | `https://onlinejob-pi.vercel.app` |
+| `DARAJA_CALLBACK_BASE_URL` | `https://gweno.business
+` |
 | `DARAJA_CALLBACK_SECRET` | *(any random string you invent — keep it private)* |
 
 Then: **Deployments → ⋯ → Redeploy**.
@@ -39,14 +40,18 @@ Supabase → **SQL Editor → New query** → paste the contents of `db/mpesa-ta
 ## Step 3 — Register callback URLs on the Daraja portal
 Use the **same** value you set for `DARAJA_CALLBACK_SECRET` in place of `YOUR_SECRET`:
 
-- STK callback:  `https://onlinejob-pi.vercel.app/api/mpesa/stk-callback?k=YOUR_SECRET`
-- B2C Result:    `https://onlinejob-pi.vercel.app/api/mpesa/b2c-result?k=YOUR_SECRET`
-- B2C Timeout:   `https://onlinejob-pi.vercel.app/api/mpesa/b2c-timeout?k=YOUR_SECRET`
+- STK callback:  `https://gweno.business
+/api/mpesa/stk-callback?k=YOUR_SECRET`
+- B2C Result:    `https://gweno.business
+/api/mpesa/b2c-result?k=YOUR_SECRET`
+- B2C Timeout:   `https://gweno.business
+/api/mpesa/b2c-timeout?k=YOUR_SECRET`
 
 ---
 
 ## Step 4 — Verify
-Open `https://onlinejob-pi.vercel.app/api/mpesa/config` in a browser.
+Open `https://gweno.business
+/api/mpesa/config` in a browser.
 - `{"stk":true,"b2c":true}`  → keys wired correctly ✅
 - `{"stk":false,...}`         → keys not set / not deployed yet ❌ (payments will fail)
 
