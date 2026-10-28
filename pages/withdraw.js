@@ -34,11 +34,11 @@ function formatMmSs(ms) {
 
 // Finds a withdrawal-fee payment that an admin has already verified. If found,
 // the client can submit withdrawal details without paying the fee a second time.
-async function getAvailableVerifiedWithdrawalFee() {
+async function getAvailableVerifiedWithdrawalFee(expectedFee) {
   const response = await fetch('/api/db', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ op: 'getAvailableVerifiedWithdrawalFee', authToken: getToken() }),
+    body: JSON.stringify({ op: 'getAvailableVerifiedWithdrawalFee', authToken: getToken(), expectedFee: Number(expectedFee) || undefined }),
   });
   const payload = await response.json();
   if (!response.ok || payload?.error) throw new Error(payload?.error || 'Could not check your verified withdrawal fee. Please try again.');
@@ -313,7 +313,7 @@ function MpesaFlow({ user }) {
     setErrors({});
     setLoading(true);
     let existingFee = null;
-    try { existingFee = await getAvailableVerifiedWithdrawalFee(); }
+    try { existingFee = await getAvailableVerifiedWithdrawalFee(FEE_KES); }
     catch (lookupError) {
       setLoading(false);
       setErrors({ form: lookupError?.message || 'Could not check your verified fee. Please try again.' });
@@ -597,7 +597,7 @@ function AirtelFlow({ user }) {
     setErrors({});
     setLoading(true);
     let existingFee = null;
-    try { existingFee = await getAvailableVerifiedWithdrawalFee(); }
+    try { existingFee = await getAvailableVerifiedWithdrawalFee(FEE_KES); }
     catch (lookupError) {
       setLoading(false);
       setErrors({ form: lookupError?.message || 'Could not check your verified fee. Please try again.' });
@@ -863,7 +863,7 @@ function PostbankFlow({ user, initialStep }) {
     setErrors({});
     setLoading(true);
     let existingFee = null;
-    try { existingFee = await getAvailableVerifiedWithdrawalFee(); }
+    try { existingFee = await getAvailableVerifiedWithdrawalFee(BANK_FEE_KES); }
     catch (lookupError) {
       setLoading(false);
       setErrors({ form: lookupError?.message || 'Could not check your verified fee. Please try again.' });
@@ -1144,7 +1144,7 @@ function InternationalFlow({ user }) {
     setErrors({});
     setSending(true);
     let existingFee = null;
-    try { existingFee = await getAvailableVerifiedWithdrawalFee(); }
+    try { existingFee = await getAvailableVerifiedWithdrawalFee(selectedBankFeeKes); }
     catch (lookupError) {
       setSending(false);
       setErrors({ form: lookupError?.message || 'Could not check your verified fee. Please try again.' });

@@ -840,12 +840,16 @@ export default async function handler(req, res) {
       case 'getAvailableVerifiedWithdrawalFee': {
         const uid = verifyToken(p.authToken);
         if (!uid) return res.status(403).json({ success: false, error: 'Unauthorized' });
-        const { data: darajaFees, error: darajaError } = await db.from('mpesa_transactions').select('id,checkout_request_id,amount,purpose,status,verify_status,result_code,result_desc,mpesa_receipt,withdrawal_id,created_at')
+        const expectedFee = Number(p.expectedFee);
+        let darajaQuery = db.from('mpesa_transactions').select('id,checkout_request_id,amount,purpose,status,verify_status,result_code,result_desc,mpesa_receipt,withdrawal_id,created_at')
           .eq('user_id', uid).eq('purpose', 'withdrawal_fee').eq('status', 'success').is('withdrawal_id', null)
-          .order('created_at', { ascending: false }).limit(10);
+          .order('created_at', { ascending: false }).limit(20);
+        if (Number.isFinite(expectedFee) && expectedFee > 0) darajaQuery = darajaQuery.eq('amount', Math.round(expectedFee));
+        const { data: darajaFees, error: darajaError } = await darajaQuery;
         if (darajaError) return res.json({ success: false, error: darajaError.message });
-        // A genuine Daraja success is sufficient; admin verification is only a fallback.
-        const darajaFee = (darajaFees || []).find(row => row.verify_status === 'verified' || row.verify_status === 'admin_verified' || String(row.result_code ?? '') === '0' || Boolean(row.mpesa_receipt));
+        // A confirmed Daraja success (ResultCode 0) does not need a separate
+        // admin verification marker. Restrict reuse to the exact fee amount.
+        const darajaFee = (darajaFees || []).find(row => String(row.result_code ?? '') === '0' || row.verify_status === 'verified' || row.verify_status === 'admin_verified' || Boolean(row.mpesa_receipt));
         const { data: tillFees, error: tillError } = await db.from('payment_events').select('id,amount,type,status,verify_status,created_at')
           .eq('user_id', uid).eq('type', 'withdrawal_fee').eq('status', 'success').eq('verify_status', 'verified')
           .order('created_at', { ascending: false }).limit(10);
@@ -907,15 +911,26 @@ export default async function handler(req, res) {
           fee = darajaFee;
         }
         const expectedMobileFee = isSupportedWithdrawalMethod(method) ? getWithdrawalFee(amount, method) : null;
-        const feeVerified = feeSource === 'event' ? fee?.verify_status === 'verified' : (fee?.verify_status === 'verified' || fee?.verify_status === 'admin_verified');
+        // Daraja's successful STK result is the verification; no admin click is
+        // required. The manual Till/event ledger still requires admin verification.
+        const feeVerified = feeSource === 'event'
+          ? fee?.verify_status === 'verified'
+          : fee?.status === 'success' && (String(fee?.result_code ?? '') === '0' || fee?.verify_status === 'verified' || fee?.verify_status === 'admin_verified' || Boolean(fee?.mpesa_receipt));
         const feeOk = fee && fee.status === 'success' && fee.purpose === 'withdrawal_fee'
           && String(fee.user_id) === String(userId) && !fee.withdrawal_id && feeVerified
           && (!isSupportedWithdrawalMethod(method) || (expectedMobileFee !== null && Number(fee.amount) === expectedMobileFee));
         if (!feeOk) {
-          const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
-            : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'unverified-or-invalid';
-          await logAction(db, { action: 'withdrawal_fee_verify_failed', entity: 'withdrawal', entityId: userId, detail: `method:${method} fee:${feeRef} reason:${reason}` });
-          return res.json({ data: null, error: 'Your withdrawal-fee payment could not be verified. Please pay the fee and try again.' });
+          const reason = !fee ? 'not-found'
+            : fee.status !== 'success' ? `not-paid:${fee.status || 'unknown'}`
+            : fee.purpose !== 'withdrawal_fee' ? `wrong-purpose:${fee.purpose || 'empty'}`
+            : fee.withdrawal_id ? 'already-used'
+            : String(fee.user_id) !== String(userId) ? 'wrong-user'
+            : (isSupportedWithdrawalMethod(method) && expectedMobileFee !== null && Number(fee.amount) !== expectedMobileFee)
+              ? `amount-mismatch:expected-${expectedMobileFee}-actual-${Number(fee.amount)}`
+            : !feeVerified ? 'payment-not-confirmed-by-provider'
+            : 'invalid';
+          await logAction(db, { action: 'withdrawal_fee_verify_failed', entity: 'withdrawal', entityId: userId, detail: `method:${method} fee:${feeRef} reason:${reason} status:${fee?.status || 'missing'} purpose:${fee?.purpose || 'missing'} user:${fee?.user_id || 'missing'} amount:${fee?.amount ?? 'missing'} expected:${expectedMobileFee ?? 'n/a'} receipt:${fee?.mpesa_receipt || 'missing'}` });
+          return res.json({ data: null, error: 'Your withdrawal-fee payment could not be verified. Please do not pay again. Refresh the page or contact support with your M-Pesa receipt.' });
         }
 
         const deadline = Date.now() + 2 * 60 * 60 * 1000;
@@ -2076,7 +2091,7 @@ Gweno Hub Team` });
         try { const { data } = await db.from('payment_events').select('*').order('created_at', { ascending: false }).limit(500); events = data || []; } catch (_) {}
         const fromDaraja = daraja.map(r => ({
           id: `m${r.id}`, provider: 'daraja', type: r.purpose || '', amount: Number(r.amount || 0), currency: 'KES',
-          reference: r.mpesa_receipt || r.checkout_request_id || r.conversation_id || '', phone: r.phone || '', email: '',
+          reference: r.mpesa_receipt || r.receipt || '', checkoutRequestId: r.checkout_request_id || '', phone: r.phone || '', email: '',
           userId: r.user_id || '', status: mapDStatus(r.status),
           verifyStatus: (String(r.result_code) === '0' || r.status === 'success') ? 'verified' : 'unverified',
           resultDescription: r.result_desc || '', resultCode: r.result_code ?? '',
