@@ -16,10 +16,21 @@ export default async function handler(req, res) {
       const db = createClient(url, key, { auth: { persistSession: false } });
       const origId = r.OriginatorConversationID || null;
       const convId = r.ConversationID || null;
-      const { data: rows } = await db.from('mpesa_transactions').select('*').eq('direction', 'b2c').eq('status', 'pending');
-      const tx = (rows || []).find(t => t.conversation_id === convId || t.originator_conversation_id === origId);
+      const { data: rows, error: lookupError } = await db.from('mpesa_transactions')
+        .select('*').eq('direction', 'b2c').eq('status', 'pending').limit(500);
+      if (lookupError) throw lookupError;
+      // Do not compare missing IDs: null === null could select the wrong payout.
+      const tx = (rows || []).find(t =>
+        (convId && t.conversation_id && String(t.conversation_id) === String(convId)) ||
+        (origId && t.originator_conversation_id && String(t.originator_conversation_id) === String(origId))
+      ) || null;
       if (tx) {
-        await db.from('mpesa_transactions').update({ status: 'timeout', result_desc: 'Queue timeout', updated_at: new Date().toISOString() }).eq('id', tx.id);
+        await db.from('mpesa_transactions').update({
+          status: 'timeout', result_desc: r.ResultDesc || 'Daraja reported a B2C timeout; final payout status needs confirmation.',
+          result_code: String(r.ResultCode ?? ''), updated_at: new Date().toISOString(),
+        }).eq('id', tx.id);
+      } else {
+        console.error('[b2c-timeout] No matching payout transaction for callback', { convId, origId });
       }
     }
   } catch (e) {

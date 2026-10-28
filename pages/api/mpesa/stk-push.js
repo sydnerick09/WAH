@@ -43,7 +43,8 @@ export default async function handler(req, res) {
     if (amount <= 0) return res.json({ success: false, message: 'Your balance already covers activation.' });
   } else if (purpose === 'premium' || purpose === 'premium_topup') {
     const { count: approvedWithdrawalCount, error: withdrawalCheckError } = await db.from('withdrawal_requests')
-      .select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('status', 'approved');
+      .select('id', { count: 'exact', head: true }).eq('user_id', uid)
+      .in('status', ['approved', 'paid', 'successful', 'success']);
     if (withdrawalCheckError || Number(approvedWithdrawalCount || 0) < 1) {
       return res.status(403).json({ success: false, message: 'You can subscribe to Premium only after the admin approves your withdrawal.' });
     }

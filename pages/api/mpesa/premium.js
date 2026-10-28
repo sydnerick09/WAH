@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       .from('withdrawal_requests')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', uid)
-      .eq('status', 'approved');
+      .in('status', ['approved', 'paid', 'successful', 'success']);
 
     if (withdrawalError || Number(count || 0) < 1) {
       return res.status(403).json({
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
       });
     }
 
-    await createTransaction({
+    const stored = await createTransaction({
       checkoutRequestId: data.CheckoutRequestID,
       merchantRequestId: data.MerchantRequestID,
       userId: uid,
@@ -83,6 +83,15 @@ export default async function handler(req, res) {
       amount: PREMIUM_FEE,
       phone: normalizePhone(phone),
     });
+    if (!stored?.ok) {
+      console.error('[premium-mpesa] prompt started but transaction tracking failed:', stored?.error || 'unknown database error');
+      return res.status(503).json({
+        success: false,
+        paymentMayBePending: true,
+        checkoutRequestId: data.CheckoutRequestID,
+        message: 'The M-Pesa prompt was sent, but payment tracking is delayed. Do not pay again; wait for confirmation or contact support.',
+      });
+    }
 
     return res.status(200).json({
       success: true,

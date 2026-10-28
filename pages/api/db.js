@@ -8,9 +8,9 @@ import { issueToken, verifyToken, issueResetToken, verifyResetToken, peekUid } f
 import { computeXp, levelInfo } from '../../lib/gamification';
 import { sendResetEmail } from '../../lib/resetEmail';
 import { createEmailTransport } from '../../lib/emailTransport';
-import { b2cPayment, isB2CConfigured, normalizePhone, isValidMsisdn } from '../../lib/daraja';
 import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../lib/withdrawalFees';
 import { completeStk } from '../../lib/mpesaStore';
+import { sendSubscriptionEmail } from '../../lib/subscriptionEmail';
 
 function getAdmin() {
   return createClient(
@@ -826,8 +826,13 @@ export default async function handler(req, res) {
       }
 
       case 'checkPremiumEligibility': {
+        // The Premium page sends authToken. Resolve the account securely from
+        // that token and continue to recognise a previously approved withdrawal
+        // after the admin marks it paid.
+        const premiumUid = verifyToken(p.authToken);
+        if (!premiumUid) return res.status(401).json({ success: false, eligible: false, error: 'Please log in again.' });
         const { count, error } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true })
-          .eq('user_id', p.userId).eq('status', 'approved');
+          .eq('user_id', premiumUid).in('status', ['approved', 'paid', 'successful', 'success']);
         if (error) return res.json({ success: false, eligible: false, error: 'Could not verify withdrawal approval yet.' });
         return res.json({ success: true, eligible: Number(count || 0) > 0, approvedWithdrawals: Number(count || 0) });
       }
@@ -835,13 +840,20 @@ export default async function handler(req, res) {
       case 'getAvailableVerifiedWithdrawalFee': {
         const uid = verifyToken(p.authToken);
         if (!uid) return res.status(403).json({ success: false, error: 'Unauthorized' });
-        let query = db.from('mpesa_transactions').select('id,checkout_request_id,amount,purpose,status,verify_status,result_desc,withdrawal_id,created_at')
+        const { data: darajaFees, error: darajaError } = await db.from('mpesa_transactions').select('id,checkout_request_id,amount,purpose,status,verify_status,result_desc,withdrawal_id,created_at')
           .eq('user_id', uid).eq('purpose', 'withdrawal_fee').eq('status', 'success').is('withdrawal_id', null)
           .order('created_at', { ascending: false }).limit(10);
-        const { data, error } = await query;
-        if (error) return res.json({ success: false, error: error.message });
-        const fee = (data || []).find(row => row.verify_status === 'verified' || row.verify_status === 'admin_verified');
-        return res.json({ success: true, fee: fee ? { checkoutRequestId: fee.checkout_request_id, amount: Number(fee.amount || 0), manuallyVerified: String(fee.result_desc || '').startsWith('Manually verified by admin') } : null });
+        if (darajaError) return res.json({ success: false, error: darajaError.message });
+        const darajaFee = (darajaFees || []).find(row => row.verify_status === 'verified' || row.verify_status === 'admin_verified');
+        const { data: tillFees, error: tillError } = await db.from('payment_events').select('id,amount,type,status,verify_status,created_at')
+          .eq('user_id', uid).eq('type', 'withdrawal_fee').eq('status', 'success').eq('verify_status', 'verified')
+          .order('created_at', { ascending: false }).limit(10);
+        if (tillError) return res.json({ success: false, error: tillError.message });
+        const tillFee = (tillFees || []).find(row => row.verify_status === 'verified');
+        const fee = darajaFee
+          ? { checkoutRequestId: darajaFee.checkout_request_id, amount: Number(darajaFee.amount || 0), manuallyVerified: String(darajaFee.result_desc || '').startsWith('Manually verified by admin') }
+          : tillFee ? { checkoutRequestId: `e${tillFee.id}`, amount: Number(tillFee.amount || 0), manuallyVerified: true } : null;
+        return res.json({ success: true, fee });
       }
 
       // Admin can manually verify an already-received payment. Daraja transactions
@@ -883,18 +895,24 @@ export default async function handler(req, res) {
           await logAction(db, { action: 'withdrawal_fee_missing', entity: 'withdrawal', entityId: userId, detail: `method:${method} — no fee reference` });
           return res.json({ data: null, error: 'A verified withdrawal-fee payment is required before submitting.' });
         }
-        const { data: fee } = await db.from('mpesa_transactions')
-          .select('*').eq('checkout_request_id', feeRef).maybeSingle();
+        let fee = null;
+        let feeSource = 'daraja';
+        if (feeRef.startsWith('e')) {
+          feeSource = 'event';
+          const { data: eventFee } = await db.from('payment_events').select('*').eq('id', feeRef.slice(1)).maybeSingle();
+          if (eventFee) fee = { ...eventFee, purpose: eventFee.type, user_id: eventFee.user_id, withdrawal_id: eventFee.verify_status === 'consumed' ? 'consumed' : null, status: eventFee.status, amount: eventFee.amount };
+        } else {
+          const { data: darajaFee } = await db.from('mpesa_transactions').select('*').eq('checkout_request_id', feeRef).maybeSingle();
+          fee = darajaFee;
+        }
         const expectedMobileFee = isSupportedWithdrawalMethod(method) ? getWithdrawalFee(amount, method) : null;
-        const feeOk = fee
-          && fee.status === 'success'
-          && fee.purpose === 'withdrawal_fee'
-          && String(fee.user_id) === String(userId)
-          && !fee.withdrawal_id
+        const feeVerified = feeSource === 'event' ? fee?.verify_status === 'verified' : (fee?.verify_status === 'verified' || fee?.verify_status === 'admin_verified');
+        const feeOk = fee && fee.status === 'success' && fee.purpose === 'withdrawal_fee'
+          && String(fee.user_id) === String(userId) && !fee.withdrawal_id && feeVerified
           && (!isSupportedWithdrawalMethod(method) || (expectedMobileFee !== null && Number(fee.amount) === expectedMobileFee));
         if (!feeOk) {
           const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
-            : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
+            : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'unverified-or-invalid';
           await logAction(db, { action: 'withdrawal_fee_verify_failed', entity: 'withdrawal', entityId: userId, detail: `method:${method} fee:${feeRef} reason:${reason}` });
           return res.json({ data: null, error: 'Your withdrawal-fee payment could not be verified. Please pay the fee and try again.' });
         }
@@ -913,10 +931,14 @@ export default async function handler(req, res) {
         }).select().single();
         if (error) return res.json({ data: null, error: error.message });
 
-        // Consume the fee payment (link it to this withdrawal → non-reusable).
-        await db.from('mpesa_transactions').update({ withdrawal_id: String(data.id) }).eq('id', fee.id);
+        // Consume the fee payment so one verified fee cannot fund multiple withdrawals.
+        if (feeSource === 'event') {
+          await db.from('payment_events').update({ verify_status: 'consumed', updated_at: new Date().toISOString() }).eq('id', fee.id);
+        } else {
+          await db.from('mpesa_transactions').update({ withdrawal_id: String(data.id) }).eq('id', fee.id);
+        }
         await logAction(db, { action: 'withdrawal_fee_verified', entity: 'withdrawal', entityId: data.id,
-          detail: `method:${method} user:${userId} fee_tx:${feeRef} receipt:${fee.mpesa_receipt || '—'} amount:KES ${fee.amount}` });
+          detail: `method:${method} user:${userId} fee_tx:${feeRef} receipt:${fee.mpesa_receipt || fee.reference || '—'} amount:KES ${fee.amount}` });
 
         // Best-effort email notifications: never roll back a valid withdrawal if email fails.
         try {
@@ -1524,6 +1546,11 @@ export default async function handler(req, res) {
         const newlyApprovedNormalWithdrawal = p.status === 'approved'
           && previousWithdrawal?.status !== 'approved'
           && !String(previousWithdrawal?.id_number || '').startsWith('__AGENT_COMMISSION__');
+        if ((p.status === 'paid' || p.status === 'processing') && previousWithdrawal?.status !== p.status) {
+          return res.json({ success: false, error: p.status === 'paid'
+            ? 'To confirm a manual payment, use the Mark as Paid button after sending the money.'
+            : 'Automatic B2C payouts are disabled. Please handle the payment manually.' });
+        }
         const wUpdates = { updated_at: new Date().toISOString() };
         if (p.status   !== undefined) wUpdates.status    = p.status;
         if (p.amount   !== undefined) wUpdates.amount    = Number(p.amount);
@@ -1605,6 +1632,8 @@ export default async function handler(req, res) {
         const { data: wd } = await db.from('withdrawal_requests').select('*').eq('id', p.requestId).maybeSingle();
         if (!wd) return res.json({ success: false, error: 'Withdrawal request not found.' });
         if (wd.status === 'paid') return res.json({ success: false, error: 'This withdrawal is already marked paid.' });
+        if (wd.status === 'declined') return res.json({ success: false, error: 'This withdrawal was declined. Change its status only after reviewing the request.' });
+        if (wd.status === 'processing') return res.json({ success: false, error: 'This request has a legacy B2C payout marked as processing. Verify its M-Pesa result first to avoid paying twice; if no payout occurred, return it to Pending before marking it paid manually.' });
 
         const amount = Number(wd.amount || 0);
         if (wd.user_id && amount > 0) {
@@ -1638,34 +1667,10 @@ export default async function handler(req, res) {
       }
 
       case 'adminPayoutWithdrawal': {
-        // Admin-triggered real M-Pesa payout (B2C) for a withdrawal request.
-        // Deliberately manual (never auto) so money only leaves on approval.
+        // GWENO withdrawals are paid manually outside the app. Keep this legacy
+        // operation disabled so a UI call or stale client cannot trigger a real B2C payout.
         if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
-        if (!isB2CConfigured()) return res.json({ success: false, error: 'M-Pesa B2C payouts are not configured yet.' });
-        const { data: wd } = await db.from('withdrawal_requests').select('*').eq('id', p.requestId).maybeSingle();
-        if (!wd) return res.json({ success: false, error: 'Withdrawal request not found.' });
-        if (wd.status === 'paid' || wd.status === 'processing') return res.json({ success: false, error: `This withdrawal is already ${wd.status}.` });
-        const amount = Number(wd.amount || 0);
-        if (!isValidMsisdn(wd.phone)) return res.json({ success: false, error: 'This request has no valid Safaricom number to pay.' });
-        if (!(amount > 0)) return res.json({ success: false, error: 'Invalid payout amount.' });
-
-        try {
-          const { ok, data } = await b2cPayment({ phone: wd.phone, amount, remarks: 'Gweno Hub withdrawal', occasion: String(p.requestId) });
-          if (!ok) return res.json({ success: false, error: data?.errorMessage || data?.ResponseDescription || 'B2C request was rejected by M-Pesa.' });
-          await db.from('mpesa_transactions').insert({
-            conversation_id: data.ConversationID || null,
-            originator_conversation_id: data.OriginatorConversationID || null,
-            withdrawal_id: String(p.requestId),
-            user_id: wd.user_id || null,
-            purpose: 'withdrawal_payout', direction: 'b2c',
-            amount, phone: normalizePhone(wd.phone), status: 'pending',
-          });
-          await db.from('withdrawal_requests').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', p.requestId);
-          await logAction(db, { action: 'withdrawal_payout', entity: 'withdrawal', entityId: p.requestId, detail: `KES ${amount} to ${normalizePhone(wd.phone)} (B2C queued)` });
-          return res.json({ success: true, message: data.ResponseDescription || 'Payout queued. It will be confirmed shortly.' });
-        } catch (e) {
-          return res.json({ success: false, error: e.message || 'B2C payout error.' });
-        }
+        return res.json({ success: false, error: 'Automatic M-Pesa B2C payouts are disabled. Send the payment manually, then use Mark as Paid in the Withdrawals section.' });
       }
 
       case 'adminDeleteWithdrawal': {
@@ -1994,13 +1999,69 @@ export default async function handler(req, res) {
           const id = txId.slice(1);
           const { data: event, error: eventError } = await db.from('payment_events').select('*').eq('id', id).maybeSingle();
           if (eventError || !event) return res.json({ success: false, error: 'Transaction not found.' });
-          const updates = action === 'unverify'
-            ? { verify_status: 'unverified', updated_at: now }
-            : { verify_status: 'verified', status: 'success', updated_at: now };
-          const { error } = await db.from('payment_events').update(updates).eq('id', id);
+          if (action === 'unverify') {
+            const { error } = await db.from('payment_events').update({ verify_status: 'unverified', updated_at: now }).eq('id', id);
+            if (error) return res.json({ success: false, error: error.message });
+            await logAction(db, { action: 'payment_unverified', entity: 'payment', entityId: id, detail: `type:${event.type || ''} reference:${event.reference || ''} amount:${event.amount || 0}` });
+            return res.json({ success: true, verifyStatus: 'unverified', status: event.status, message: 'Marked unverified. Previously applied account changes were not reversed.' });
+          }
+          const type = String(event.type || '').toLowerCase();
+          const amount = Number(event.amount || 0);
+          let user = null;
+          if (event.user_id) {
+            const { data, error: userError } = await db.from('users').select('*').eq('id', event.user_id).maybeSingle();
+            if (userError) return res.json({ success: false, error: userError.message });
+            user = data;
+          }
+          if (event.status === 'success' && event.verify_status === 'verified'
+              && ['premium', 'premium_membership'].includes(type) && user?.premium && user?.premium_paid_at) {
+            return res.json({ success: true, verifyStatus: 'verified', status: 'successful', message: 'This payment is already verified and Premium is active.' });
+          }
+          if (['premium', 'premium_membership'].includes(type)) {
+            if (amount !== 599) return res.json({ success: false, error: `Premium verification requires a KES 599 payment; this record is KES ${amount}.` });
+            if (!user) return res.json({ success: false, error: 'The account linked to this payment could not be found.' });
+            const { count, error: eligibilityError } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', event.user_id).eq('status', 'approved');
+            if (eligibilityError || Number(count || 0) < 1) return res.json({ success: false, error: 'Premium can only be activated after an admin-approved withdrawal. The payment has not been applied; please review the account eligibility.' });
+            const { error: premiumError } = await db.from('users').update({ premium: true, premium_paid_at: Date.now() }).eq('id', event.user_id);
+            if (premiumError) return res.json({ success: false, error: premiumError.message });
+            try {
+              const emailResult = await sendSubscriptionEmail({ email: user.email, name: user.full_name, type: 'premium', wasPremium: Boolean(user.premium_paid_at) });
+              if (!emailResult?.success) console.error('[admin-verify-event] premium email not sent:', emailResult?.message || 'unknown email error');
+            } catch (mailError) { console.error('[admin-verify-event] premium email error:', mailError?.message || mailError); }
+          } else if (['registration', 'activation', 'activation_topup'].includes(type)) {
+            if (!user) return res.json({ success: false, error: 'The account linked to this payment could not be found.' });
+            if (amount <= 0 || amount > 50) return res.json({ success: false, error: 'Activation payment amount is invalid.' });
+            const subs = { ...(user.task_submissions || {}) };
+            const priorActAt = Number(subs._act || 0);
+            const alreadyActive = Boolean(priorActAt && Date.now() <= priorActAt + 30 * 24 * 60 * 60 * 1000);
+            if (!alreadyActive) {
+              subs._act = Date.now();
+              const { error: activationError } = await db.from('users').update({ activated: true, task_submissions: subs, balance: Math.max(0, Number(user.balance || 0) + amount - 50) }).eq('id', event.user_id);
+              if (activationError) return res.json({ success: false, error: activationError.message });
+              try {
+                if (user.email) await createEmailTransport('subscription').sendMail({ to: user.email, subject: 'Your Gweno Hub account is activated', text: `Hello ${user.full_name || 'Client'},
+
+Your account activation payment of KES ${amount} has been manually verified. Your account is now activated.
+
+Dashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard
+
+Gweno Hub Team` });
+              } catch (mailError) { console.error('[admin-verify-event] activation email error:', mailError?.message || mailError); }
+            }
+          } else if (type === 'withdrawal_fee') {
+            if (!user) return res.json({ success: false, error: 'The account linked to this payment could not be found.' });
+            try {
+              if (user.email) await createEmailTransport('withdrawal').sendMail({ to: user.email, subject: 'Your withdrawal fee has been verified — no further payment required', text: `Hello ${user.full_name || 'Gweno client'},
+
+Our admin team has verified your withdrawal-fee payment of KES ${amount.toLocaleString('en-KE')}. You do not need to pay this fee again. Sign in to your GWENO account and continue to Withdrawals to submit your details.
+
+Gweno Hub Team` });
+            } catch (mailError) { console.error('[admin-verify-event] withdrawal fee email error:', mailError?.message || mailError); }
+          }
+          const { error } = await db.from('payment_events').update({ verify_status: 'verified', status: 'success', updated_at: now }).eq('id', id);
           if (error) return res.json({ success: false, error: error.message });
-          await logAction(db, { action: action === 'verify' ? 'payment_manually_verified' : 'payment_unverified', entity: 'payment', entityId: id, detail: `type:${event.type || ''} reference:${event.reference || ''} amount:${event.amount || 0}` });
-          return res.json({ success: true, verifyStatus: action === 'verify' ? 'verified' : 'unverified', status: action === 'verify' ? 'successful' : event.status, message: action === 'verify' ? 'Transaction marked successful and verified.' : 'Marked unverified. No payment effects were reversed.' });
+          await logAction(db, { action: 'payment_manually_verified', entity: 'payment', entityId: id, detail: `type:${event.type || ''} reference:${event.reference || ''} amount:${event.amount || 0}` });
+          return res.json({ success: true, verifyStatus: 'verified', status: 'successful', message: type === 'premium' || type === 'premium_membership' ? 'Payment verified and Premium activated.' : type === 'registration' || type === 'activation' || type === 'activation_topup' ? 'Payment verified and activation applied.' : 'Transaction marked successful and verified.' });
         }
         return res.json({ success: false, error: 'Unsupported transaction reference.' });
       }
@@ -2008,7 +2069,7 @@ export default async function handler(req, res) {
       // Admin unified transactions view (merges the Daraja ledger + payment_events).
       case 'adminListTransactions': {
         if (p.adminSecret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
-        const mapDStatus = s => ({ success: 'successful', pending: 'pending', failed: 'failed', timeout: 'failed', cancelled: 'cancelled' }[s] || s || 'pending');
+        const mapDStatus = s => ({ success: 'successful', pending: 'pending', failed: 'failed', timeout: 'pending', cancelled: 'cancelled' }[s] || s || 'pending');
         let daraja = [], events = [];
         try { const { data } = await db.from('mpesa_transactions').select('*').order('created_at', { ascending: false }).limit(500); daraja = data || []; } catch (_) {}
         try { const { data } = await db.from('payment_events').select('*').order('created_at', { ascending: false }).limit(500); events = data || []; } catch (_) {}
@@ -2017,12 +2078,13 @@ export default async function handler(req, res) {
           reference: r.mpesa_receipt || r.checkout_request_id || r.conversation_id || '', phone: r.phone || '', email: '',
           userId: r.user_id || '', status: mapDStatus(r.status),
           verifyStatus: (String(r.result_code) === '0' || r.status === 'success') ? 'verified' : 'unverified',
+          resultDescription: r.result_desc || '', resultCode: r.result_code ?? '',
           createdAt: r.created_at,
         }));
         const fromEvents = events.map(r => ({
           id: `e${r.id}`, provider: r.provider || '', type: r.type || '', amount: Number(r.amount || 0), currency: r.currency || 'KES',
           reference: r.reference || '', phone: r.phone || '', email: r.email || '', userId: r.user_id || '',
-          status: r.status || 'pending', verifyStatus: r.verify_status || 'unverified', createdAt: r.created_at,
+          status: r.status || 'pending', verifyStatus: r.verify_status || 'unverified', resultDescription: r.result_desc || '', resultCode: r.result_code ?? '', createdAt: r.created_at,
         }));
         let all = [...fromDaraja, ...fromEvents].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         if (p.provider) all = all.filter(t => t.provider === p.provider);

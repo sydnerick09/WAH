@@ -897,14 +897,9 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
   const [saving,  setSaving]  = useState({});
   const [msg,     setMsg]     = useState({});
   const [deleting, setDeleting] = useState({});
-  const [b2cEnabled, setB2cEnabled] = useState(false);   // true once Daraja B2C is live
   const [methodFilter, setMethodFilter] = useState('all');
 
-  // While B2C is pending approval, admins pay manually + Mark as Paid. Once B2C
-  // is configured, the automatic "Pay via M-Pesa" (B2C) button appears instead.
-  useEffect(() => {
-    fetch('/api/mpesa/config').then(r => r.json()).then(d => setB2cEnabled(!!d.b2c)).catch(() => {});
-  }, []);
+  // GWENO uses manual payouts: admins send funds outside the app, then confirm payment here.
 
   function setEdit(id, field, val) {
     setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: val } }));
@@ -963,20 +958,6 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
       setMsg(prev => ({ ...prev, [wd.id]: { type: 'err', text: res.error || 'Failed.' } }));
     }
     setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[wd.id]; return n; }), 3000);
-  }
-
-  async function payout(wd) {
-    if (!confirm(`Send KES ${Number(wd.amount).toLocaleString()} to ${wd.phone} via M-Pesa (B2C)?\n\nThis pays out REAL money and cannot be undone.`)) return;
-    setSaving(prev => ({ ...prev, [wd.id]: true }));
-    const res = await dbProxy('adminPayoutWithdrawal', { adminSecret: secret, requestId: wd.id });
-    setSaving(prev => ({ ...prev, [wd.id]: false }));
-    if (res.success) {
-      setMsg(prev => ({ ...prev, [wd.id]: { type: 'ok', text: '💸 Payout queued via M-Pesa.' } }));
-      await onRefresh();
-    } else {
-      setMsg(prev => ({ ...prev, [wd.id]: { type: 'err', text: res.error || 'Payout failed.' } }));
-    }
-    setTimeout(() => setMsg(prev => { const n = { ...prev }; delete n[wd.id]; return n; }), 4000);
   }
 
   // Manual payout confirmation: admin has already sent the money via their
@@ -1092,8 +1073,8 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
                       <option value="pending">Pending Manual Payment</option>
                       <option value="approved">Approved</option>
                       <option value="declined">Declined</option>
-                      <option value="paid">Paid</option>
-                      <option value="processing">Processing</option>
+                      <option value="paid" disabled>Paid — use Mark as Paid</option>
+                      <option value="processing" disabled>Processing (legacy)</option>
                     </select>
                     <textarea
                       style={{ ...styles.numInput, width: 130, marginTop: 6, minHeight: 42, resize: 'vertical', fontSize: 12 }}
@@ -1122,19 +1103,11 @@ function WithdrawalsTab({ withdrawals, manualWithdrawals, secret, onRefresh }) {
                         ❌ Reject
                       </button>
                     </div>
-                    {b2cEnabled ? (
-                      <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#065F46' }}
-                        disabled={isSaving || isDel || wd.status === 'paid' || wd.status === 'processing'} onClick={() => payout(wd)}
-                        title="Send the money now via Safaricom M-Pesa B2C (automatic)">
-                        {wd.status === 'paid' ? '✅ Paid' : wd.status === 'processing' ? '⏳ Processing…' : '💸 Pay via M-Pesa (auto)'}
-                      </button>
-                    ) : (
-                      <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#065F46' }}
-                        disabled={isSaving || isDel || wd.status === 'paid'} onClick={() => markPaid(wd)}
-                        title="You've sent the money manually via M-Pesa Business — mark paid and deduct balance">
-                        {wd.status === 'paid' ? '✅ Paid' : '✅ Mark as Paid (manual)'}
-                      </button>
-                    )}
+                    <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6, background: '#065F46' }}
+                      disabled={isSaving || isDel || wd.status === 'paid' || wd.status === 'declined' || wd.status === 'processing'} onClick={() => markPaid(wd)}
+                      title="After you send the money manually, confirm it here; the request will be marked paid and the balance deducted">
+                      {wd.status === 'paid' ? '✅ Paid' : '✅ Mark as Paid (manual)'}
+                    </button>
                     <button style={{ ...styles.btn, padding: '7px 14px', fontSize: 12, width: '100%', marginTop: 6 }}
                       disabled={isSaving || isDel} onClick={() => saveWithdrawal(wd)}>
                       {isSaving ? 'Saving…' : 'Save edits'}
@@ -2070,7 +2043,7 @@ function TransactionsTab({ secret }) {
 
       <div className="admin-table-wrap" style={styles.tableWrap}>
         <table style={styles.table}>
-          <thead><tr>{['User', 'Type', 'Amount', 'Provider', 'Reference', 'Status', 'Verify', 'Date'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{['User', 'Type', 'Amount', 'Provider', 'Reference', 'Status', 'Result details', 'Verify', 'Date'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.map(t => (
               <tr key={t.id} style={styles.tr}>
@@ -2080,12 +2053,13 @@ function TransactionsTab({ secret }) {
                 <td style={styles.td}>{providerLabel[t.provider] || t.provider || '—'}</td>
                 <td style={{ ...styles.td, fontFamily: 'monospace', fontSize: 11, maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.reference || '—'}</td>
                 <td style={styles.td}><span style={{ ...styles.badge, background: t.status === 'successful' ? '#e5e7eb' : '#f3f4f6', color: '#111827' }}>{t.status}</span></td>
+                <td style={{ ...styles.td, minWidth: 180, maxWidth: 280, fontSize: 11, whiteSpace: 'normal' }}>{t.resultDescription || (t.status === 'pending' ? 'Awaiting final confirmation. If money was received outside STK, verify the payment manually after checking the receipt.' : '—')}{t.resultCode !== '' && t.resultCode !== null && t.resultCode !== undefined ? <div style={{ color: '#64748B', marginTop: 3 }}>Code: {String(t.resultCode)}</div> : null}</td>
                 <td style={styles.td}><div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}><span style={{ fontSize: 11, color: '#64748B' }}>{t.verifyStatus || 'unverified'}</span><button type="button" style={{ ...styles.btn, width: 'auto', padding: '5px 8px', fontSize: 11, opacity: verifying === t.id ? 0.6 : 1 }} disabled={!!verifying} onClick={() => verifyTransaction(t)}>{verifying === t.id ? 'Working…' : t.verifyStatus === 'verified' ? 'Unverify' : 'Verify'}</button></div></td>
                 <td style={{ ...styles.td, fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(t.createdAt ? new Date(t.createdAt).getTime() : null)}</td>
               </tr>
             ))}
             {loaded && rows.length === 0 && !err && (
-              <tr><td colSpan={8} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No transactions match these filters.</td></tr>
+              <tr><td colSpan={9} style={{ ...styles.td, textAlign: 'center', color: '#94A3B8' }}>No transactions match these filters.</td></tr>
             )}
           </tbody>
         </table>

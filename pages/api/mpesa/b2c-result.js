@@ -26,14 +26,27 @@ export default async function handler(req, res) {
 
       // Pull the M-Pesa receipt from the result parameters, if present.
       let receipt = null;
-      for (const it of (r.ResultParameters?.ResultParameter || [])) {
-        if (it.Key === 'TransactionReceipt') receipt = it.Value;
+      const resultParameters = r.ResultParameters?.ResultParameter;
+      const params = Array.isArray(resultParameters) ? resultParameters : (resultParameters ? [resultParameters] : []);
+      for (const it of params) {
+        if (it?.Key === 'TransactionReceipt') receipt = it.Value || null;
       }
 
-      // Locate the payout transaction by either conversation id.
-      let q = db.from('mpesa_transactions').select('*').eq('direction', 'b2c');
-      const { data: rows } = await q;
-      const tx = (rows || []).find(t => t.conversation_id === convId || t.originator_conversation_id === origId);
+      // Match only identifiers actually supplied by Daraja. Comparing null === null
+      // can accidentally attach a callback to an unrelated payout whose IDs are null.
+      let tx = null;
+      if (convId || origId) {
+        const { data: rows, error: lookupError } = await db.from('mpesa_transactions')
+          .select('*').eq('direction', 'b2c').limit(500);
+        if (lookupError) throw lookupError;
+        tx = (rows || []).find(t =>
+          (convId && t.conversation_id && String(t.conversation_id) === String(convId)) ||
+          (origId && t.originator_conversation_id && String(t.originator_conversation_id) === String(origId))
+        ) || null;
+      }
+      if (!tx) {
+        console.error('[b2c-result] No matching payout transaction for callback', { convId, origId, resultCode: r.ResultCode });
+      }
 
       if (tx && tx.status !== 'success') {
         await db.from('mpesa_transactions').update({
