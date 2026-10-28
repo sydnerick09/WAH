@@ -840,11 +840,12 @@ export default async function handler(req, res) {
       case 'getAvailableVerifiedWithdrawalFee': {
         const uid = verifyToken(p.authToken);
         if (!uid) return res.status(403).json({ success: false, error: 'Unauthorized' });
-        const { data: darajaFees, error: darajaError } = await db.from('mpesa_transactions').select('id,checkout_request_id,amount,purpose,status,verify_status,result_desc,withdrawal_id,created_at')
+        const { data: darajaFees, error: darajaError } = await db.from('mpesa_transactions').select('id,checkout_request_id,amount,purpose,status,verify_status,result_code,result_desc,mpesa_receipt,withdrawal_id,created_at')
           .eq('user_id', uid).eq('purpose', 'withdrawal_fee').eq('status', 'success').is('withdrawal_id', null)
           .order('created_at', { ascending: false }).limit(10);
         if (darajaError) return res.json({ success: false, error: darajaError.message });
-        const darajaFee = (darajaFees || []).find(row => row.verify_status === 'verified' || row.verify_status === 'admin_verified');
+        // A genuine Daraja success is sufficient; admin verification is only a fallback.
+        const darajaFee = (darajaFees || []).find(row => row.verify_status === 'verified' || row.verify_status === 'admin_verified' || String(row.result_code ?? '') === '0' || Boolean(row.mpesa_receipt));
         const { data: tillFees, error: tillError } = await db.from('payment_events').select('id,amount,type,status,verify_status,created_at')
           .eq('user_id', uid).eq('type', 'withdrawal_fee').eq('status', 'success').eq('verify_status', 'verified')
           .order('created_at', { ascending: false }).limit(10);

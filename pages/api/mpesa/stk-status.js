@@ -18,7 +18,8 @@ export default async function handler(req, res) {
   if (tx.user_id && tx.user_id !== uid) return res.status(403).json({ status: 'error' });
 
   // Verification fallback: if the callback hasn't landed yet, ask Daraja directly.
-  if (tx.status === 'pending') {
+  const staleProcessingFailure = tx.status === 'failed' && /still under processing|being processed|processing|in progress|pending|request timed out|timeout|timed out/i.test(String(tx.result_desc || ''));
+  if (tx.status === 'pending' || staleProcessingFailure) {
     try {
       const { data } = await stkQuery(id);
       if (data && data.ResultCode !== undefined && String(data.ResultCode) !== '') {
@@ -28,5 +29,5 @@ export default async function handler(req, res) {
     } catch (_) { /* keep pending; the client keeps polling */ }
   }
 
-  return res.json({ status: tx.status, purpose: tx.purpose, amount: tx.amount, receipt: tx.mpesa_receipt || null });
+  return res.json({ status: tx.status, purpose: tx.purpose, amount: tx.amount, receipt: tx.mpesa_receipt || null, resultDescription: tx.result_desc || null, resultCode: tx.result_code ?? null });
 }

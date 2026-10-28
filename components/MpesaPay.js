@@ -20,8 +20,8 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
 
   useEffect(() => () => clearInterval(pollRef.current), []);
 
-  // If an admin verified a previously charged withdrawal fee after a failed
-  // callback, reuse it automatically. The user must never be prompted to pay again.
+  // If Safaricom already confirmed a previously charged withdrawal fee, reuse it
+  // automatically. The admin verification icon is not required for normal payments.
   useEffect(() => {
     if (purpose !== 'withdrawal_fee' || recoveryCheckedRef.current) return;
     recoveryCheckedRef.current = true;
@@ -42,7 +42,7 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
         if (!fee.manuallyVerified && Number(fee.amount) !== Math.round(Number(amount) || 0)) return;
         doneRef.current = true;
         setState('success');
-        setMsg('Previously paid withdrawal fee verified by admin. No further payment is required.');
+        setMsg('Your previous withdrawal-fee payment is confirmed. No further payment is required.');
         onSuccess?.({ success: true, status: 'success', checkoutRequestId: fee.checkoutRequestId, recovered: true });
       } catch (_) { /* Normal payment remains available if recovery lookup fails. */ }
     })();
