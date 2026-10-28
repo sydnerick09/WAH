@@ -14,8 +14,18 @@ export default async function handler(req, res) {
     const cb = req.body?.Body?.stkCallback;
     if (cb && cb.CheckoutRequestID) {
       let receipt = null;
-      for (const it of (cb.CallbackMetadata?.Item || [])) {
-        if (it.Name === 'MpesaReceiptNumber') receipt = it.Value;
+      const items = cb.CallbackMetadata?.Item || [];
+      for (const it of items) {
+        if (String(it?.Name || '').trim().toLowerCase() === 'mpesareceiptnumber' && it.Value != null) {
+          receipt = String(it.Value).trim();
+          break;
+        }
+      }
+      if (Number(cb.ResultCode) === 0 && !receipt) {
+        console.error('[stk-callback] Safaricom reported success but no MpesaReceiptNumber was present in CallbackMetadata.', {
+          checkoutRequestId: cb.CheckoutRequestID,
+          metadataNames: items.map(it => it?.Name).filter(Boolean),
+        });
       }
       const result = await completeStk({
         checkoutRequestId: cb.CheckoutRequestID,
@@ -25,6 +35,9 @@ export default async function handler(req, res) {
       });
       if (result?.error || result?.pending) {
         console.error('[stk-callback] payment confirmation still needs processing:', result.error || 'account update pending');
+      }
+      if (receipt && result?.receiptUpdated) {
+        console.info('[stk-callback] saved Safaricom receipt for checkout request:', cb.CheckoutRequestID);
       }
     }
   } catch (e) {
