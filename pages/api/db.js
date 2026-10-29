@@ -22,7 +22,6 @@ function getAdmin() {
 }
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-const AGENT_WITHDRAWAL_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
 const AGENT_REWARD_MILESTONE = 10;
 const AGENT_REWARD_KES = 25000;
 
@@ -1268,7 +1267,7 @@ export default async function handler(req, res) {
         subs._agent = a;
         const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
         if (error) return res.json({ success: false, error: error.message });
-        try { const transport = createEmailTransport('support'); await transport.sendMail({ to: u.email, subject: p.decision === 'approve' ? 'Your Gweno Hub agent application is approved' : 'Update on your Gweno Hub agent application', text: `Hello ${u.full_name || 'Applicant'},\n\n${p.decision === 'approve' ? `Your agent application has been approved. Your agent referral link is ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/register?agent=${a.code}. Your agent dashboard is now available after signing in. You can request a bank commission withdrawal after 7 days, or earlier once you have 10 qualified clients whose withdrawals have been approved.` : `Your agent application has not been approved at this time. You remain a normal Gweno Hub client and may be invited to apply again in the future.`}\n\n${p.note ? `Admin note: ${p.note}\n\n` : ''}Gweno Hub Team` }); } catch (_) {}
+        try { const transport = createEmailTransport('support'); await transport.sendMail({ to: u.email, subject: p.decision === 'approve' ? 'Your Gweno Hub agent application is approved' : 'Update on your Gweno Hub agent application', text: `Hello ${u.full_name || 'Applicant'},\n\n${p.decision === 'approve' ? `Your agent application has been approved. Your agent referral link is ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/register?agent=${a.code}. Your agent dashboard is now available after signing in. You can request a bank commission withdrawal once you have at least 10 qualified clients whose withdrawals have been approved.` : `Your agent application has not been approved at this time. You remain a normal Gweno Hub client and may be invited to apply again in the future.`}\n\n${p.note ? `Admin note: ${p.note}\n\n` : ''}Gweno Hub Team` }); } catch (_) {}
         await logAction(db, { action: `agent_application_${p.decision === 'approve' ? 'approved' : 'declined'}`, entity: 'user', entityId: u.id, detail: String(p.note || '') });
         return res.json({ success: true, data: norm({ ...u, task_submissions: subs }) });
       }
@@ -1277,9 +1276,10 @@ export default async function handler(req, res) {
         const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
         const userSubs = { ...(u?.task_submissions || {}) }; const a = { ...(userSubs._agent || {}) };
         if (!u || a.status !== 'active') return res.json({ success: false, error: 'Agent access is not active.' });
-        const commissionReadyAt = Number(a.startedAt || Date.now()) + AGENT_WITHDRAWAL_WAIT_MS;
-        const unlockByClients = (Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length) >= 10;
-        if ((Date.now() >= commissionReadyAt || unlockByClients) && Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; userSubs._agent = a; await db.from('users').update({ task_submissions: userSubs }).eq('id', u.id); }
+        const effectiveQualifiedCount = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : new Set((a.qualifiedClientIds || []).map(String)).size;
+        // Commission becomes withdrawable when the 10-client requirement is met;
+        // elapsed time is not an eligibility condition.
+        if (effectiveQualifiedCount >= 10 && Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; userSubs._agent = a; await db.from('users').update({ task_submissions: userSubs }).eq('id', u.id); }
         const { data: all } = await db.from('users').select('id,full_name,email,phone,country,referred_by,created_at,task_submissions');
         const rows = all || []; const byId = new Map(rows.map(x => [String(x.id), x]));
         const descendants = new Set(); let changed = true;
@@ -1297,15 +1297,15 @@ export default async function handler(req, res) {
         if (eatDay >= 5 && weekQualified < 10 && a.lastTargetReminderWeek !== weekKey) {
           try { await createEmailTransport('support').sendMail({ to:u.email, subject:'Gweno Hub agent weekly performance reminder', text:`Hello ${u.full_name || 'Agent'},\n\nYou currently have ${weekQualified} qualified client(s) for this week. Your weekly target is 10 clients whose withdrawals have been approved. Your account remains active, but your current shortfall is recorded for administrative review. Please continue recruiting and guiding clients through the process.\n\nGweno Hub Team` }); a.lastTargetReminderWeek = weekKey; userSubs._agent = a; await db.from('users').update({task_submissions:userSubs}).eq('id',u.id); } catch (e) { console.error('[agent-target-reminder]',e?.message||e); }
         }
-        return res.json({ success: true, agent: a, clients: clients.map(c => ({ id:c.id, fullName:c.full_name, email:c.email, country:c.country, createdAt:c.created_at, qualified:qualified.includes(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null })), qualifiedCount: Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : qualified.length, weekQualified: Number.isFinite(Number(a.currentWeekQualifiedOverride)) ? Number(a.currentWeekQualifiedOverride) : weekQualified, weeklyHistory, target: 10, startDate: start, balances: { pending: Number(a.pendingCommission||0), available: Number(a.availableCommission||0), total: Number(a.totalCommissionEarned||0), paid: Number(a.paidCommission||0) }, commissionReadyAt, phone: u.phone || '', fullName: u.full_name || '', country: u.country || '' });
+        return res.json({ success: true, agent: a, clients: clients.map(c => ({ id:c.id, fullName:c.full_name, email:c.email, country:c.country, createdAt:c.created_at, qualified:qualified.includes(String(c.id)), qualifiedAt:c.task_submissions?._agentQualifiedAt || null })), qualifiedCount: effectiveQualifiedCount, weekQualified: Number.isFinite(Number(a.currentWeekQualifiedOverride)) ? Number(a.currentWeekQualifiedOverride) : weekQualified, weeklyHistory, target: 10, startDate: start, balances: { pending: Number(a.pendingCommission||0), available: Number(a.availableCommission||0), total: Number(a.totalCommissionEarned||0), paid: Number(a.paidCommission||0) }, phone: u.phone || '', fullName: u.full_name || '', country: u.country || '' });
       }
 
       case 'requestAgentCommissionWithdrawal': {
         const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
         const subs = { ...(u?.task_submissions || {}) }, a = { ...(subs._agent || {}) };
         if (!u || a.status !== 'active') return res.json({ success: false, error: 'Active agent account required.' });
-        const qualifiedCountForGate = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : (a.qualifiedClientIds || []).length;
-        if (qualifiedCountForGate < 10) return res.json({ success:false,error:'You can withdraw after reaching 10 qualified clients.' });
+        const qualifiedCountForGate = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : new Set((a.qualifiedClientIds || []).map(String)).size;
+        if (qualifiedCountForGate < 10) return res.json({ success:false,error:`You need at least 10 qualifying clients to initiate a withdrawal. Your current progress is ${qualifiedCountForGate} out of 10 clients.` });
         if (Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; }
         const amount = Math.floor(Number(a.availableCommission || 0));
         if (amount <= 0) return res.json({ success:false,error:'There is no available commission balance to withdraw.' });
@@ -1617,21 +1617,24 @@ export default async function handler(req, res) {
         }
         if (p.status !== undefined) {
           try {
-            const { data: owner } = await db.from('users').select('email,full_name').eq('id', wUp.user_id).maybeSingle();
+            const { data: owner } = await db.from('users').select('email,full_name,premium,premium_paid_at').eq('id', wUp.user_id).maybeSingle();
             if (owner?.email) {
               const transport = createEmailTransport('withdrawal');
               const statusText = String(wUp.status || p.status);
               const isNewApproval = newlyApprovedNormalWithdrawal;
+              const premiumPaidAt = Number(owner.premium_paid_at || 0);
+              const hasActivePremium = Boolean(owner.premium && premiumPaidAt && Date.now() <= premiumPaidAt + ONE_MONTH_MS);
+              const needsPremium = isNewApproval && !hasActivePremium;
               const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
-              const premiumText = isNewApproval
+              const premiumText = needsPremium
                 ? `\n\nYour withdrawal request has been approved by our administration team. To proceed with receiving your funds, please upgrade to Gweno Hub Premium if you have not already done so. Sign in to your account and open the Premium Upgrade section: ${baseUrl}/premium\n\nPlease note that approval of the withdrawal request is not itself confirmation that payment has been sent. You will receive a further update when your payment status changes.`
                 : '';
-              const premiumHtml = isNewApproval
+              const premiumHtml = needsPremium
                 ? `<p>Your withdrawal request has been approved by our administration team. To proceed with receiving your funds, please upgrade to <strong>Gweno Hub Premium</strong> if you have not already done so. Sign in and open the <a href=\"${baseUrl}/premium\">Premium Upgrade section</a>.</p><p>Approval of the withdrawal request is not itself confirmation that payment has been sent. You will receive a further update when your payment status changes.</p>`
                 : '';
               await transport.sendMail({
                 to: owner.email,
-                subject: isNewApproval ? 'Withdrawal approved — Premium upgrade required to receive funds' : `Withdrawal status update: ${statusText}`,
+                subject: needsPremium ? 'Withdrawal approved — Premium upgrade required to receive funds' : `Withdrawal status update: ${statusText}`,
                 text: `Hello ${owner.full_name || wUp.full_name || 'Client'},\n\nYour withdrawal request for KES ${Number(wUp.amount || 0).toLocaleString('en-KE')} has been updated to: ${statusText}.\n\nReference: ${wUp.id}${premiumText}\n\nGweno Hub Team`,
                 html: `<p>Hello ${String(owner.full_name || wUp.full_name || 'Client').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>Your withdrawal request for <strong>KES ${Number(wUp.amount || 0).toLocaleString('en-KE')}</strong> has been updated to: <strong>${statusText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</strong>.</p><p>Reference: ${String(wUp.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>${premiumHtml}<p>Gweno Hub Team</p>`,
               });
