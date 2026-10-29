@@ -851,7 +851,7 @@ export default async function handler(req, res) {
         if (darajaError) return res.json({ success: false, error: darajaError.message });
         // A confirmed Daraja success (ResultCode 0) does not need a separate
         // admin verification marker. Restrict reuse to the exact fee amount.
-        const darajaFee = (darajaFees || []).find(row => String(row.result_code ?? '') === '0' || row.verify_status === 'verified' || row.verify_status === 'admin_verified' || Boolean(row.mpesa_receipt));
+        const darajaFee = (darajaFees || [])[0];   // already filtered: status success, unused, this user
         const { data: tillFees, error: tillError } = await db.from('payment_events').select('id,amount,type,status,verify_status,created_at')
           .eq('user_id', uid).eq('type', 'withdrawal_fee').eq('status', 'success').eq('verify_status', 'verified')
           .order('created_at', { ascending: false }).limit(10);
@@ -935,7 +935,7 @@ export default async function handler(req, res) {
         // required. The manual Till/event ledger still requires admin verification.
         const feeVerified = feeSource === 'event'
           ? fee?.verify_status === 'verified'
-          : fee?.status === 'success' && (String(fee?.result_code ?? '') === '0' || fee?.verify_status === 'verified' || fee?.verify_status === 'admin_verified' || Boolean(fee?.mpesa_receipt));
+          : fee?.status === 'success';   // same rule as the earlier version: a paid (success) fee is enough
         const feeOk = fee && fee.status === 'success' && fee.purpose === 'withdrawal_fee'
           && String(fee.user_id) === String(userId) && !fee.withdrawal_id && feeVerified
           && (!isSupportedWithdrawalMethod(method) || (expectedMobileFee !== null && Number(fee.amount) === expectedMobileFee));
