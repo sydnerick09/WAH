@@ -9,7 +9,7 @@ const PHONE_RE = /^(?:\+?254|0)?(7|1)\d{8}$/;
 const POLL_MS = 3000;
 const MAX_POLLS = 24; // ~72s
 
-export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawalAmount, defaultPhone = '', payLabel, onSuccess, onError }) {
+export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawalAmount, withdrawalDetails, defaultPhone = '', payLabel, onSuccess, onError }) {
   const [phone, setPhone] = useState(defaultPhone);
   const [state, setState] = useState('idle'); // idle | pushing | waiting | pending | success | failed
   const [msg, setMsg] = useState('');
@@ -87,7 +87,7 @@ export default function MpesaPay({ purpose, amount, withdrawalMethod, withdrawal
       const r = await fetch('/api/mpesa/stk-push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken, purpose, amount, withdrawalMethod, withdrawalAmount, phone: p }),
+        body: JSON.stringify({ authToken, purpose, amount, withdrawalMethod, withdrawalAmount, withdrawalDetails, phone: p }),
       });
       const d = await readJson(r);
 

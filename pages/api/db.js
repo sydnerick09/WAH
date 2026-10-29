@@ -9,6 +9,7 @@ import { computeXp, levelInfo } from '../../lib/gamification';
 import { sendResetEmail } from '../../lib/resetEmail';
 import { createEmailTransport } from '../../lib/emailTransport';
 import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../lib/withdrawalFees';
+import { findActiveWithdrawal, ACTIVE_WITHDRAWAL_MESSAGE, sendWithdrawalEmails } from '../../lib/withdrawalAuto';
 import { completeStk } from '../../lib/mpesaStore';
 import { sendSubscriptionEmail } from '../../lib/subscriptionEmail';
 
@@ -840,6 +841,7 @@ export default async function handler(req, res) {
       case 'getAvailableVerifiedWithdrawalFee': {
         const uid = verifyToken(p.authToken);
         if (!uid) return res.status(403).json({ success: false, error: 'Unauthorized' });
+        if (await findActiveWithdrawal(db, uid)) return res.json({ success: false, error: ACTIVE_WITHDRAWAL_MESSAGE });
         const expectedFee = Number(p.expectedFee);
         let darajaQuery = db.from('mpesa_transactions').select('id,checkout_request_id,amount,purpose,status,verify_status,result_code,result_desc,mpesa_receipt,withdrawal_id,created_at')
           .eq('user_id', uid).eq('purpose', 'withdrawal_fee').eq('status', 'success').is('withdrawal_id', null)
@@ -910,6 +912,24 @@ export default async function handler(req, res) {
           const { data: darajaFee } = await db.from('mpesa_transactions').select('*').eq('checkout_request_id', feeRef).maybeSingle();
           fee = darajaFee;
         }
+        // The server may already have created this withdrawal automatically when the
+        // fee was confirmed. Return it instead of failing with "fee already used".
+        if (feeSource === 'daraja' && fee && String(fee.user_id) === String(userId) && fee.purpose === 'withdrawal_fee') {
+          let linkedId = fee.withdrawal_id;
+          for (let i = 0; linkedId === 'creating' && i < 5; i += 1) {
+            await new Promise(r => setTimeout(r, 700));
+            const { data: again } = await db.from('mpesa_transactions').select('withdrawal_id').eq('id', fee.id).maybeSingle();
+            linkedId = again?.withdrawal_id;
+          }
+          if (linkedId && linkedId !== 'creating') {
+            const { data: existingWd } = await db.from('withdrawal_requests').select('*').eq('id', linkedId).eq('user_id', userId).maybeSingle();
+            if (existingWd) return res.json({ data: normWd(existingWd) });
+          }
+        }
+        // One withdrawal at a time: wait for the admin to approve the current one.
+        if (await findActiveWithdrawal(db, userId)) {
+          return res.json({ data: null, error: ACTIVE_WITHDRAWAL_MESSAGE });
+        }
         const expectedMobileFee = isSupportedWithdrawalMethod(method) ? getWithdrawalFee(amount, method) : null;
         // Daraja's successful STK result is the verification; no admin click is
         // required. The manual Till/event ledger still requires admin verification.
@@ -956,33 +976,13 @@ export default async function handler(req, res) {
         await logAction(db, { action: 'withdrawal_fee_verified', entity: 'withdrawal', entityId: data.id,
           detail: `method:${method} user:${userId} fee_tx:${feeRef} receipt:${fee.mpesa_receipt || fee.reference || '—'} amount:KES ${fee.amount}` });
 
-        // Best-effort email notifications: never roll back a valid withdrawal if email fails.
+        // Admin + client emails (shared helper; failures are written to the Audit log).
         try {
           const { data: account } = await db.from('users').select('email,full_name').eq('id', userId).maybeSingle();
-          const transporter = createEmailTransport('withdrawal');
-          const adminTo = process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || process.env.SMTP_REPLY_TO_EMAIL || 'businesshub.comke@gmail.com';
-          const subject = `Withdrawal request received — ${fullName}`;
-          const details = `Withdrawal ID: ${data.id}\nName: ${fullName}\nEmail: ${account?.email || 'Not available'}\nAmount: KES ${amount.toLocaleString('en-KE')}\nMethod: ${method}\nPhone: ${phone || 'Not provided'}\nStatus: Pending`;
-          if (adminTo) {
-            try {
-              await transporter.sendMail({
-                to: adminTo,
-                subject: `[Gweno Hub] ${subject}`,
-                text: details,
-                html: `<h2>New withdrawal request</h2><pre style="font-family:Arial,sans-serif;white-space:pre-wrap;">${details.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`,
-              });
-            } catch (mailErr) { console.error('[withdrawal-email] admin notice failed:', mailErr?.message || mailErr); }
-          }
-          if (account?.email) {
-            try {
-              await transporter.sendMail({
-                to: account.email,
-                subject: 'We received your withdrawal request',
-                text: `Hello ${account.full_name || fullName},\n\nWe received your withdrawal request for KES ${amount.toLocaleString('en-KE')}. Its current status is pending.\nWithdrawal reference: ${data.id}\n\nPlease ensure the account holder name and payment details match the details on your GWENO Hub account. Read the withdrawal Terms & Conditions before proceeding: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/terms\n\nGweno Hub Team`,
-                html: `<p>Hello ${(account.full_name || fullName).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},</p><p>We received your withdrawal request for <strong>KES ${amount.toLocaleString('en-KE')}</strong>. Its current status is <strong>pending</strong>.</p><p>Reference: ${String(data.id).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p><p>Please ensure your account holder name and payment details match the details on your GWENO Hub account. Please read the <a href="${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/terms">Withdrawal Terms &amp; Conditions</a> before proceeding.</p><p>Gweno Hub Team</p>`,
-              });
-            } catch (mailErr) { console.error('[withdrawal-email] client confirmation failed:', mailErr?.message || mailErr); }
-          }
+          await sendWithdrawalEmails(db, {
+            withdrawalId: data.id, fullName, accountName: account?.full_name, email: account?.email,
+            amount, method, phone, feeAmount: fee.amount, receipt: fee.mpesa_receipt || fee.reference || '', checkoutRequestId: feeRef,
+          });
         } catch (mailErr) { console.error('[withdrawal-email] notification setup failed:', mailErr?.message || mailErr); }
 
         return res.json({ data: normWd(data) });
@@ -1124,6 +1124,7 @@ export default async function handler(req, res) {
           return res.json({ success: false, eligible: false, error: 'You must have at least one task approved and credited to your balance before you can withdraw. Please apply for an available task first.' });
         }
         if (!u) return res.json({ success: false, error: 'User not found.' });
+        if (await findActiveWithdrawal(db, p.userId)) return res.json({ success: false, eligible: false, error: ACTIVE_WITHDRAWAL_MESSAGE });
         if (!isIntl && Number(u.balance || 0) < BULK_THRESHOLD_KES) {
           return res.json({ success: false, eligible: false, error: 'Balance is below the bulk-withdrawal threshold.' });
         }
@@ -1988,7 +1989,7 @@ export default async function handler(req, res) {
             return res.json({ success: true, verifyStatus: 'unverified', status: tx.status, message: 'Marked unverified. No payment effects were reversed.' });
           }
           if (tx.status !== 'success') {
-            const result = await completeStk({ checkoutRequestId: tx.checkout_request_id, resultCode: 0, resultDesc: 'Manually verified by admin', receipt: tx.mpesa_receipt || `ADMIN-VERIFIED-${id}` });
+            const result = await completeStk({ checkoutRequestId: tx.checkout_request_id, resultCode: 0, resultDesc: 'Manually verified by admin', receipt: tx.mpesa_receipt || '' });
             if (result?.error) return res.json({ success: false, error: result.error });
             if (result?.failed && !result?.applied && !result?.alreadyDone) return res.json({ success: false, error: 'Could not apply the normal payment success process.' });
           }
@@ -2091,7 +2092,9 @@ Gweno Hub Team` });
         try { const { data } = await db.from('payment_events').select('*').order('created_at', { ascending: false }).limit(500); events = data || []; } catch (_) {}
         const fromDaraja = daraja.map(r => ({
           id: `m${r.id}`, provider: 'daraja', type: r.purpose || '', amount: Number(r.amount || 0), currency: 'KES',
-          reference: r.mpesa_receipt || r.receipt || '', checkoutRequestId: r.checkout_request_id || '', phone: r.phone || '', email: '',
+          reference: (() => { const rc = String(r.mpesa_receipt || r.receipt || '').trim(); return rc && !/^ADMIN-VERIFIED-/i.test(rc) ? rc : (r.checkout_request_id || ''); })(),
+          receiptConfirmed: Boolean(String(r.mpesa_receipt || r.receipt || '').trim() && !/^ADMIN-VERIFIED-/i.test(String(r.mpesa_receipt || r.receipt || ''))),
+          checkoutRequestId: r.checkout_request_id || '', phone: r.phone || '', email: '',
           userId: r.user_id || '', status: mapDStatus(r.status),
           verifyStatus: (String(r.result_code) === '0' || r.status === 'success') ? 'verified' : 'unverified',
           resultDescription: r.result_desc || '', resultCode: r.result_code ?? '',

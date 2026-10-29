@@ -2,13 +2,18 @@
 // Always ACK with HTTP 200 + ResultCode 0 (otherwise Safaricom retries). The
 // shared secret in the query string authenticates the caller.
 import { verifyCallbackSecret } from '../../../lib/daraja';
-import { completeStk } from '../../../lib/mpesaStore';
+import { completeStk, getTransaction } from '../../../lib/mpesaStore';
 
 export const config = { api: { bodyParser: true } };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).json({ ResultCode: 0, ResultDesc: 'Ignored' });
-  if (!verifyCallbackSecret(req)) return res.status(200).json({ ResultCode: 0, ResultDesc: 'Rejected' });
+  if (!verifyCallbackSecret(req)) {
+    // If this appears in the Vercel logs, DARAJA_CALLBACK_SECRET does not match the
+    // secret in the callback URL Safaricom was given, and no receipts will be saved.
+    console.error('[stk-callback] REJECTED: callback secret mismatch — M-Pesa receipts will not be saved until this is fixed.');
+    return res.status(200).json({ ResultCode: 0, ResultDesc: 'Rejected' });
+  }
 
   try {
     const cb = req.body?.Body?.stkCallback;
@@ -26,6 +31,12 @@ export default async function handler(req, res) {
           checkoutRequestId: cb.CheckoutRequestID,
           metadataNames: items.map(it => it?.Name).filter(Boolean),
         });
+      }
+      // Safaricom calls only once. If the callback beats the database insert made by
+      // stk-push, wait briefly for the transaction row instead of losing the receipt.
+      for (let i = 0; i < 5; i += 1) {
+        if (await getTransaction(cb.CheckoutRequestID)) break;
+        await new Promise(resolve => setTimeout(resolve, 600));
       }
       const result = await completeStk({
         checkoutRequestId: cb.CheckoutRequestID,

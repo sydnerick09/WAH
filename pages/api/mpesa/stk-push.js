@@ -8,6 +8,7 @@ import { verifyToken } from '../../../lib/token';
 import { isConfigured, stkPush, isValidMsisdn, normalizePhone } from '../../../lib/daraja';
 import { createTransaction } from '../../../lib/mpesaStore';
 import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../../lib/withdrawalFees';
+import { findActiveWithdrawal, ACTIVE_WITHDRAWAL_MESSAGE } from '../../../lib/withdrawalAuto';
 
 const ACTIVATION_FEE = 50;
 const PREMIUM_FEE    = 599;
@@ -33,11 +34,12 @@ export default async function handler(req, res) {
 
   const db = adminDb();
   if (!db) return res.status(503).json({ success: false, message: 'Service unavailable.' });
-  const { data: u } = await db.from('users').select('balance').eq('id', uid).maybeSingle();
+  const { data: u } = await db.from('users').select('balance,completed_tasks,task_submissions').eq('id', uid).maybeSingle();
   if (!u) return res.status(401).json({ success: false, message: 'Please log in again.' });
 
   // Canonical, server-side amount per purpose.
   let amount = 0;
+  let pendingWithdrawal = null;   // details saved server-side so the withdrawal is created automatically
   if (purpose === 'activation' || purpose === 'activation_topup') {
     amount = Math.max(0, ACTIVATION_FEE - Number(u.balance || 0));
     if (amount <= 0) return res.json({ success: false, message: 'Your balance already covers activation.' });
@@ -57,6 +59,11 @@ export default async function handler(req, res) {
     const withdrawalMethod = String(req.body?.withdrawalMethod || '').toLowerCase();
     const requestedFee = Math.round(Number(req.body?.amount) || 0);
 
+    // One withdrawal at a time: block BEFORE the client is charged anything.
+    if (await findActiveWithdrawal(db, uid)) {
+      return res.json({ success: false, activeWithdrawal: true, message: ACTIVE_WITHDRAWAL_MESSAGE });
+    }
+
     // Mobile withdrawal fees are calculated server-side from the selected
     // withdrawal amount, never from a fee amount supplied by the browser.
     if (isSupportedWithdrawalMethod(withdrawalMethod)) {
@@ -73,6 +80,24 @@ export default async function handler(req, res) {
         return res.json({ success: false, message: `Invalid fee amount. The required ${withdrawalMethod === 'airtel' ? 'Airtel' : 'M-Pesa'} withdrawal fee for this amount is KES ${expectedFee.toLocaleString()}.` });
       }
       amount = expectedFee;
+
+      if (Number(u.completed_tasks || 0) < 1) {
+        return res.json({ success: false, message: 'You must have at least one task approved and credited to your balance before you can withdraw. Please apply for an available task first.' });
+      }
+
+      // Withdrawal details typed by the client. Saved on the server so the request
+      // is created automatically when Safaricom confirms the fee (even if the
+      // client closes the page). Older cached pages may not send them.
+      const wd = req.body?.withdrawalDetails;
+      if (wd && typeof wd === 'object') {
+        const fullName = String(wd.fullName || '').trim().slice(0, 80);
+        const wdPhone  = String(wd.phone || '').trim().slice(0, 20);
+        const idNumber = String(wd.idNumber || '').trim().slice(0, 20);
+        if (!fullName) return res.json({ success: false, message: 'Account holder name is required.' });
+        if (!isValidMsisdn(wdPhone)) return res.json({ success: false, message: 'Enter a valid withdrawal phone number.' });
+        if (!/^\d{8,10}$/.test(idNumber)) return res.json({ success: false, message: 'National ID must be 8 to 10 digits.' });
+        pendingWithdrawal = { fullName, phone: wdPhone, idNumber, amount: requestedWithdrawalAmount, method: withdrawalMethod, createdAt: Date.now() };
+      }
     } else {
       // Existing bank/international flows may use a bank-specific fee. Keep
       // their existing validation unchanged.
@@ -88,11 +113,29 @@ export default async function handler(req, res) {
     if (!ok) {
       return res.json({ success: false, message: data?.errorMessage || data?.ResponseDescription || 'Could not start the M-Pesa prompt. Please try again.' });
     }
-    const stored = await createTransaction({
-      checkoutRequestId: data.CheckoutRequestID,
-      merchantRequestId: data.MerchantRequestID,
-      userId: uid, purpose, amount, phone: normalizePhone(phone),
-    });
+    // Save the withdrawal details and the transaction together so the callback
+    // always finds both, however quickly Safaricom replies.
+    const savePending = async () => {
+      if (!pendingWithdrawal) return;
+      try {
+        const { data: fresh } = await db.from('users').select('task_submissions').eq('id', uid).maybeSingle();
+        const subs = { ...(fresh?.task_submissions || {}) };
+        const map = {};
+        const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+        for (const [k, v] of Object.entries(subs._pendingWd || {})) if (Number(v?.createdAt || 0) > cutoff) map[k] = v;
+        map[data.CheckoutRequestID] = pendingWithdrawal;
+        subs._pendingWd = map;
+        await db.from('users').update({ task_submissions: subs }).eq('id', uid);
+      } catch (e) { console.error('[stk-push] could not save withdrawal details:', e?.message || e); }
+    };
+    const [stored] = await Promise.all([
+      createTransaction({
+        checkoutRequestId: data.CheckoutRequestID,
+        merchantRequestId: data.MerchantRequestID,
+        userId: uid, purpose, amount, phone: normalizePhone(phone),
+      }),
+      savePending(),
+    ]);
     if (!stored?.ok) {
       // The prompt has already been sent to the phone. Never invite the client
       // to pay again just because transaction tracking failed to save.

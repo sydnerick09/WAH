@@ -479,6 +479,7 @@ function MpesaFlow({ user }) {
             amount={FEE_KES}
             withdrawalMethod="mpesa"
             withdrawalAmount={selectedAmount}
+            withdrawalDetails={{ fullName: fullName.trim(), phone: phone.trim(), idNumber: idNumber.trim() }}
             defaultPhone={phone || user?.phone || ''}
             payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
@@ -495,6 +496,9 @@ function MpesaFlow({ user }) {
             <p style={{ margin: '0 0 6px', fontSize: 14, color: '#1f2937', fontWeight: 700 }}>Withdrawal request submitted</p>
             <p style={{ margin: 0, fontSize: 13, color: '#1f2937', lineHeight: 1.65 }}>
               Your fee payment was successful and your withdrawal details have been submitted.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 13, color: '#1f2937', lineHeight: 1.65 }}>
+              <strong>Please note:</strong> you cannot start another withdrawal until this request has been approved by our admin team.
             </p>
           </div>
 
@@ -763,6 +767,7 @@ function AirtelFlow({ user }) {
             amount={FEE_KES}
             withdrawalMethod="airtel"
             withdrawalAmount={selectedAmount}
+            withdrawalDetails={{ fullName: fullName.trim(), phone: airtelPhone.trim(), idNumber: idNumber.trim() }}
             defaultPhone={user?.phone || ''}
             payLabel={`Pay KES ${FEE_KES.toLocaleString()} via M-Pesa`}
             onSuccess={handleFeeSuccess}
@@ -779,6 +784,9 @@ function AirtelFlow({ user }) {
             <p style={{ margin: '0 0 6px', fontSize: 14, color: '#1f2937', fontWeight: 700 }}>Withdrawal request submitted</p>
             <p style={{ margin: 0, fontSize: 13, color: '#1f2937', lineHeight: 1.65 }}>
               Your fee payment was successful and your withdrawal details have been submitted.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 13, color: '#1f2937', lineHeight: 1.65 }}>
+              <strong>Please note:</strong> you cannot start another withdrawal until this request has been approved by our admin team.
             </p>
           </div>
 
