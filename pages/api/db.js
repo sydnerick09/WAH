@@ -1342,6 +1342,8 @@ export default async function handler(req, res) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const { userId, balance, premium, premiumPaidAt, activatedAt, clearActivation } = p;
+        let holdEmailUser = null;
+        let holdEmailChanged = false;
 
         const updates = {};
         if (balance   !== undefined) updates.balance    = Number(balance);
@@ -1361,6 +1363,7 @@ export default async function handler(req, res) {
           else if (activatedAt !== undefined) subs._act = activatedAt;
 
           if (p.suspended !== undefined) {
+            holdEmailChanged = Boolean(subs._suspended) !== Boolean(p.suspended);
             subs._suspended   = Boolean(p.suspended);
             subs._suspendedAt = p.suspended ? Date.now() : null;
             subs._suspendReason = p.suspendReason ?? '';
@@ -1379,7 +1382,33 @@ export default async function handler(req, res) {
         const { data: updated, error: updErr } = await db.from('users')
           .update(updates).eq('id', userId).select().single();
         if (updErr) return res.json({ success: false, error: updErr.message });
-        return res.json({ success: true, user: norm(updated) });
+
+        // Notify the account holder only when the hold state actually changes.
+        // Reuse the existing configured SMTP transport; no new environment keys.
+        let emailSent = false;
+        let warning = '';
+        if (p.suspended !== undefined && holdEmailChanged) {
+          const recipient = updated?.email;
+          if (recipient) {
+            const isHeld = Boolean(p.suspended);
+            const reason = String(p.suspendReason || '').trim();
+            const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
+            const subject = isHeld ? 'Gweno Hub agent account placed on hold' : 'Gweno Hub agent account hold released';
+            const text = isHeld
+              ? `Hello ${updated.full_name || 'Agent'},\n\nYour Gweno Hub agent account has temporarily been placed on hold.\n\nReason: ${reason || 'An account review is required.'}\n\nWhile the hold is active, earning activities are paused. Please follow the instructions above and contact support if you need clarification. Your account can still be accessed to view the available information.\n\nAgent dashboard: ${baseUrl}/agent-dashboard\nSupport: businesshub.comke@gmail.com\n\nGweno Hub Team`
+              : `Hello ${updated.full_name || 'Agent'},\n\nYour Gweno Hub agent account hold has been released. You may now resume your normal agent activities.\n\nAgent dashboard: ${baseUrl}/agent-dashboard\nSupport: businesshub.comke@gmail.com\n\nGweno Hub Team`;
+            try {
+              await createEmailTransport('withdrawal').sendMail({ to: recipient, subject, text });
+              emailSent = true;
+            } catch (mailError) {
+              warning = 'Account status was updated, but the email could not be sent. Check the existing SMTP configuration.';
+              console.error('[agent-hold-email]', mailError?.message || mailError);
+            }
+          } else {
+            warning = 'Account status was updated, but this agent has no email address.';
+          }
+        }
+        return res.json({ success: true, user: norm(updated), emailSent, ...(warning ? { warning } : {}) });
       }
 
       case 'adminListManualWithdrawals': {
