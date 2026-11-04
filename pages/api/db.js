@@ -25,6 +25,42 @@ const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 const AGENT_REWARD_MILESTONE = 10;
 const AGENT_REWARD_KES = 25000;
 
+async function awardClientReferral(db, referredUser) {
+  const referrerId = referredUser?.referred_by;
+  if (!referrerId || String(referrerId) === String(referredUser.id)) return null;
+  const { data: referrer, error: lookupError } = await db.from('users')
+    .select('id,full_name,email,balance,referral_count,task_submissions').eq('id', referrerId).maybeSingle();
+  if (lookupError) throw lookupError;
+  if (!referrer || referrer.task_submissions?._agent?.status === 'active') return null;
+
+  const refSubs = { ...(referrer.task_submissions || {}) };
+  const rewarded = { ...(refSubs._clientReferralRewards || {}) };
+  const referredId = String(referredUser.id);
+  if (rewarded[referredId]) return { alreadyRewarded: true, referrer };
+
+  rewarded[referredId] = { amount: 70, at: Date.now() };
+  refSubs._clientReferralRewards = rewarded;
+  const { data: updatedReferrer, error: rewardError } = await db.from('users').update({
+    balance: Number(referrer.balance || 0) + 70,
+    referral_count: Number(referrer.referral_count || 0) + 1,
+    task_submissions: refSubs,
+  }).eq('id', referrer.id).select('id,full_name,email,balance,referral_count').single();
+  if (rewardError) throw rewardError;
+
+  if (updatedReferrer?.email) {
+    try {
+      const mailer = createEmailTransport('transactional');
+      await mailer.sendMail({
+        to: updatedReferrer.email,
+        subject: 'You earned KES 70 from a successful GWENO referral',
+        text: `Hello ${updatedReferrer.full_name || 'Client'},\n\nYour referral has successfully topped up at least KES 50 and activated their GWENO account. KES 70 has been credited to your main earnings balance.\n\nReferral: ${referredUser.full_name || 'New client'}\nReward: KES 70\nYour updated balance: KES ${Number(updatedReferrer.balance || 0).toLocaleString('en-KE')}\n\nThank you for growing GWENO.\nGWENO Team`,
+      });
+      try { mailer.close(); } catch (_) {}
+    } catch (mailError) { console.error('[client-referral-reward-email]', mailError?.message || mailError); }
+  }
+  return { referrer: updatedReferrer };
+}
+
 function applyAgentMilestoneRewards(agent, qualifiedCount) {
   const count = Math.max(0, Math.floor(Number(qualifiedCount) || 0));
   const earnedMilestones = Array.isArray(agent.rewardedMilestones) ? agent.rewardedMilestones.map(Number) : [];
@@ -499,10 +535,8 @@ export default async function handler(req, res) {
         if (error) return res.json({ success: false, message: error.message });
 
         if (referredBy && referredBy !== id) {
-          const { data: ref } = await db.from('users').select('balance,task_submissions').eq('id', referredBy).maybeSingle();
-          if (ref && ref.task_submissions?._agent?.status !== 'active') {
-            await db.from('users').update({ balance: (ref.balance || 0) + 70 }).eq('id', referredBy);
-          }
+          // Ordinary client referral rewards are issued only after the referred
+          // client completes the KES 50 activation flow. Active-agent notices remain separate.
           // Registration email goes only to the direct referrer when that referrer is an active agent.
           // Ancestor agents receive commission emails only after a qualifying withdrawal approval.
           try {
@@ -666,11 +700,9 @@ export default async function handler(req, res) {
 
         try { if (updated?.email) await createEmailTransport('subscription').sendMail({ to: updated.email, subject: 'Your Gweno Hub account is activated', text: `Hello ${updated.full_name || 'Client'},\n\nYour Gweno Hub account has been activated successfully. Your activation fee of KSh 50 has been applied. You can now sign in and continue to your dashboard.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGweno Hub Team` }); } catch (e) { console.error('[activation-confirmation-email]', e?.message || e); }
 
-        if (u.referred_by && u.referred_by !== userId) {
-          const { data: ref } = await db.from('users').select('balance,referral_count,task_submissions').eq('id', u.referred_by).maybeSingle();
-          if (ref && ref.task_submissions?._agent?.status !== 'active') {
-            await db.from('users').update({ balance: (ref.balance || 0) + 132, referral_count: (ref.referral_count || 0) + 1 }).eq('id', u.referred_by);
-          }
+        if (updated && u.referred_by && u.referred_by !== userId) {
+          try { await awardClientReferral(db, { ...u, id: userId }); }
+          catch (referralError) { console.error('[activateUser-referral]', referralError?.message || referralError); }
         }
 
         return res.json({ data: norm(updated) });
@@ -759,15 +791,9 @@ export default async function handler(req, res) {
 
         try { if (updated?.email) await createEmailTransport('subscription').sendMail({ to: updated.email, subject: 'Your Gweno Hub account is activated', text: `Hello ${updated.full_name || 'Client'},\n\nYour Gweno Hub account has been activated successfully. Your activation fee of KSh 50 has been deducted from your balance. You can now sign in and continue to your dashboard.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGweno Hub Team` }); } catch (e) { console.error('[activation-confirmation-email]', e?.message || e); }
 
-        if (u.referred_by && u.referred_by !== userId) {
-          const { data: ref } = await db.from('users')
-            .select('balance,referral_count').eq('id', u.referred_by).maybeSingle();
-          if (ref) {
-            await db.from('users').update({
-              balance:        (ref.balance || 0) + 132,
-              referral_count: (ref.referral_count || 0) + 1,
-            }).eq('id', u.referred_by);
-          }
+        if (updated && u.referred_by && u.referred_by !== userId) {
+          try { await awardClientReferral(db, { ...u, id: userId }); }
+          catch (referralError) { console.error('[activateWithBalance-referral]', referralError?.message || referralError); }
         }
         return res.json({ data: norm(updated) });
       }

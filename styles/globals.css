@@ -1831,7 +1831,7 @@ button.profile-row:hover { background: #F4F4F5; }
 .gweno-native-app .dash-main { padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
 .gweno-native-app .whatsapp-chat-button { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); right: 16px; z-index: 90; }
 .gweno-app-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 250; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: #fff; border-top: 1px solid #e5e7eb; box-shadow: 0 -5px 20px rgba(0,0,0,.08); }
-.gweno-app-nav-item { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 5px 2px; border: 0; border-radius: 10px; background: transparent; color: #555; font: 600 10px/1.2 Arial, sans-serif; cursor: pointer; }
+.gweno-app-nav-item { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 10px 2px; border: 0; border-radius: 10px; background: transparent; color: #555; font: 600 10px/1.2 Arial, sans-serif; cursor: pointer; }
 .gweno-app-nav-item svg { color: currentColor; }
 .gweno-app-nav-item.active, .gweno-app-nav-item.selected { color: #000; }
 .gweno-app-nav-item.active svg { stroke-width: 2.2; }
@@ -1848,3 +1848,10 @@ button.profile-row:hover { background: #F4F4F5; }
   .gweno-native-app .dash-avatar { width: 34px; height: 34px; }
   .gweno-native-app .dash-main { padding-left: 14px; padding-right: 14px; }
 }
+
+/* Native app uses an icon-only, persistent bottom tab bar (official-app pattern). */
+.gweno-native-app .gweno-app-nav-item span { display: none !important; }
+.gweno-native-app .gweno-app-bottom-nav { min-height: 56px; padding-top: 7px; padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px)); }
+.gweno-native-app .gweno-app-nav-item { min-height: 42px; border-radius: 0; }
+.gweno-native-app .gweno-app-nav-item svg { width: 24px; height: 24px; }
+.gweno-native-app { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }

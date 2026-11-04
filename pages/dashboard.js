@@ -534,13 +534,13 @@ function ReferralModal({ user, onClose }) {
         <div className="pay-modal-header" style={{ background: '#000000' }}>
           <div>
             <div className="pay-modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="link" size={20} /> Your Referral Link</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Earn KES 132 per referral</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Earn KES 70 per successful referral</div>
           </div>
           <button className="modal-close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>×</button>
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb' }}>
-            Share your referral link and earn <strong style={{ color: '#374151' }}>KES 132</strong> for every friend who signs up and activates their account.
+            Share your referral link and earn <strong style={{ color: '#374151' }}>KES 70</strong> when a referred client tops up at least KES 50 and successfully activates their account.
           </div>
           <div style={{ marginBottom: 16 }}>
             <div className="pay-phone-label">Your unique referral link</div>
@@ -565,11 +565,11 @@ function ReferralModal({ user, onClose }) {
               <div className="referral-stat-label">Referrals</div>
             </div>
             <div className="referral-stat">
-              <div className="referral-stat-num">KES {((user?.referralCount || 0) * 132).toLocaleString()}</div>
+              <div className="referral-stat-num">KES {((user?.referralCount || 0) * 70).toLocaleString()}</div>
               <div className="referral-stat-label">Earned</div>
             </div>
             <div className="referral-stat">
-              <div className="referral-stat-num">KES 132</div>
+              <div className="referral-stat-num">KES 70</div>
               <div className="referral-stat-label">Per Referral</div>
             </div>
           </div>
@@ -612,8 +612,10 @@ function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onM
       <div className="hamburger-menu">
         <div className="hamburger-header">
           <div className="hamburger-user">
-            <div className="dash-avatar" style={{ width: 48, height: 48, fontSize: 20 }}>
-              {user?.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+            <div className="dash-avatar" style={{ width: 48, height: 48, fontSize: 20, overflow: 'hidden' }}>
+              {user?.avatar
+                ? <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <img src="/icons/gweno-192.png" alt="GWENO" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--white)' }}>{user?.fullName}</div>
@@ -933,7 +935,7 @@ export default function Dashboard() {
             <Link href="/profile" className="dash-avatar" aria-label="Open profile" title="Profile">
               {user.avatar
                 ? <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                : initials}
+                : <img src="/icons/gweno-192.png" alt="GWENO" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />}
             </Link>
             <button className="hamburger-btn" onClick={() => setShowMenu(true)} aria-label="Open menu">
               <span /><span /><span />

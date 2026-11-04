@@ -53,9 +53,9 @@ public class MainActivity extends Activity {
         webView.setBackgroundColor(Color.WHITE);
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
 
-        bottomNavigation = buildBottomNavigation();
-        FrameLayout.LayoutParams navParams = new FrameLayout.LayoutParams(-1, dp(64), Gravity.BOTTOM);
-        root.addView(bottomNavigation, navParams);
+        // Navigation is rendered by the app-only React shell so it stays
+        // consistent across every route without duplicating a second native bar.
+        bottomNavigation = null;
         setContentView(root);
         applySystemBarInsets(root);
 
@@ -172,8 +172,7 @@ public class MainActivity extends Activity {
                 left = insets.getSystemWindowInsetLeft();
                 right = insets.getSystemWindowInsetRight();
             }
-            webView.setPadding(left, top, right, dp(64));
-            bottomNavigation.setPadding(left, 0, right, bottom);
+            webView.setPadding(left, top, right, bottom);
             return insets;
         });
     }

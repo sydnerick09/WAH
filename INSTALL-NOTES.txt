@@ -1,0 +1,17 @@
+GWENO UPDATED FILES
+
+Copy the folders and files in this archive into the root of your existing GWENO project, keeping the same folder structure and allowing the files to be replaced.
+
+Included changes:
+- New G brand image for PWA/site icons, Android launcher icons, Android branding asset and default profile avatar.
+- Client referral reward changed to KES 70. Ordinary referral rewards are no longer paid at registration; they are awarded after the referred account successfully activates. The referrer receives an email confirming the KES 70 reward.
+- Referral balance is credited to the referrer's main balance, and the referral reward is recorded against the referred account to prevent repeat rewards.
+- Android app bottom navigation is icon-only and stays in the React app shell across routes. The duplicate native bottom bar was removed.
+- Android status/navigation bar colors and app label updated for the GWENO branding.
+
+After copying the files:
+1. Run npm install if your dependencies need restoring.
+2. Run npm run build and deploy the website to update the PWA/site icons and referral flow.
+3. Rebuild the Android APK from android-app using Android Studio/Gradle. The existing APK file is not included or rebuilt in this source patch; a newly built APK is required for the launcher icon and native navigation changes to appear in an installed Android app.
+
+Validation: ESLint completed with no errors (existing hook and image-optimization warnings remain). A complete Next.js production build could not finish in this environment because the Next.js SWC binary was unavailable and network access to npm was blocked.
