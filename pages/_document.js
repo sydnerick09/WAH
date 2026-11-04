@@ -6,6 +6,7 @@ export default function Document() {
     <Html lang="en">
       <Head>
         <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="description" content="Gweno Hub, Work, Earn, Grow. Complete tasks, post assignments, and earn money from anywhere in Kenya." />
         <meta name="theme-color" content="#0B0F19" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
