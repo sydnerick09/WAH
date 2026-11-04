@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
         setContentView(webView);
 
         WebSettings settings = webView.getSettings();
+        settings.setUserAgentString(settings.getUserAgentString() + " GWENOAndroidApp");
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);

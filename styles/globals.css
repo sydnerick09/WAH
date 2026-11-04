@@ -203,7 +203,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 }
 .hero-content {
   position: relative; z-index: 2;
-  max-width: 1200px; margin: 0 auto; padding: 120px 24px 80px;
+  max-width: 1200px; margin: 0 auto; padding: 80px 24px 80px;
 }
 .hero-tag {
   display: inline-block;
@@ -1821,4 +1821,30 @@ button.profile-row:hover { background: #F4F4F5; }
     border-radius: 14px !important;
     box-shadow: 0 4px 18px rgba(15,23,42,.08) !important;
   }
+}
+
+
+/* Native GWENO Android app navigation: deliberately scoped so the website is unchanged. */
+.gweno-native-app .dash-navbar { padding-top: env(safe-area-inset-top, 0px); }
+.gweno-native-app .dash-navbar-inner { min-height: 64px; height: auto; }
+.gweno-native-app .dash-user-info { display: none; }
+.gweno-native-app .dash-main { padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
+.gweno-native-app .whatsapp-chat-button { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); right: 16px; z-index: 90; }
+.gweno-app-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 250; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: #fff; border-top: 1px solid #e5e7eb; box-shadow: 0 -5px 20px rgba(0,0,0,.08); }
+.gweno-app-nav-item { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 5px 2px; border: 0; border-radius: 10px; background: transparent; color: #555; font: 600 10px/1.2 Arial, sans-serif; cursor: pointer; }
+.gweno-app-nav-item svg { color: currentColor; }
+.gweno-app-nav-item.active, .gweno-app-nav-item.selected { color: #000; }
+.gweno-app-nav-item.active svg { stroke-width: 2.2; }
+.gweno-wallet-backdrop { position: fixed; inset: 0; z-index: 260; background: rgba(0,0,0,.35); }
+.gweno-wallet-sheet { position: fixed; left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 261; padding: 14px; border: 1px solid #e5e7eb; border-radius: 16px; background: #fff; box-shadow: 0 12px 40px rgba(0,0,0,.2); }
+.gweno-wallet-sheet-title { display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 10px; font-weight: 800; color: #111; }
+.gweno-wallet-sheet-title button { border: 0; background: transparent; font-size: 25px; color: #555; }
+.gweno-wallet-sheet > button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 8px; border: 0; border-top: 1px solid #eee; background: #fff; color: #111; text-align: left; font-size: 14px; font-weight: 600; }
+.gweno-native-app .dash-bell { min-width: 40px; min-height: 40px; }
+@media (max-width: 480px) {
+  .gweno-native-app .dash-navbar-inner { padding-left: 14px; padding-right: 14px; }
+  .gweno-native-app .dash-logo { font-size: 17px; }
+  .gweno-native-app .dash-user { gap: 7px; }
+  .gweno-native-app .dash-avatar { width: 34px; height: 34px; }
+  .gweno-native-app .dash-main { padding-left: 14px; padding-right: 14px; }
 }

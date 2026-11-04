@@ -725,8 +725,8 @@ export default async function handler(req, res) {
 
         const subs     = { ...(u.task_submissions || {}) };
         const pbal     = Number(subs._pbal || 0);
-        if (pbal < 599) return res.json({ data: null, error: 'You need at least KES 599 in your Premium balance to subscribe.' });
-        const consumed = 599;
+        if (pbal < 300) return res.json({ data: null, error: 'You need at least KES 300 in your Premium balance to subscribe.' });
+        const consumed = 300;
         subs._pbal     = pbal - consumed;
         const { data: updated, error: updateError } = await db.from('users').update({
           premium:          true,
@@ -734,7 +734,7 @@ export default async function handler(req, res) {
           task_submissions: subs,
         }).eq('id', userId).select().single();
         if (updateError) return res.json({ data: null, error: updateError.message });
-        try { if (updated?.email) await createEmailTransport('transactional').sendMail({ to: updated.email, subject: 'Your Gweno Hub Premium Is Active', text: `Hello ${updated.full_name || 'Client'},\n\nYour Premium subscription is now active. KES 599 has been applied from your Premium balance.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGWENO Hub Team` }); }
+        try { if (updated?.email) await createEmailTransport('transactional').sendMail({ to: updated.email, subject: 'Your Gweno Hub Premium Is Active', text: `Hello ${updated.full_name || 'Client'},\n\nYour Premium subscription is now active. KES 300 has been applied from your Premium balance.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGWENO Hub Team` }); }
         catch (mailErr) { console.error('[premium-balance-email]', mailErr?.message || mailErr); }
         return res.json({ data: norm(updated) });
       }
@@ -2067,7 +2067,7 @@ export default async function handler(req, res) {
             return res.json({ success: true, verifyStatus: 'verified', status: 'successful', message: 'This payment is already verified and Premium is active.' });
           }
           if (['premium', 'premium_membership'].includes(type)) {
-            if (amount !== 599) return res.json({ success: false, error: `Premium verification requires a KES 599 payment; this record is KES ${amount}.` });
+            if (amount !== 300) return res.json({ success: false, error: `Premium verification requires a KES 300 payment; this record is KES ${amount}.` });
             if (!user) return res.json({ success: false, error: 'The account linked to this payment could not be found.' });
             const { count, error: eligibilityError } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', event.user_id).eq('status', 'approved');
             if (eligibilityError || Number(count || 0) < 1) return res.json({ success: false, error: 'Premium can only be activated after an admin-approved withdrawal. The payment has not been applied; please review the account eligibility.' });

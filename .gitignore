@@ -38,3 +38,22 @@ next-env.d.ts
 
 .env.local
 .env*
+
+# Android / Gradle generated files
+**/.gradle/
+**/build/
+**/.idea/
+*.iml
+local.properties
+
+# Git backup folders
+.git-corrupt-backup-*/
+
+# Next.js generated files
+.next/
+node_modules/
+
+# Environment secrets
+.env
+.env.local
+.env.*.local

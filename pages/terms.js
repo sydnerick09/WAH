@@ -727,7 +727,7 @@ Since we do not meet clients in person for individual verification, it is import
 
 <p>
   The current one-time account activation fee is <strong>KES 50</strong>,
-  the Premium subscription fee is <strong>KES 599 per month</strong>, and the
+  the Premium subscription fee is <strong>KES 300 per month</strong>, and the
   fee for a name or profile contact-detail update is <strong>KES 480</strong>,
   unless GWENO Hub publishes a revised fee. Withdrawal processing fees vary by
   withdrawal method and balance amount; the applicable fee is shown before

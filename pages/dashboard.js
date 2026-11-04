@@ -653,12 +653,17 @@ function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onM
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const router = useRouter();
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') setIsNativeApp(/GWENOAndroidApp/i.test(navigator.userAgent));
+  }, []);
   const [user,    setUser]    = useState(null);
   const [mounted, setMounted] = useState(false);
 
   const [selectedTask,        setSelectedTask]        = useState(null);
   const [showReferral,        setShowReferral]        = useState(false);
   const [showMenu,            setShowMenu]            = useState(false);
+  const [showWalletNav,       setShowWalletNav]       = useState(false);
+  const [isNativeApp,         setIsNativeApp]         = useState(false);
   const [showTraining,        setShowTraining]        = useState(false);
   const [showPostTask,        setShowPostTask]        = useState(false);
   const [showMyTasks,         setShowMyTasks]         = useState(false);
@@ -911,7 +916,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="dashboard">
+    <div className={`dashboard${isNativeApp ? ' gweno-native-app' : ''}`}>
       {/* Navbar */}
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">

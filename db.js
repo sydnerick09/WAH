@@ -723,8 +723,8 @@ export default async function handler(req, res) {
 
         const subs     = { ...(u.task_submissions || {}) };
         const pbal     = Number(subs._pbal || 0);
-        if (pbal < 599) return res.json({ data: null, error: 'You need at least KES 599 in your Premium balance to subscribe.' });
-        const consumed = 599;
+        if (pbal < 300) return res.json({ data: null, error: 'You need at least KES 300 in your Premium balance to subscribe.' });
+        const consumed = 300;
         subs._pbal     = pbal - consumed;
         const { data: updated } = await db.from('users').update({
           premium:          true,

@@ -5,7 +5,7 @@ import { verifyToken } from '../../../lib/token';
 import { isConfigured, stkPush, isValidMsisdn, normalizePhone } from '../../../lib/daraja';
 import { createTransaction } from '../../../lib/mpesaStore';
 
-const PREMIUM_FEE = 599;
+const PREMIUM_FEE = 300;
 
 function adminDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
