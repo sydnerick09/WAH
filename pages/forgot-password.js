@@ -63,7 +63,7 @@ export default function ForgotPassword() {
       <div className="auth-grid-bg" />
       <div className="auth-card">
         <Link href="/" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
-          <img className="auth-logo-image" src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" />
+          <div className="auth-logo">GWENO HUB</div>
         </Link>
         <p className="auth-tagline">Work. Earn. Grow.</p>
         <h1 className="auth-title">Reset your password</h1>

@@ -158,7 +158,7 @@ export default function PrivacyPage() {
       `}</style>
 
       <header>
-        <img className="legal-brand-logo" src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" />
+        <div className="brand">GWENO HUB</div>
       </header>
 
       <nav className="legal-nav" aria-label="Legal navigation">

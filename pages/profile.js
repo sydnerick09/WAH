@@ -347,7 +347,7 @@ export default function ProfilePage() {
           <div className="profile-avatar" onClick={onAvatarClick} title={user.avatar ? 'View profile photo' : 'Add profile picture'}>
             {user.avatar
               ? <img src={user.avatar} alt="Profile" />
-              : <img src="/icons/gweno-192.png" alt="GWENO" />}
+              : (user.username || user.fullName || 'U').charAt(0).toUpperCase()}
             <span className="profile-avatar-cam" role="button" aria-label="Change profile picture" onClick={e => { e.stopPropagation(); startChange(); }}>
               <Icon name="camera" size={18} />
             </span>

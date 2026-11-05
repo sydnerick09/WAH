@@ -615,7 +615,7 @@ function HamburgerMenu({ user, onClose, onProfile, onUpgrade, onLeaderboard, onM
             <div className="dash-avatar" style={{ width: 48, height: 48, fontSize: 20, overflow: 'hidden' }}>
               {user?.avatar
                 ? <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <img src="/icons/gweno-192.png" alt="GWENO" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                : (user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--white)' }}>{user?.fullName}</div>
@@ -922,7 +922,7 @@ export default function Dashboard() {
       {/* Navbar */}
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">
-          <Link href="/" className="dash-logo" aria-label="GWENO Hub"><img src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" /></Link>
+          <Link href="/" className="dash-logo">GWENO HUB</Link>
           <div className="dash-user">
             <Link href="/profile" data-tour="profile" className="dash-user-info" style={{ textDecoration: 'none' }}>
               <div className="dash-user-name">{user.fullName}</div>
@@ -935,7 +935,7 @@ export default function Dashboard() {
             <Link href="/profile" className="dash-avatar" aria-label="Open profile" title="Profile">
               {user.avatar
                 ? <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                : <img src="/icons/gweno-192.png" alt="GWENO" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />}
+                : (user.fullName || user.username || 'U').charAt(0).toUpperCase()}
             </Link>
             <button className="hamburger-btn" onClick={() => setShowMenu(true)} aria-label="Open menu">
               <span /><span /><span />

@@ -730,31 +730,36 @@ export default function Manual() {
         transition: none;
       }
     }
-      .manual-brand-logo { width: 104px; height: 56px; object-fit: contain; display: block; }
+.manual-brand-logo {
+  width: 104px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
+}
       `}
       </style>
 
-<header className="topbar">
-  <img className="manual-brand-logo" src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" />
+      <header className="topbar">
+        <div className="topbar-logo">GWENO HUB</div>
 
-  <div className="topbar-badge">
-    Official User Guide &amp; Member Handbook
-  </div>
+        <div className="topbar-badge">
+          Official User Guide &amp; Member Handbook
+        </div>
 
-  <nav className="topbar-right" aria-label="Legal and support links">
-    <a href="https://swastaskhub.github.io/terms-/">
-      Terms &amp; Conditions
-    </a>
+        <nav className="topbar-right" aria-label="Legal and support links">
+          <a href="https://swastaskhub.github.io/terms-/">
+            Terms &amp; Conditions
+          </a>
 
-    <a href="https://swastaskhub.github.io/privacy/">
-      Privacy Policy
-    </a>
+          <a href="https://swastaskhub.github.io/privacy/">
+            Privacy Policy
+          </a>
 
-    <a href="https://swastaskhub.github.io/conduct/">
-      Conduct Policy
-    </a>
-  </nav>
-</header>
+          <a href="https://swastaskhub.github.io/conduct/">
+            Conduct Policy
+          </a>
+        </nav>
+      </header>
 
 
 <div className="layout">
@@ -762,8 +767,8 @@ export default function Manual() {
 <main className="main">
 
   {/* ==========================================================
-       HERO
-  =========================================================== */}
+    HERO
+=========================================================== */}
 
   <div className="hero" id="hero">
 
