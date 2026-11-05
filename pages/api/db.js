@@ -53,7 +53,7 @@ async function awardClientReferral(db, referredUser) {
       await mailer.sendMail({
         to: updatedReferrer.email,
         subject: 'You earned KES 70 from a successful GWENO referral',
-        text: `Hello ${updatedReferrer.full_name || 'Client'},\n\nYour referral has successfully topped up at least KES 50 and activated their GWENO account. KES 70 has been credited to your main earnings balance.\n\nReferral: ${referredUser.full_name || 'New client'}\nReward: KES 70\nYour updated balance: KES ${Number(updatedReferrer.balance || 0).toLocaleString('en-KE')}\n\nThank you for growing GWENO.\nGWENO Team`,
+        text: `Hello ${updatedReferrer.full_name || 'Client'},\n\nYour referral has successfully activated their GWENO account. KES 70 has been credited to your main earnings balance.\n\nReferral: ${referredUser.full_name || 'New client'}\nReward: KES 70\nYour updated balance: KES ${Number(updatedReferrer.balance || 0).toLocaleString('en-KE')}\n\nThank you for growing GWENO.\nGWENO Team`,
       });
       try { mailer.close(); } catch (_) {}
     } catch (mailError) { console.error('[client-referral-reward-email]', mailError?.message || mailError); }

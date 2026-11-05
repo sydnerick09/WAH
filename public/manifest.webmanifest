@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "GWENO",
+  "name": "GWENOHUB",
   "short_name": "GWENO",
-  "description": "Work, Earn, Grow.",
+  "description": "Work • Earn • Grow",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

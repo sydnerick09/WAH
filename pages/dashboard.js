@@ -540,7 +540,7 @@ function ReferralModal({ user, onClose }) {
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb' }}>
-            Share your referral link and earn <strong style={{ color: '#374151' }}>KES 70</strong> when a referred client tops up at least KES 50 and successfully activates their account.
+            Share your referral link and earn <strong style={{ color: '#374151' }}>KES 70</strong> when a referred client successfully activates their account.
           </div>
           <div style={{ marginBottom: 16 }}>
             <div className="pay-phone-label">Your unique referral link</div>

@@ -40,10 +40,10 @@ function NativeAppNavigation() {
         </div>
       )}
       <nav className="gweno-app-bottom-nav" aria-label="App navigation">
-        <button className={`gweno-app-nav-item${router.pathname === '/dashboard' ? ' active' : ''}`} onClick={() => router.push('/dashboard')} aria-label="Dashboard"><Icon name="home" size={21} /></button>
+        <button className={`gweno-app-nav-item${(router.pathname === '/dashboard' || router.pathname === '/') ? ' active' : ''}`} onClick={() => router.push('/dashboard')} aria-label="Dashboard"><Icon name="home" size={21} /></button>
         <button className={`gweno-app-nav-item${walletOpen ? ' selected' : ''}`} onClick={() => setWalletOpen(v => !v)} aria-label="My Wallet" aria-expanded={walletOpen}><Icon name="cash" size={21} /></button>
-        <button className="gweno-app-nav-item" onClick={goTasks} aria-label="Tasks"><Icon name="tasks" size={21} /></button>
-        <button className={`gweno-app-nav-item${router.pathname === '/profile' ? ' active' : ''}`} onClick={() => router.push('/profile')} aria-label="My Profile"><Icon name="user" size={21} /></button>
+        <button className={`gweno-app-nav-item${router.asPath.includes('#tasks-section') ? ' active' : ''}`} onClick={goTasks} aria-label="Tasks"><Icon name="tasks" size={21} /></button>
+        <button className={`gweno-app-nav-item${router.pathname === '/profile' ? ' active' : ''}`} onClick={() => router.push('/profile')} aria-label="Profile"><Icon name="user" size={21} /></button>
       </nav>
     </>
   );

@@ -23,6 +23,8 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -35,23 +37,40 @@ public class MainActivity extends Activity {
     private WebView webView;
     private LinearLayout bottomNavigation;
     private ValueCallback<Uri[]> filePathCallback;
+    private FrameLayout splashOverlay;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private long launchStartedAt;
+    private boolean pageReady = false;
+    private boolean splashHidden = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        launchStartedAt = android.os.SystemClock.elapsedRealtime();
         Window window = getWindow();
-        window.setStatusBarColor(Color.rgb(11, 15, 25));
-        window.setNavigationBarColor(Color.rgb(11, 15, 25));
+        window.setStatusBarColor(Color.BLACK);
+        window.setNavigationBarColor(Color.BLACK);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.setNavigationBarContrastEnforced(false);
         }
 
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.WHITE);
+        root.setBackgroundColor(Color.BLACK);
         webView = new WebView(this);
         webView.setBackgroundColor(Color.WHITE);
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
+        webView.setVisibility(View.INVISIBLE);
+        splashOverlay = buildSplashScreen();
+        root.addView(splashOverlay, new FrameLayout.LayoutParams(-1, -1));
+        mainHandler.postDelayed(() -> {
+            if (!splashHidden) {
+                // Fail open if a slow or unavailable network prevents page load.
+                pageReady = true;
+                webView.setVisibility(View.VISIBLE);
+                hideSplashScreen();
+            }
+        }, 12000);
 
         // Navigation is rendered by the app-only React shell so it stays
         // consistent across every route without duplicating a second native bar.
@@ -93,6 +112,17 @@ public class MainActivity extends Activity {
         });
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageFinished(WebView view, String url) {
+                pageReady = true;
+                long elapsed = android.os.SystemClock.elapsedRealtime() - launchStartedAt;
+                long remaining = Math.max(0, 700 - elapsed);
+                mainHandler.postDelayed(() -> {
+                    webView.setVisibility(View.VISIBLE);
+                    hideSplashScreen();
+                }, remaining);
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return handleNavigation(request.getUrl());
             }
@@ -105,6 +135,51 @@ public class MainActivity extends Activity {
 
         if (savedInstanceState != null) webView.restoreState(savedInstanceState);
         if (webView.getUrl() == null) webView.loadUrl(HOME_URL);
+    }
+
+    private FrameLayout buildSplashScreen() {
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.BLACK);
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        brand.setGravity(Gravity.CENTER);
+        TextView name = new TextView(this);
+        name.setText("GWENOHUB");
+        name.setTextColor(Color.WHITE);
+        name.setTextSize(30);
+        name.setLetterSpacing(0.10f);
+        name.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        name.setGravity(Gravity.CENTER);
+        TextView tagline = new TextView(this);
+        tagline.setText("Work • Earn • Grow");
+        tagline.setTextColor(Color.WHITE);
+        tagline.setTextSize(13);
+        tagline.setLetterSpacing(0.035f);
+        tagline.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+        tagline.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams taglineParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        taglineParams.topMargin = dp(8);
+        brand.addView(name);
+        brand.addView(tagline, taglineParams);
+        FrameLayout.LayoutParams centered = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER);
+        overlay.addView(brand, centered);
+        return overlay;
+    }
+
+    private void hideSplashScreen() {
+        if (splashHidden || !pageReady) return;
+        splashHidden = true;
+        if (splashOverlay != null) {
+            splashOverlay.animate().alpha(0f).setDuration(160).withEndAction(() -> {
+                if (splashOverlay != null) {
+                    splashOverlay.setVisibility(View.GONE);
+                    splashOverlay = null;
+                }
+            }).start();
+        }
     }
 
     private LinearLayout buildBottomNavigation() {
