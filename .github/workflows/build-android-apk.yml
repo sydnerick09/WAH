@@ -30,10 +30,14 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        # setup-android@v3 defaults to installing the obsolete "tools" package.
+        # Google no longer publishes that package; install only platform-tools here.
+        with:
+          packages: 'platform-tools'
 
       - name: Install required Android SDK packages
         run: |
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
