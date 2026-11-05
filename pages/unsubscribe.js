@@ -31,7 +31,7 @@ export default function Unsubscribe() {
   return (
     <div style={wrap}>
       <div style={card}>
-        <div style={logo}>GWENO HUB</div>
+        <img src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" style={{ width: 136, height: 136, objectFit: "contain", display: "block", margin: "0 auto" }} />
         {state === 'done' ? (
           <>
             <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#111827' }}><Icon name="check" size={44} /></div>

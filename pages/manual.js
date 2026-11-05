@@ -730,10 +730,10 @@ export default function Manual() {
         transition: none;
       }
     }
-      `}</style>
+      `} .manual-brand-logo { width: 104px; height: 56px; object-fit: contain; display: block; }\n      </style>
 
 <header className="topbar">
-  <div className="topbar-logo">GWENO HUB</div>
+  <img className="manual-brand-logo" src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" />
 
   <div className="topbar-badge">
     Official User Guide &amp; Member Handbook

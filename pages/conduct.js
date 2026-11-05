@@ -156,7 +156,7 @@ export default function ConductPage() {
       `}</style>
 
       <header>
-        <div className="brand">GWENO HUB</div>
+        <img className="legal-brand-logo" src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" />
       </header>
 
       <nav className="legal-nav" aria-label="Legal navigation">

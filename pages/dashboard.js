@@ -540,7 +540,7 @@ function ReferralModal({ user, onClose }) {
         </div>
         <div className="pay-modal-body">
           <div className="pay-message" style={{ borderColor: '#374151', background: '#f9fafb' }}>
-            Share your referral link and earn <strong style={{ color: '#374151' }}>KES 70</strong> when a referred client successfully activates their account.
+            Share your referral link and earn <strong style={{ color: '#374151' }}>KES 70</strong> when a referred client tops up at least KES 50 and successfully activates their account.
           </div>
           <div style={{ marginBottom: 16 }}>
             <div className="pay-phone-label">Your unique referral link</div>
@@ -922,7 +922,7 @@ export default function Dashboard() {
       {/* Navbar */}
       <nav className="dash-navbar">
         <div className="dash-navbar-inner">
-          <Link href="/" className="dash-logo">GWENO HUB</Link>
+          <Link href="/" className="dash-logo" aria-label="GWENO Hub"><img src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" /></Link>
           <div className="dash-user">
             <Link href="/profile" data-tour="profile" className="dash-user-info" style={{ textDecoration: 'none' }}>
               <div className="dash-user-name">{user.fullName}</div>

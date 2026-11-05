@@ -2,7 +2,7 @@ import Head from "next/head";
 import { useEffect } from "react";
 
 const TERMS_HTML = `<header>
-  <div class="brand">GWENO HUB</div>
+  <img class="legal-brand-logo" src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" />
 </header>
 
 <nav class="legal-nav" aria-label="Legal navigation">

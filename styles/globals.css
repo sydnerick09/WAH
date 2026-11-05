@@ -142,7 +142,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
   color: var(--white); letter-spacing: 0.5px;
   display: flex; align-items: center; gap: 8px;
 }
-.navbar-logo span { color: var(--gold-light); }
+.navbar-logo img { display: block; width: 86px; height: 62px; object-fit: contain; }
 .navbar-actions { display: flex; gap: 12px; align-items: center; }
 
 /* ── Hero ───────────────────────────────────────────────────────────────────── */
@@ -282,7 +282,7 @@ input, select, textarea { font-family: var(--font-body); outline: none; }
 /* ── Footer ─────────────────────────────────────────────────────────────────── */
 .footer { background: var(--black); padding: 60px 24px 32px; }
 .footer-inner { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
-.footer-logo  { font-family: var(--font-display); font-size: 22px; font-weight: 800; color: var(--green-light); margin-bottom: 16px; }
+.footer-logo  { margin-bottom: 16px; }\n.footer-logo img { display: block; width: 116px; height: 116px; object-fit: contain; }
 .footer-desc  { font-family: var(--font-sub); font-size: 14px; color: rgba(255,255,255,0.4); line-height: 1.75; }
 .footer-heading { font-family: var(--font-utility); font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 20px; }
 .footer-links { list-style: none; display: flex; flex-direction: column; gap: 12px; }
@@ -1830,7 +1830,7 @@ button.profile-row:hover { background: #F4F4F5; }
 .gweno-native-app .dash-user-info { display: none; }
 .gweno-native-app .dash-main { padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
 .gweno-native-app .whatsapp-chat-button { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); right: 16px; z-index: 90; }
-.gweno-app-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 250; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: #fff; border-top: 1px solid #e5e7eb; box-shadow: 0 -5px 20px rgba(0,0,0,.08); }
+.gweno-app-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 250; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: #fff; border-top: 1px solid #e5e7eb; box-shadow: 0 -5px 20px rgba(0,0,0,.08); transform: translate3d(0, 110%, 0); opacity: 0; visibility: hidden; pointer-events: none; transition: transform 240ms ease, opacity 200ms ease, visibility 0s linear 240ms; will-change: transform, opacity; }\n.gweno-app-bottom-nav.is-visible { transform: translate3d(0, 0, 0); opacity: 1; visibility: visible; pointer-events: auto; transition: transform 240ms ease, opacity 200ms ease, visibility 0s; }\n.gweno-app-bottom-nav.is-hidden { transform: translate3d(0, 110%, 0); opacity: 0; visibility: hidden; pointer-events: none; }
 .gweno-app-nav-item { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 10px 2px; border: 0; border-radius: 10px; background: transparent; color: #555; font: 600 10px/1.2 Arial, sans-serif; cursor: pointer; }
 .gweno-app-nav-item svg { color: currentColor; }
 .gweno-app-nav-item.active, .gweno-app-nav-item.selected { color: #000; }
@@ -1854,4 +1854,17 @@ button.profile-row:hover { background: #F4F4F5; }
 .gweno-native-app .gweno-app-bottom-nav { min-height: 56px; padding-top: 7px; padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px)); }
 .gweno-native-app .gweno-app-nav-item { min-height: 42px; border-radius: 0; }
 .gweno-native-app .gweno-app-nav-item svg { width: 24px; height: 24px; }
-.gweno-native-app { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+.gweno-native-app { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); transition: padding-bottom 240ms ease; }\n.gweno-native-app.gweno-nav-hidden { padding-bottom: 0; }\n.gweno-native-app .dash-main { padding-bottom: 24px; }\n.gweno-native-app .auth-page { padding-top: max(16px, env(safe-area-inset-top, 0px)); }\n@media (prefers-reduced-motion: reduce) { .gweno-app-bottom-nav { transition: none !important; } }
+
+/* Approved GWENO brand artwork */
+.dash-logo { display: inline-flex; align-items: center; }
+.dash-logo img { display: block; width: 112px; height: 52px; object-fit: contain; }
+.auth-brand { display: block; width: 132px; height: 132px; object-fit: contain; }
+@media (max-width: 480px) {
+  .dash-logo img { width: 96px; height: 46px; }
+  .auth-brand { width: 116px; height: 116px; }
+}
+
+.auth-logo-image { display: block; width: 144px; height: 144px; object-fit: contain; margin: 0 auto 8px; }
+.legal-brand-logo { display: block; width: 112px; height: 112px; object-fit: contain; margin: 0 auto; }
+.manual-brand-logo { display: block; width: 104px; height: 56px; object-fit: contain; }

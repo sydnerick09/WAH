@@ -1,14 +1,14 @@
 {
   "id": "/",
-  "name": "GWENOHUB",
+  "name": "GWENO",
   "short_name": "GWENO",
-  "description": "Work • Earn • Grow",
+  "description": "Work, Earn, Grow.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
   "categories": [
     "business",
     "productivity"

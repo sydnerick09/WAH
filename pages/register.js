@@ -139,7 +139,7 @@ export default function Register() {
     <div className="auth-page auth-page--top">
       <header className="auth-header">
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <div className="auth-brand">GWENO HUB</div>
+          <img className="auth-brand" src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" />
         </Link>
       </header>
 

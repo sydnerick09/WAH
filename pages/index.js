@@ -797,7 +797,7 @@ export default function Home() {
       <footer className="footer">
         <div className="footer-inner">
           <div>
-            <div className="footer-logo">GWENO HUB</div>
+            <div className="footer-logo"><img src="/branding/gweno-full-logo.png" alt="GWENO — Work, Earn, Grow" /></div>
 
             <p className="footer-desc">
               The all-in-one digital platform for tasks and assignments.
