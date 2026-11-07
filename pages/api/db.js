@@ -9,6 +9,7 @@ import { computeXp, levelInfo } from '../../lib/gamification';
 import { sendResetEmail } from '../../lib/resetEmail';
 import { createEmailTransport } from '../../lib/emailTransport';
 import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../lib/withdrawalFees';
+import { FEES } from '../../lib/fees';
 import { findActiveWithdrawal, ACTIVE_WITHDRAWAL_MESSAGE, sendWithdrawalEmails } from '../../lib/withdrawalAuto';
 import { completeStk } from '../../lib/mpesaStore';
 import { sendSubscriptionEmail } from '../../lib/subscriptionEmail';
@@ -22,6 +23,7 @@ function getAdmin() {
 }
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const PREMIUM_FEE = Number(FEES.premiumSubscriptionKes || 0);
 const AGENT_REWARD_MILESTONE = 10;
 const AGENT_REWARD_KES = 25000;
 
@@ -757,8 +759,8 @@ export default async function handler(req, res) {
 
         const subs     = { ...(u.task_submissions || {}) };
         const pbal     = Number(subs._pbal || 0);
-        if (pbal < 300) return res.json({ data: null, error: 'You need at least KES 300 in your Premium balance to subscribe.' });
-        const consumed = 300;
+        if (pbal < PREMIUM_FEE) return res.json({ data: null, error: `You need at least KES ${PREMIUM_FEE} in your Premium balance to subscribe.` });
+        const consumed = PREMIUM_FEE;
         subs._pbal     = pbal - consumed;
         const { data: updated, error: updateError } = await db.from('users').update({
           premium:          true,
@@ -766,7 +768,7 @@ export default async function handler(req, res) {
           task_submissions: subs,
         }).eq('id', userId).select().single();
         if (updateError) return res.json({ data: null, error: updateError.message });
-        try { if (updated?.email) await createEmailTransport('transactional').sendMail({ to: updated.email, subject: 'Your Gweno Hub Premium Is Active', text: `Hello ${updated.full_name || 'Client'},\n\nYour Premium subscription is now active. KES 300 has been applied from your Premium balance.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGWENO Hub Team` }); }
+        try { if (updated?.email) await createEmailTransport('transactional').sendMail({ to: updated.email, subject: 'Your Gweno Hub Premium Is Active', text: `Hello ${updated.full_name || 'Client'},\n\nYour Premium subscription is now active. KES ${PREMIUM_FEE} has been applied from your Premium balance.\n\nDashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/dashboard\n\nGWENO Hub Team` }); }
         catch (mailErr) { console.error('[premium-balance-email]', mailErr?.message || mailErr); }
         return res.json({ data: norm(updated) });
       }
@@ -2093,7 +2095,7 @@ export default async function handler(req, res) {
             return res.json({ success: true, verifyStatus: 'verified', status: 'successful', message: 'This payment is already verified and Premium is active.' });
           }
           if (['premium', 'premium_membership'].includes(type)) {
-            if (amount !== 300) return res.json({ success: false, error: `Premium verification requires a KES 300 payment; this record is KES ${amount}.` });
+            if (amount !== PREMIUM_FEE) return res.json({ success: false, error: `Premium verification requires a KES ${PREMIUM_FEE} payment; this record is KES ${amount}.` });
             if (!user) return res.json({ success: false, error: 'The account linked to this payment could not be found.' });
             const { count, error: eligibilityError } = await db.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('user_id', event.user_id).eq('status', 'approved');
             if (eligibilityError || Number(count || 0) < 1) return res.json({ success: false, error: 'Premium can only be activated after an admin-approved withdrawal. The payment has not been applied; please review the account eligibility.' });
@@ -2800,19 +2802,21 @@ Gweno Hub Team` });
         const userId = clean(p.userId, 64);
         if (!nonEmpty(userId)) return res.json({ success: false, error: 'Missing user.' });
 
+        const profileFee = Math.max(0, Number(FEES.profileUpdateKes || 0));
         const feeRef = clean(p.feeRef, 120);
-        if (!nonEmpty(feeRef)) {
-          return res.json({ success: false, needsFee: true, error: 'A kes 480 profile-change fee is required.' });
-        }
-        const { data: fee } = await db.from('mpesa_transactions')
-          .select('*').eq('checkout_request_id', feeRef).maybeSingle();
-        const feeOk = fee && fee.status === 'success' && fee.purpose === 'profile_change'
-          && String(fee.user_id) === String(userId) && !fee.withdrawal_id;
-        if (!feeOk) {
-          const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
-            : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
-          await logAction(db, { action: 'profile_fee_verify_failed', entity: 'user', entityId: userId, detail: `fee:${feeRef} reason:${reason}` });
-          return res.json({ success: false, needsFee: true, error: 'Your kes 480 payment could not be verified. Please pay the fee and try again.' });
+        let fee = null;
+        if (profileFee > 0) {
+          if (!nonEmpty(feeRef)) return res.json({ success: false, needsFee: true, error: `A KES ${profileFee} profile-update fee is required.` });
+          const result = await db.from('mpesa_transactions').select('*').eq('checkout_request_id', feeRef).maybeSingle();
+          fee = result.data;
+          const feeOk = fee && fee.status === 'success' && fee.purpose === 'profile_change'
+            && Math.round(Number(fee.amount)) === profileFee && String(fee.user_id) === String(userId) && !fee.withdrawal_id;
+          if (!feeOk) {
+            const reason = !fee ? 'not-found' : fee.status !== 'success' ? 'not-paid'
+              : fee.withdrawal_id ? 'already-used' : String(fee.user_id) !== String(userId) ? 'wrong-user' : 'invalid';
+            await logAction(db, { action: 'profile_fee_verify_failed', entity: 'user', entityId: userId, detail: `fee:${feeRef} reason:${reason}` });
+            return res.json({ success: false, needsFee: true, error: `Your KES ${profileFee} payment could not be verified.` });
+          }
         }
 
         const updates = {};
@@ -2840,9 +2844,9 @@ Gweno Hub Team` });
         const { data: updated, error } = await db.from('users')
           .update(updates).eq('id', userId).select().single();
         if (error) return res.json({ success: false, error: error.message });
-        // Consume the fee (link it → single-use), then log.
-        await db.from('mpesa_transactions').update({ withdrawal_id: `profile:${Date.now()}` }).eq('id', fee.id);
-        await logAction(db, { action: 'profile_changed', entity: 'user', entityId: userId, detail: `${Object.keys(updates).join(',')} fee:${feeRef}` });
+        // Consume a paid fee only when the central profile-update fee is enabled.
+        if (fee) await db.from('mpesa_transactions').update({ withdrawal_id: `profile:${Date.now()}` }).eq('id', fee.id);
+        await logAction(db, { action: 'profile_changed', entity: 'user', entityId: userId, detail: `${Object.keys(updates).join(',')} fee:${profileFee}` });
         try {
           const notifyEmail = updated?.email;
           if (notifyEmail) await createEmailTransport('support').sendMail({ to: notifyEmail, subject: 'Your Gweno Hub profile was updated', text: `Hello ${updated.full_name || 'Client'},\n\nYour profile was updated successfully. Fields changed: ${Object.keys(updates).join(', ')}. If you did not make this change, contact Gweno Hub support immediately.\n\nGweno Hub Team` });

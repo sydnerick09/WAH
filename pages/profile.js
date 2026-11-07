@@ -21,8 +21,9 @@ import {
 import Icon from '../components/Icon';
 import { ProfileSkeleton } from '../components/Skeleton';
 import MpesaPay from '../components/MpesaPay';
+import { FEES } from '../lib/fees';
 
-const PROFILE_FEE = 480   // kes fee (via Daraja) to change personal name / email / phone
+const PROFILE_FEE = Number(FEES.profileUpdateKes || 0)
 
 // Validate a chosen image file and return a data URL (cropping happens later,
 // in the interactive AvatarCropper).
@@ -252,15 +253,15 @@ export default function ProfilePage() {
   const fieldLabel = f => f === 'fullName' ? 'Full Name' : f === 'email' ? 'Email Address' : 'Phone Number';
   function beginPaidChange(field) {
     const cur = field === 'fullName' ? (user.fullName || '') : field === 'email' ? (user.email || '') : (user.phone || '');
-    setFeeEdit({ field, step: 'notice', value: cur, feeRef: '' });
+    setFeeEdit({ field, step: PROFILE_FEE > 0 ? 'notice' : 'input', value: cur, feeRef: '' });
   }
   async function saveFeeChange() {
     const { field, value, feeRef } = feeEdit;
     const v = String(value || '').trim();
     if (!v) { setToast('Please enter a value'); return; }
-    if (!feeRef) { setToast('Please complete the kes 480 payment first'); return; }
+    if (PROFILE_FEE > 0 && !feeRef) { setToast(`Please complete the KES ${PROFILE_FEE} payment first`); return; }
     setBusy(true);
-    const res = await changeContact(user.id, { [field]: v, feeRef });
+    const res = await changeContact(user.id, { [field]: v, ...(feeRef ? { feeRef } : {}) });
     setBusy(false);
     if (res.success && res.user) {
       setUser(res.user);
@@ -514,7 +515,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ── Personal field change (Full Name / Email / Phone) — kes 480 via Daraja ── */}
+      {/* ── Personal field change (fee controlled by lib/fees.js) ── */}
       {feeEdit && (
         <div className="profile-dialog-overlay" onClick={() => setFeeEdit(null)}>
           <div className="profile-dialog" onClick={e => e.stopPropagation()}>
@@ -523,14 +524,14 @@ export default function ProfilePage() {
               <span className="profile-dialog-title">Change {fieldLabel(feeEdit.field)}</span>
             </div>
             <div className="profile-dialog-body">
-              {feeEdit.step === 'notice' && (
+              {PROFILE_FEE > 0 && feeEdit.step === 'notice' && (
                 <p style={{ marginBottom: 0 }}>
                   Changing your <strong>{fieldLabel(feeEdit.field).toLowerCase()}</strong> requires a one-time
                   <strong> KES {PROFILE_FEE} profile-change fee</strong>, paid via <strong>M-Pesa (Safaricom)</strong>.
                   After the payment is confirmed, you can enter and save the new value. Do you want to continue?
                 </p>
               )}
-              {feeEdit.step === 'pay' && (
+              {PROFILE_FEE > 0 && feeEdit.step === 'pay' && (
                 <>
                   <div className="pay-amount" style={{ marginBottom: 14 }}>
                     <div className="pay-amount-label">Profile Change Fee</div>
@@ -548,9 +549,9 @@ export default function ProfilePage() {
               )}
               {feeEdit.step === 'input' && (
                 <>
-                  <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f0fff4', marginBottom: 14, fontSize: 13 }}>
+                  {PROFILE_FEE > 0 && <div className="pay-message" style={{ borderColor: 'var(--mpesa-green)', background: '#f0fff4', marginBottom: 14, fontSize: 13 }}>
                     <Icon name="check" size={14} /> KES {PROFILE_FEE} fee paid and verified. Enter your new {fieldLabel(feeEdit.field).toLowerCase()}.
-                  </div>
+                  </div>}
                   <input
                     className="profile-input"
                     type={feeEdit.field === 'email' ? 'email' : feeEdit.field === 'phone' ? 'tel' : 'text'}
@@ -563,7 +564,7 @@ export default function ProfilePage() {
               )}
             </div>
             <div className="profile-dialog-actions">
-              {feeEdit.step === 'notice' && (
+              {PROFILE_FEE > 0 && feeEdit.step === 'notice' && (
                 <button className="btn-mono" onClick={() => setFeeEdit(f => ({ ...f, step: 'pay' }))}>
                   <Icon name="lock" size={15} /> Pay KES {PROFILE_FEE} to continue
                 </button>

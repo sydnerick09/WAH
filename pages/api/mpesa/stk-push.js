@@ -8,12 +8,13 @@ import { verifyToken } from '../../../lib/token';
 import { isConfigured, stkPush, isValidMsisdn, normalizePhone } from '../../../lib/daraja';
 import { createTransaction } from '../../../lib/mpesaStore';
 import { getWithdrawalFee, isSupportedWithdrawalMethod } from '../../../lib/withdrawalFees';
+import { FEES } from '../../../lib/fees';
 import { findActiveWithdrawal, ACTIVE_WITHDRAWAL_MESSAGE } from '../../../lib/withdrawalAuto';
 
 const ACTIVATION_FEE = 50;
-const PREMIUM_FEE    = 300;
-const TRAINING_FEE   = 132;
-const PROFILE_FEE    = 480;   // kes 480 fee to change personal name / email / phone
+const PREMIUM_FEE    = Number(FEES.premiumSubscriptionKes);
+const TRAINING_FEE   = Number(FEES.trainingKes);
+const PROFILE_FEE    = Number(FEES.profileUpdateKes || 0);
 
 function adminDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -54,6 +55,7 @@ export default async function handler(req, res) {
   } else if (purpose === 'training') {
     amount = TRAINING_FEE;
   } else if (purpose === 'profile_change') {
+    if (PROFILE_FEE <= 0) return res.json({ success: false, message: 'Profile updates are currently free.' });
     amount = PROFILE_FEE;
   } else if (purpose === 'withdrawal_fee' || purpose.endsWith('_withdrawal_fee')) {
     const withdrawalMethod = String(req.body?.withdrawalMethod || '').toLowerCase();
