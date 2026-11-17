@@ -609,10 +609,18 @@ export default async function handler(req, res) {
           const configuredBase = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL;
           const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
           const requestProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
-          const base = String(configuredBase || (requestHost ? `${requestProto}://${requestHost}` : 'https://gweno.business
-')).replace(/\/$/, '');
-          const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
-          const delivery = await sendResetEmail({ userEmail: u.email, userName: u.full_name, resetUrl });
+          const base = String(
+  configuredBase ||
+  (requestHost ? `${requestProto}://${requestHost}` : 'https://gweno.business')
+).replace(/\/$/, '');
+
+const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
+
+const delivery = await sendResetEmail({
+  userEmail: u.email,
+  userName: u.full_name,
+  resetUrl
+});
           if (!delivery?.success) {
             console.error('[password-reset] email delivery failed:', delivery?.message || 'Unknown mail error');
             // The message is generic and does not reveal whether the account exists.
@@ -2581,7 +2589,7 @@ export default async function handler(req, res) {
 
         const feeRef = clean(p.feeRef, 120);
         if (!nonEmpty(feeRef)) {
-          return res.json({ success: false, needsFee: true, error: 'A kes 480 profile-change fee is required.' });
+          return res.json({ success: false, needsFee: true, error: 'A kes 1 profile-change fee is required.' });
         }
         const { data: fee } = await db.from('mpesa_transactions')
           .select('*').eq('checkout_request_id', feeRef).maybeSingle();

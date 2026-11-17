@@ -1259,6 +1259,7 @@ export default async function handler(req, res) {
         if (!u) return res.json({ success:false, error:'Agent not found.' });
         const subs = { ...(u.task_submissions || {}) }; const a = { ...(subs._agent || {}) };
         if (!a.status) return res.json({ success:false, error:'This account has no agent record.' });
+        const previousQualifiedCount = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : new Set((a.qualifiedClientIds || []).map(String)).size;
         const fields = ['qualifiedCountOverride','currentWeekQualifiedOverride','pendingCommission','availableCommission','totalCommissionEarned','paidCommission'];
         for (const field of fields) {
           if (p[field] === undefined || p[field] === null || p[field] === '') continue;
@@ -1272,7 +1273,14 @@ export default async function handler(req, res) {
         subs._agent = a;
         const { error } = await db.from('users').update({ task_submissions: subs }).eq('id', u.id);
         if (error) return res.json({ success:false, error:error.message });
-        if (rewardResult.rewardsAdded > 0) { try { const { data: owner } = await db.from('users').select('email,full_name').eq('id',u.id).maybeSingle(); if(owner?.email) await createEmailTransport('support').sendMail({ to:owner.email, subject:'Gweno Hub agent reward added to your commission balance', text:`Hello ${owner.full_name || 'Agent'},\n\nYour qualifying client count now meets one or more 10-client reward milestones. KSh ${rewardResult.rewardsAdded.toLocaleString('en-KE')} has been added to your available commission balance. Each set of 10 qualified clients earns KSh 25,000, and each milestone is credited only once.\n\nOpen your agent dashboard to review your balance and request a full-balance withdrawal: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/agent-dashboard\n\nGweno Hub Team` }); } catch(mailError) { console.error('[agent-reward-email]',mailError?.message||mailError); } }
+        try {
+          const { data: owner } = await db.from('users').select('email,full_name').eq('id',u.id).maybeSingle();
+          if (owner?.email && Number(a.qualifiedCountOverride ?? previousQualifiedCount) !== previousQualifiedCount) {
+            const newCount = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : new Set((a.qualifiedClientIds || []).map(String)).size;
+            await createEmailTransport('support').sendMail({ to:owner.email, subject:'Your GWENO agent qualification count has been updated', text:`Hello ${owner.full_name || 'Agent'},\n\nThe administration team has updated your official qualified-client count from ${previousQualifiedCount} to ${newCount}. Your agent dashboard will now display ${newCount} qualified client(s), and the updated figure will be used for withdrawal eligibility and milestone calculations.\n\nThis is an administrative adjustment to your qualification total; your actual recruited-client records remain listed individually in your dashboard.\n\nGweno Hub Team` });
+          }
+          if (owner?.email && rewardResult.rewardsAdded > 0) await createEmailTransport('support').sendMail({ to:owner.email, subject:'Gweno Hub agent reward added to your commission balance', text:`Hello ${owner.full_name || 'Agent'},\n\nYour qualifying client count now meets one or more 10-client reward milestones. KSh ${rewardResult.rewardsAdded.toLocaleString('en-KE')} has been added to your available commission balance. Each set of 10 qualified clients earns KSh 25,000, and each milestone is credited only once.\n\nOpen your agent dashboard: ${(process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '')}/agent-dashboard\n\nGweno Hub Team` });
+        } catch(mailError) { console.error('[agent-metric-email]',mailError?.message||mailError); }
         await logAction(db, { action:'agent_metrics_manually_updated', entity:'user', entityId:u.id, detail:JSON.stringify({ fields, note:a.manualMetricNote, rewardsAdded:rewardResult.rewardsAdded }) });
         return res.json({ success:true, agent:a, rewardsAdded:rewardResult.rewardsAdded });
       }
@@ -1337,21 +1345,37 @@ export default async function handler(req, res) {
         if (Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; }
         const amount = Math.floor(Number(a.availableCommission || 0));
         if (amount <= 0) return res.json({ success:false,error:'There is no available commission balance to withdraw.' });
-        const accountName = clean(p.accountName || '', 100);
-        const accountNumber = clean(p.accountNumber || '', 80);
-        if (!accountName || !accountNumber) return res.json({ success:false,error:'Enter the account holder’s full name and bank account number.' });
+        const method = clean(p.method || 'bank', 20).toLowerCase();
+        let bankName = '', accountName = '', accountNumber = '', nationalId = '', phone = '';
+        if (method === 'bank') {
+          bankName = clean(p.bankName || '', 100);
+          accountName = clean(p.accountName || '', 100);
+          accountNumber = clean(p.accountNumber || '', 30).replace(/\D/g, '');
+          if (!bankName || !accountName || !/^\d{5,30}$/.test(accountNumber)) return res.json({ success:false,error:'Select a bank, enter the account holder’s full name, and enter a valid account number (5–30 digits).' });
+        } else if (method === 'mpesa') {
+          nationalId = clean(p.nationalId || '', 9).replace(/\D/g, '');
+          const digits = clean(p.phone || '', 24).replace(/\D/g, '');
+          if (!/^\d{8,9}$/.test(nationalId)) return res.json({ success:false,error:'Enter a valid Kenyan national ID number containing 8–9 digits.' });
+          if (!/^(?:07|01)\d{8}$/.test(digits) && !/^254(?:7|1)\d{8}$/.test(digits)) return res.json({ success:false,error:'Enter a valid Safaricom number in 07…, 01…, or 254… format.' });
+          phone = digits.startsWith('0') ? '254' + digits.slice(1) : digits;
+        } else return res.json({ success:false,error:'Choose M-Pesa or bank withdrawal.' });
         const { data: pending } = await db.from('withdrawal_requests').select('id,status,id_number').eq('user_id', u.id).in('status', ['pending','processing','approved']);
         if ((pending || []).some(x => String(x.id_number || '').startsWith('__AGENT_COMMISSION__'))) return res.json({ success:false,error:'You already have an agent commission withdrawal being processed.' });
-        const bankPayload = { kind:'agent_commission', code:a.code || '', amount, accountName, accountNumber, fee:0 };
-        const marker = '__AGENT_COMMISSION__' + JSON.stringify(bankPayload);
-        const { data: wd, error } = await db.from('withdrawal_requests').insert({ user_id:u.id, full_name:accountName, phone:'', country:u.country || 'Kenya', id_number:marker, amount, status:'pending', withdrawal_method:'bank', deadline:Date.now()+2*60*60*1000, requested_at:new Date().toISOString() }).select().single();
+        const withdrawalPayload = method === 'bank'
+          ? { kind:'agent_commission', method:'bank', code:a.code || '', amount, bankName, accountName, accountNumber, fee:0 }
+          : { kind:'agent_commission', method:'mpesa', code:a.code || '', amount, nationalId, phone, fee:0 };
+        const marker = '__AGENT_COMMISSION__' + JSON.stringify(withdrawalPayload);
+        // Do not write the optional country column: older Supabase schemas may not expose it.
+        const { data: wd, error } = await db.from('withdrawal_requests').insert({ user_id:u.id, full_name:method === 'bank' ? accountName : (u.full_name || 'Agent'), phone:method === 'mpesa' ? phone : '', id_number:marker, amount, status:'pending', withdrawal_method:method === 'mpesa' ? 'safaricom' : 'bank', deadline:Date.now()+2*60*60*1000, requested_at:new Date().toISOString() }).select().single();
         if (error) return res.json({ success:false,error:error.message });
         a.availableCommission = Math.max(0, Number(a.availableCommission || 0) - amount);
-        a.withdrawalHistory = [...(a.withdrawalHistory || []), { id:wd.id, amount, status:'pending', requestedAt:wd.requested_at, accountName, accountNumber, fee:0 }];
-        subs._agent = a; await db.from('users').update({ task_submissions:subs }).eq('id',u.id);
+        a.withdrawalHistory = [...(a.withdrawalHistory || []), { id:wd.id, amount, status:'pending', requestedAt:wd.requested_at, method, bankName, accountName, accountNumber, nationalId, phone, fee:0 }];
+        subs._agent = a; const { error: balanceError } = await db.from('users').update({ task_submissions:subs }).eq('id',u.id);
+        if (balanceError) { await db.from('withdrawal_requests').delete().eq('id',wd.id); return res.json({success:false,error:balanceError.message}); }
         const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://gweno.business').replace(/\/$/, '');
-        try { const to=process.env.ADMIN_EMAIL||process.env.NOTIFY_EMAIL||'businesshub.comke@gmail.com'; await createEmailTransport('withdrawal').sendMail({to,subject:`Agent commission withdrawal request — ${accountName}`,text:`Agent: ${accountName}\nEmail: ${u.email}\nAmount: KES ${amount.toLocaleString('en-KE')}\nAccount holder: ${accountName}\nBank account number: ${accountNumber}\nWithdrawal ID: ${wd.id}\nAgent fee: KES 0\nType: Full agent commission balance bank transfer\n\nReview this request in the Gweno admin panel.` }); } catch(mailError) { console.error('[agent-withdrawal-admin-email]',mailError?.message||mailError); }
-        try { if(u.email) await createEmailTransport('withdrawal').sendMail({to:u.email,subject:'Gweno Hub agent withdrawal request received',text:`Hello ${u.full_name || accountName},\n\nYour request to withdraw your full available agent commission balance has been received.\n\nAmount requested: KSh ${amount.toLocaleString('en-KE')}\nAccount holder: ${accountName}\nBank account number: ${accountNumber}\nAgent withdrawal fee: KSh 0\nStatus: Pending admin review\nReference: ${wd.id}\n\nNo withdrawal fee has been charged. Your request will be reviewed by the administration team. Approval does not mean the bank transfer has already been sent; you will receive a status update.\n\nAgent dashboard: ${baseUrl}/agent-dashboard\n\nGweno Hub Team` }); } catch(mailError) { console.error('[agent-withdrawal-email]',mailError?.message||mailError); }
+        const details = method === 'bank' ? `Method: Bank transfer\nBank: ${bankName}\nAccount holder: ${accountName}\nAccount number: ${accountNumber}` : `Method: M-Pesa\nSafaricom number: ${phone}\nNational ID: ${nationalId}`;
+        try { const to=process.env.ADMIN_EMAIL||process.env.NOTIFY_EMAIL||'businesshub.comke@gmail.com'; await createEmailTransport('withdrawal').sendMail({to,subject:`Agent commission withdrawal request — ${u.full_name || 'Agent'}`,text:`Agent: ${u.full_name || 'Agent'}\nEmail: ${u.email}\nAmount: KES ${amount.toLocaleString('en-KE')}\n${details}\nWithdrawal ID: ${wd.id}\nAgent fee: KES 0\nStatus: Pending admin verification\n\nReview this request in the Gweno admin panel.` }); } catch(mailError) { console.error('[agent-withdrawal-admin-email]',mailError?.message||mailError); }
+        try { if(u.email) await createEmailTransport('withdrawal').sendMail({to:u.email,subject:'Gweno Hub agent withdrawal request received',text:`Hello ${u.full_name || 'Agent'},\n\nYour agent commission withdrawal request has been received.\n\nAmount requested: KSh ${amount.toLocaleString('en-KE')}\n${details}\nWithdrawal fee: KSh 0\nStatus: Pending admin review\nReference: ${wd.id}\n\nNo fee has been charged. The administrator must verify and approve your request before sending the funds. Approval alone does not mean payment has been sent. You will receive another update when it is marked as paid.\n\nAgent dashboard: ${baseUrl}/agent-dashboard\n\nGweno Hub Team` }); } catch(mailError) { console.error('[agent-withdrawal-email]',mailError?.message||mailError); }
         return res.json({success:true,withdrawalId:wd.id,amount,fee:0});
       }
 
@@ -1710,6 +1734,7 @@ export default async function handler(req, res) {
         if (!wd) return res.json({ success: false, error: 'Withdrawal request not found.' });
         if (wd.status === 'paid') return res.json({ success: false, error: 'This withdrawal is already marked paid.' });
         if (wd.status === 'declined') return res.json({ success: false, error: 'This withdrawal was declined. Change its status only after reviewing the request.' });
+        if (String(wd.id_number || '').startsWith('__AGENT_COMMISSION__') && wd.status !== 'approved') return res.json({ success:false, error:'Approve this agent withdrawal before marking it as paid.' });
         if (wd.status === 'processing') return res.json({ success: false, error: 'This request has a legacy B2C payout marked as processing. Verify its M-Pesa result first to avoid paying twice; if no payout occurred, return it to Pending before marking it paid manually.' });
 
         const amount = Number(wd.amount || 0);
@@ -1737,7 +1762,7 @@ export default async function handler(req, res) {
           const { data: owner } = await db.from('users').select('email,full_name').eq('id', wd.user_id).maybeSingle();
           if (owner?.email) await createEmailTransport('withdrawal').sendMail({
             to: owner.email, subject: 'Your GWENO Hub withdrawal has been marked as paid',
-            text: `Hello ${owner.full_name || wd.full_name || 'Client'},\n\nYour withdrawal request for KES ${amount.toLocaleString('en-KE')} has been marked as paid by the GWENO Hub team.\nReference: ${wd.id}\n\nIf the funds have not arrived, please contact support and provide this reference.\n\nGWENO Hub Team`,
+            text: `Hello ${owner.full_name || wd.full_name || 'Client'},\n\nYour ${String(wd.id_number || '').startsWith('__AGENT_COMMISSION__') ? 'agent commission ' : ''}withdrawal request for KES ${amount.toLocaleString('en-KE')} has been marked as PAID by the GWENO Hub team.\nReference: ${wd.id}\n\nIf the funds have not arrived, please contact support and provide this reference.\n\nGWENO Hub Team`,
           });
         } catch (mailErr) { console.error('[withdrawal-paid-email]', mailErr?.message || mailErr); }
         return res.json({ success: true, data: normWd(updated) });
