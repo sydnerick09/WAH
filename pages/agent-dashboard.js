@@ -1,59 +1,55 @@
-
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { getCurrentUser, getToken, logout } from '../lib/auth';
 
+// Accepts 07XXXXXXXX, 01XXXXXXXX, 2547XXXXXXXX, 2541XXXXXXXX, +2547XXXXXXXX
+function normalizeMpesaPhone(input) {
+  const cleaned = String(input || '').replace(/[\s-]/g, '');
+  const m = cleaned.match(/^(?:\+?254|0)([17]\d{8})$/);
+  return m ? `254${m[1]}` : null;
+}
+
 export default function AgentDashboard() {
   const router = useRouter();
-
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState(false);
-
-  const [paymentMethod, setPaymentMethod] = useState('mpesa');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [method, setMethod] = useState('mpesa'); // 'mpesa' | 'bank'
   const [fullName, setFullName] = useState('');
-
+  const [phone, setPhone] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
   const [withdrawMsg, setWithdrawMsg] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
+
+  const loadDashboard = async () => {
+    const r = await fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'getAgentDashboard', authToken: getToken() }),
+    });
+    return r.json();
+  };
 
   useEffect(() => {
     (async () => {
       const u = await getCurrentUser();
-
       if (!u) {
         router.replace('/login');
         return;
       }
-
       if (u.agent?.status !== 'active') {
         router.replace('/dashboard');
         return;
       }
-
-      try {
-        const r = await fetch('/api/db', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            op: 'getAgentDashboard',
-            authToken: getToken()
-          })
-        });
-
-        const d = await r.json();
-
-        if (!d.success) {
-          setErr(d.error || 'Could not load agent dashboard');
-          return;
-        }
-
-        setData(d);
-        setFullName(d.fullName || '');
-      } catch {
-        setErr('Could not load agent dashboard.');
+      const d = await loadDashboard();
+      if (!d.success) {
+        setErr(d.error || 'Could not load agent dashboard');
+        return;
       }
+      setData(d);
+      setAccountNumber('');
+      setFullName(d.fullName || '');
     })();
   }, [router]);
 
@@ -66,110 +62,92 @@ export default function AgentDashboard() {
     );
   }
 
-  const link = `${
-    typeof window !== 'undefined'
-      ? window.location.origin
-      : 'https://gweno.business'
-  }/register?agent=${data.agent.code}`;
-
+  const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://gweno.business'}/register?agent=${data.agent.code}`;
   const qualifyingClients = Number(data.qualifiedCount || 0);
-  const eligible = qualifyingClients >= 10 &&
-    Number(data.balances.available || 0) >= 100;
+  const available = Number(data.balances.available || 0);
 
-  const refreshDashboard = async () => {
-    const r = await fetch('/api/db', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        op: 'getAgentDashboard',
-        authToken: getToken()
-      })
-    });
+  const submitWithdrawal = async () => {
+    setWithdrawMsg('');
 
-    const d = await r.json();
-
-    if (d.success) setData(d);
-  };
-
-  const requestWithdrawal = async () => {
     if (!fullName.trim()) {
       setWithdrawMsg('Enter the account holder name.');
       return;
     }
 
-    if (paymentMethod === 'mpesa' && !/^254[17]\d{8}$/.test(phoneNumber)) {
-      setWithdrawMsg('Enter a valid M-Pesa number in 254XXXXXXXXX format.');
-      return;
-    }
-
-    if (paymentMethod === 'bank' && !accountNumber.trim()) {
-      setWithdrawMsg('Enter your bank account number.');
-      return;
-    }
-
-    if (!eligible) {
-      setWithdrawMsg(
-        'You need 10 qualified clients and at least KES 100 available commission.'
-      );
-      return;
+    let payload;
+    if (method === 'mpesa') {
+      const normalized = normalizeMpesaPhone(phone);
+      if (!normalized) {
+        setWithdrawMsg('Enter a valid M-Pesa number, e.g. 0712345678 or 254712345678.');
+        return;
+      }
+      payload = {
+        method: 'mpesa',
+        accountName: fullName.trim(),
+        phone: normalized,
+        // kept for backends that still read accountNumber
+        accountNumber: normalized,
+      };
+    } else {
+      if (!bankName.trim()) {
+        setWithdrawMsg('Enter your bank name.');
+        return;
+      }
+      if (!/^\d{6,20}$/.test(accountNumber.replace(/\s/g, ''))) {
+        setWithdrawMsg('Enter a valid bank account number.');
+        return;
+      }
+      payload = {
+        method: 'bank',
+        accountName: fullName.trim(),
+        bankName: bankName.trim(),
+        accountNumber: accountNumber.replace(/\s/g, ''),
+      };
     }
 
     setWithdrawing(true);
-    setWithdrawMsg('');
-
     try {
-      const payload = {
-        op: 'requestAgentCommissionWithdrawal',
-        authToken: getToken(),
-        accountName: fullName.trim(),
-        paymentMethod,
-        accountNumber:
-          paymentMethod === 'bank' ? accountNumber.trim() : '',
-        phoneNumber:
-          paymentMethod === 'mpesa' ? phoneNumber.trim() : '',
-        withdrawalFee: 0
-      };
-
       const r = await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          op: 'requestAgentCommissionWithdrawal',
+          authToken: getToken(),
+          ...payload,
+        }),
       });
-
       const d = await r.json();
-
-      if (!d.success) {
-        setWithdrawMsg(d.error || 'Withdrawal request failed.');
-        return;
-      }
-
       setWithdrawMsg(
-        `Your ${paymentMethod === 'mpesa' ? 'M-Pesa' : 'bank'} withdrawal request has been submitted successfully. Amount: KES ${Number(d.amount).toLocaleString()}. No withdrawal fee. Await admin processing.`
+        d.success
+          ? `Withdrawal request submitted for KES ${Number(d.amount).toLocaleString()} via ${method === 'mpesa' ? 'M-Pesa' : 'bank transfer'}.`
+          : d.error || 'Request failed.'
       );
-
-      setPhoneNumber('');
-      setAccountNumber('');
-
-      await refreshDashboard();
-
-    } catch {
-      setWithdrawMsg('Could not submit withdrawal request.');
+      if (d.success) {
+        setPhone('');
+        setAccountNumber('');
+        setBankName('');
+        const dd = await loadDashboard();
+        if (dd.success) setData(dd);
+      }
+    } catch (e) {
+      setWithdrawMsg('Could not submit request.');
     } finally {
       setWithdrawing(false);
     }
   };
 
+  const methodLabel = (w) => {
+    const m = String(w.method || 'bank').toLowerCase();
+    return m === 'mpesa' ? 'M-Pesa' : 'Bank';
+  };
+
   return (
     <main style={{ ...wrap, maxWidth: 1000 }}>
-
-      <header style={header}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ marginBottom: 4 }}>Agent Dashboard</h1>
-          <p>
-            Agent since {new Date(data.startDate).toLocaleDateString()}
-          </p>
+          <p>Agent since {new Date(data.startDate).toLocaleDateString()}</p>
         </div>
-
         <button
           style={btn}
           onClick={() => {
@@ -188,26 +166,23 @@ export default function AgentDashboard() {
           ['Pending commission', `KES ${data.balances.pending.toLocaleString()}`],
           ['Available commission', `KES ${data.balances.available.toLocaleString()}`],
           ['Total commission earned', `KES ${data.balances.total.toLocaleString()}`],
-          ['Paid commission', `KES ${data.balances.paid.toLocaleString()}`]
-        ].map(([label, value]) => (
-          <div key={label} style={card}>
-            <div style={{ color: '#64748b', fontSize: 13 }}>{label}</div>
-            <strong style={{ fontSize: 24 }}>{value}</strong>
+          ['Paid commission', `KES ${data.balances.paid.toLocaleString()}`],
+        ].map(([l, v]) => (
+          <div key={l} style={card}>
+            <div style={{ color: '#64748b', fontSize: 13 }}>{l}</div>
+            <strong style={{ fontSize: 24 }}>{v}</strong>
           </div>
         ))}
       </section>
 
       <section style={card}>
         <h2>Your agent referral link</h2>
-
         <p>
-          Share this link. Commission is KSh 434 once per distinct client
-          in your referral network after their withdrawal is approved.
+          Share this link. Commission is KSh 434 once per distinct client in your referral network after their
+          withdrawal is approved.
         </p>
-
-        <div style={flex}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input readOnly value={link} style={{ ...field, flex: 1, minWidth: 240 }} />
-
           <button
             style={btn}
             onClick={() =>
@@ -223,125 +198,119 @@ export default function AgentDashboard() {
 
         <p>
           {qualifyingClients < 10
-            ? `You need ${10 - qualifyingClients} more qualified clients to unlock withdrawals.`
-            : 'You have met the 10-client requirement. You can request a withdrawal subject to your available balance.'}
+            ? `You need at least 10 qualifying clients to initiate a withdrawal. Your current progress is ${qualifyingClients} out of 10 clients.`
+            : 'You have met the 10-client requirement. Withdrawal is available subject to your available commission balance.'}
         </p>
 
-        <div style={{ marginTop: 20 }}>
-          <h2>Withdraw your commission</h2>
+        <h3 style={{ marginBottom: 8 }}>Withdraw commission</h3>
+        <p style={{ marginTop: 0 }}>
+          Withdrawal amount: <strong>KES {available.toLocaleString()}</strong> (your full available balance).{' '}
+          <strong>No fee is charged.</strong>
+        </p>
 
-          <p>
-            Choose your preferred payment method. All requests are
-            manually reviewed and processed by an administrator.
-            No withdrawal fees are charged.
-          </p>
-
-          <label style={label}>Payment method</label>
-
-          <div style={flex}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }} role="radiogroup" aria-label="Payment method">
+          {[
+            ['mpesa', 'M-Pesa'],
+            ['bank', 'Bank account'],
+          ].map(([key, label]) => (
             <button
-              style={paymentMethod === 'mpesa' ? activeBtn : secondaryBtn}
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={method === key}
               onClick={() => {
-                setPaymentMethod('mpesa');
+                setMethod(key);
                 setWithdrawMsg('');
               }}
+              style={method === key ? btn : btnOutline}
             >
-              M-Pesa
+              {label}
             </button>
-
-            <button
-              style={paymentMethod === 'bank' ? activeBtn : secondaryBtn}
-              onClick={() => {
-                setPaymentMethod('bank');
-                setWithdrawMsg('');
-              }}
-            >
-              Bank account
-            </button>
-          </div>
-
-          <div style={formGrid}>
-            <input
-              value={fullName}
-              onChange={e => setFullName(e.target.value)}
-              placeholder="Account holder full name"
-              style={field}
-            />
-
-            {paymentMethod === 'mpesa' ? (
-              <input
-                value={phoneNumber}
-                onChange={e => setPhoneNumber(e.target.value)}
-                placeholder="M-Pesa number (2547XXXXXXXX)"
-                style={field}
-                inputMode="numeric"
-              />
-            ) : (
-              <input
-                value={accountNumber}
-                onChange={e => setAccountNumber(e.target.value)}
-                placeholder="Bank account number"
-                style={field}
-              />
-            )}
-
-            <button
-              disabled={withdrawing || !eligible}
-              style={{
-                ...btn,
-                opacity: eligible ? 1 : 0.5,
-                cursor: eligible ? 'pointer' : 'not-allowed'
-              }}
-              onClick={requestWithdrawal}
-            >
-              {withdrawing ? 'Submitting…' : 'Request commission withdrawal'}
-            </button>
-          </div>
-
-          <p style={{ color: '#15803d', fontWeight: 600 }}>
-            Withdrawal fee: KES 0
-          </p>
-
-          {withdrawMsg && (
-            <p role="status" style={{ color: '#334155' }}>
-              {withdrawMsg}
-            </p>
-          )}
+          ))}
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 8, marginTop: 12 }}>
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Account holder name"
+            style={field}
+          />
+
+          {method === 'mpesa' ? (
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="M-Pesa number (07XX XXX XXX)"
+              inputMode="tel"
+              autoComplete="tel"
+              style={field}
+            />
+          ) : (
+            <>
+              <input
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="Bank name"
+                style={field}
+              />
+              <input
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                placeholder="Bank account number"
+                inputMode="numeric"
+                style={field}
+              />
+            </>
+          )}
+
+          <button
+            disabled={withdrawing || qualifyingClients < 10 || available < 100}
+            style={{ ...btn, opacity: withdrawing || qualifyingClients < 10 || available < 100 ? 0.5 : 1 }}
+            onClick={submitWithdrawal}
+          >
+            {withdrawing
+              ? 'Submitting…'
+              : `Withdraw KES ${available.toLocaleString()} via ${method === 'mpesa' ? 'M-Pesa' : 'bank'}`}
+          </button>
+        </div>
+
+        {available < 100 && qualifyingClients >= 10 && (
+          <p style={{ color: '#64748b', fontSize: 13 }}>The minimum withdrawal is KES 100.</p>
+        )}
+        {withdrawMsg && <p role="status">{withdrawMsg}</p>}
+
         <p>
-          Weekly target: 10 distinct qualified clients, measured Monday
-          to Sunday (East Africa time). Missing the target does not
-          automatically suspend your account.
+          Weekly target: 10 distinct qualified clients, measured Monday–Sunday (East Africa time). Missing the target
+          does not automatically suspend your account; performance is recorded for review.
         </p>
       </section>
 
       <section style={card}>
         <h2>Weekly performance history</h2>
-        <p>
-          Each week is measured Monday to Sunday in East Africa Time.
-          Previous weeks remain in your history.
-        </p>
-
-        <div style={tableWrap}>
-          <table style={table}>
+        <p>Each week is measured Monday to Sunday in East Africa Time. Previous weeks remain in your history.</p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Week starting', 'Qualified clients', 'Target', 'Shortfall'].map(x => (
-                  <th key={x} style={th}>{x}</th>
+                {['Week starting', 'Qualified clients', 'Target', 'Shortfall'].map((x) => (
+                  <th key={x} style={th}>
+                    {x}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {(data.weeklyHistory || []).map(w => (
+              {(data.weeklyHistory || []).map((w) => (
                 <tr key={w.weekStart}>
                   {[w.weekStart, w.qualified, w.target, w.shortfall].map((v, i) => (
-                    <td key={i} style={th}>{v}</td>
+                    <td key={i} style={th}>
+                      {v}
+                    </td>
                   ))}
                 </tr>
               ))}
-
-              {!data.weeklyHistory?.length && (
+              {!(data.weeklyHistory || []).length && (
                 <tr>
                   <td style={th} colSpan="4">
                     No completed qualification history yet.
@@ -355,37 +324,37 @@ export default function AgentDashboard() {
 
       <section style={card}>
         <h2>Commission withdrawal history</h2>
-
-        <div style={tableWrap}>
-          <table style={table}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Reference', 'Payment method', 'Amount', 'Status', 'Requested'].map(x => (
-                  <th key={x} style={th}>{x}</th>
+                {['Reference', 'Amount', 'Method', 'Status', 'Requested'].map((x) => (
+                  <th key={x} style={th}>
+                    {x}
+                  </th>
                 ))}
               </tr>
             </thead>
-
             <tbody>
-              {(data.agent.withdrawalHistory || []).slice().reverse().map(w => (
-                <tr key={w.id}>
-                  <td style={th}>{w.id}</td>
-                  <td style={th}>
-                    {w.paymentMethod === 'mpesa' ? 'M-Pesa' : 'Bank'}
-                  </td>
-                  <td style={th}>
-                    KES {Number(w.amount || 0).toLocaleString()}
-                  </td>
-                  <td style={th}>{w.status}</td>
-                  <td style={th}>
-                    {w.requestedAt
-                      ? new Date(w.requestedAt).toLocaleDateString()
-                      : '—'}
-                  </td>
-                </tr>
-              ))}
-
-              {!data.agent.withdrawalHistory?.length && (
+              {(data.agent.withdrawalHistory || [])
+                .slice()
+                .reverse()
+                .map((w) => (
+                  <tr key={w.id}>
+                    {[
+                      w.id,
+                      `KES ${Number(w.amount || 0).toLocaleString()}`,
+                      methodLabel(w),
+                      w.status,
+                      w.requestedAt ? new Date(w.requestedAt).toLocaleDateString() : '—',
+                    ].map((v, i) => (
+                      <td key={i} style={th}>
+                        {v}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              {!(data.agent.withdrawalHistory || []).length && (
                 <tr>
                   <td style={th} colSpan="5">
                     No commission withdrawals yet.
@@ -399,33 +368,34 @@ export default function AgentDashboard() {
 
       <section style={card}>
         <h2>Clients in your referral network</h2>
-
-        <div style={tableWrap}>
-          <table style={table}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Client', 'Email', 'Country', 'Joined', 'Qualification'].map(x => (
-                  <th key={x} style={th}>{x}</th>
+                {['Client', 'Email', 'Country', 'Joined', 'Qualification'].map((x) => (
+                  <th key={x} style={th}>
+                    {x}
+                  </th>
                 ))}
               </tr>
             </thead>
-
             <tbody>
-              {(data.clients || []).map(c => (
+              {data.clients.map((c) => (
                 <tr key={c.id}>
                   {[
                     c.fullName || 'Client',
                     c.email,
                     c.country || '—',
                     c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—',
-                    c.qualified ? 'Withdrawal approved' : 'Not yet qualified'
+                    c.qualified ? 'Withdrawal approved' : 'Not yet qualified',
                   ].map((v, i) => (
-                    <td key={i} style={th}>{v}</td>
+                    <td key={i} style={th}>
+                      {v}
+                    </td>
                   ))}
                 </tr>
               ))}
-
-              {!data.clients?.length && (
+              {!data.clients.length && (
                 <tr>
                   <td style={th} colSpan="5">
                     No recruited clients yet.
@@ -436,95 +406,14 @@ export default function AgentDashboard() {
           </table>
         </div>
       </section>
-
     </main>
   );
 }
 
-const wrap = {
-  fontFamily: 'Arial,sans-serif',
-  maxWidth: 800,
-  margin: '30px auto',
-  padding: 22,
-  color: '#111827',
-  lineHeight: 1.5
-};
-
-const grid = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
-  gap: 12,
-  margin: '20px 0'
-};
-
-const card = {
-  background: '#fff',
-  border: '1px solid #e2e8f0',
-  borderRadius: 12,
-  padding: 18,
-  marginBottom: 16,
-  boxShadow: '0 3px 12px #00000008'
-};
-
-const btn = {
-  background: '#111827',
-  color: '#fff',
-  border: 0,
-  borderRadius: 7,
-  padding: '10px 16px',
-  cursor: 'pointer'
-};
-
-const activeBtn = {
-  ...btn,
-  background: '#15803d'
-};
-
-const secondaryBtn = {
-  ...btn,
-  background: '#e2e8f0',
-  color: '#111827'
-};
-
-const field = {
-  padding: 10,
-  border: '1px solid #cbd5e1',
-  borderRadius: 7,
-  width: '100%',
-  boxSizing: 'border-box'
-};
-
-const label = {
-  display: 'block',
-  marginBottom: 8,
-  fontWeight: 600
-};
-
-const flex = {
-  display: 'flex',
-  gap: 8,
-  flexWrap: 'wrap'
-};
-
-const formGrid = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
-  gap: 8,
-  marginTop: 12
-};
-
-const tableWrap = {
-  overflowX: 'auto'
-};
-
-const table = {
-  width: '100%',
-  borderCollapse: 'collapse'
-};
-
-const th = {
-  textAlign: 'left',
-  padding: 10,
-  borderBottom: '1px solid #e2e8f0',
-  fontSize: 13
-};
+const wrap = { fontFamily: 'Arial,sans-serif', maxWidth: 800, margin: '30px auto', padding: 22, color: '#111827', lineHeight: 1.5 };
+const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, margin: '20px 0' };
+const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 18, marginBottom: 16, boxShadow: '0 3px 12px #00000008' };
+const btn = { background: '#111827', color: '#fff', border: '1px solid #111827', borderRadius: 7, padding: '10px 16px', cursor: 'pointer' };
+const btnOutline = { background: '#fff', color: '#111827', border: '1px solid #cbd5e1', borderRadius: 7, padding: '10px 16px', cursor: 'pointer' };
+const field = { padding: 10, border: '1px solid #cbd5e1', borderRadius: 7 };
+const th = { textAlign: 'left', padding: 10, borderBottom: '1px solid #e2e8f0', fontSize: 13 };
