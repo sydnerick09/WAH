@@ -233,16 +233,25 @@ function parseAgentCommission(row) {
 function normWd(row) {
   if (!row) return null;
   const agentCommission = parseAgentCommission(row);
-  const bank = parseBankWithdrawal(row) || agentCommission;
+  const parsedBank = parseBankWithdrawal(row);
+  // Agent withdrawal details are stored in the metadata marker. Do not treat
+  // every agent request as a bank transfer: M-Pesa agent requests use the same
+  // marker but carry a phone number and National ID instead.
+  const agentBank = agentCommission?.method === 'bank' ? agentCommission : null;
+  const bank = parsedBank || agentBank;
   const country = bank?.country || row.country || '';
+  const isAgentCommission = Boolean(agentCommission);
+  const isAgentMpesa = isAgentCommission && agentCommission.method === 'mpesa';
   return {
     id:          row.id,
     userId:      row.user_id,
     fullName:    row.full_name,
-    phone:       maskWithdrawalPhone(row.phone, country),
+    // The admin panel needs the complete destination number to verify and pay
+    // agent M-Pesa requests. Ordinary client withdrawal numbers remain masked.
+    phone:       isAgentMpesa ? (agentCommission.phone || row.phone || '') : maskWithdrawalPhone(row.phone, country),
     rawPhone:    row.phone || '',
-    idNumber:    bank || String(row.id_number || '').startsWith('__AGENT_COMMISSION__') ? '' : row.id_number,
-    isAgentCommission: String(row.id_number || '').startsWith('__AGENT_COMMISSION__'),
+    idNumber:    isAgentMpesa ? (agentCommission.nationalId || '') : (bank || isAgentCommission ? '' : row.id_number),
+    isAgentCommission,
     agentCountry: agentCommission?.country || '',
     amount:      Number(row.amount || 0),
     status:      row.status      ?? 'pending',
@@ -250,7 +259,7 @@ function normWd(row) {
     deadline:    row.deadline,
     requestedAt: row.requested_at,
     updatedAt:   row.updated_at  ?? null,
-    withdrawalMethod: bank ? 'bank' : (row.withdrawal_method || 'mpesa'),
+    withdrawalMethod: isAgentMpesa ? 'safaricom' : (bank ? 'bank' : (row.withdrawal_method || 'mpesa')),
     bankName: bank?.bankName || '',
     accountName: bank?.accountName || '',
     accountNumber: bank ? String(bank.accountNumber || '') : '',
@@ -1340,8 +1349,14 @@ export default async function handler(req, res) {
         const { data: u } = await db.from('users').select('*').eq('id', p.userId).maybeSingle();
         const subs = { ...(u?.task_submissions || {}) }, a = { ...(subs._agent || {}) };
         if (!u || a.status !== 'active') return res.json({ success: false, error: 'Active agent account required.' });
-        const qualifiedCountForGate = Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : new Set((a.qualifiedClientIds || []).map(String)).size;
-        if (qualifiedCountForGate < 10) return res.json({ success:false,error:`You need at least 10 qualifying clients to initiate a withdrawal. Your current progress is ${qualifiedCountForGate} out of 10 clients.` });
+        const qualifiedCountForGate = Math.max(0, Math.floor(Number.isFinite(Number(a.qualifiedCountOverride)) ? Number(a.qualifiedCountOverride) : new Set((a.qualifiedClientIds || []).map(String)).size));
+        if (qualifiedCountForGate < 10) {
+          return res.json({ success:false,error:`You need at least 10 qualified clients before you can withdraw. You currently have ${qualifiedCountForGate}.` });
+        }
+        if (qualifiedCountForGate % 10 !== 0) {
+          const nextMilestone = qualifiedCountForGate + (10 - (qualifiedCountForGate % 10));
+          return res.json({ success:false,error:`You cannot withdraw yet. Agent withdrawals are available only when your qualified-client total is exactly divisible by 10 (10, 20, 30, 40, and so on). You currently have ${qualifiedCountForGate}; you need ${nextMilestone - qualifiedCountForGate} more qualified client(s) to reach ${nextMilestone}.` });
+        }
         if (Number(a.pendingCommission || 0) > 0) { a.availableCommission = Number(a.availableCommission || 0) + Number(a.pendingCommission || 0); a.pendingCommission = 0; }
         const amount = Math.floor(Number(a.availableCommission || 0));
         if (amount <= 0) return res.json({ success:false,error:'There is no available commission balance to withdraw.' });
